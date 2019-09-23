@@ -9,27 +9,24 @@ so imagecollection is a class ;)
 warning blackboax number: (size+fwhm) gauss for extracting donor&acceptor
 """
 
-import os
-import time
 from pathlib import Path
-import tifffile as TIFF
-import numpy as np
-import matplotlib.pyplot as plt
 import cv2
+import matplotlib.pyplot as plt
+import numpy as np
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
+import tifffile as TIFF
 
-
-from trace_analysis.image_adapt.load_file import read_one_page#_pma, read_one_page_tif
-from trace_analysis.image_adapt.load_file import read_header
-from trace_analysis.image_adapt.rolling_ball import rollingball
-from trace_analysis.image_adapt.find_threshold import remove_background, get_threshold
-#from trace_analysis.image_adapt.Mapping import Mapping
-from trace_analysis.image_adapt.Image import Image
-from trace_analysis.image_adapt.analyze_label import analyze # note analyze label is differently from the approach in pick spots
 from trace_analysis.find_xy_position.Gaussian import makeGaussian
-from trace_analysis.image_adapt.polywarp import polywarp, polywarp_apply
-#from cached_property import cached_property
+# from trace_analysis.image_adapt.Mapping import Mapping
+from trace_analysis.image_adapt.Image import Image
+from trace_analysis.image_adapt.analyze_label import \
+    analyze  # note analyze label is differently from the approach in pick spots
+from trace_analysis.image_adapt.find_threshold import remove_background, get_threshold
+from trace_analysis.image_adapt.load_file import read_header
+from trace_analysis.image_adapt.load_file import read_one_page  # _pma, read_one_page_tif
+from trace_analysis.image_adapt.rolling_ball import rollingball
+# from cached_property import cached_property
 from trace_analysis.mapping.mapping import Mapping2
 
 class Movie:
@@ -120,7 +117,6 @@ class Movie:
 #                         for i in range(np.min([self.number_of_frames, number_of_frames]))]
 #         frame_array = np.dstack(frame_list)
 #         frame_array_mean = np.mean(frame_array, axis=2).astype(int)
-
         frame_array_sum = np.zeros((self.height, self.width))
         for i in range(np.min([self.number_of_frames, number_of_frames])):
             frame_array_sum = frame_array_sum + self.read_frame(frame_number=i).astype(float)
@@ -285,7 +281,14 @@ class Movie:
         if show == True: self.show_coordinates(image, coordinates)
         
         return coordinates
-    
+    def get_channel_coordinates_cropped(self, within_margin = True, show = False, channel = 'donor', threshold=100):
+        image = self.get_channel(self.average_image, channel)
+        coordinates = self.find_peaks(image,method = 'local-maximum', threshold = threshold)
+        coordinates = coordinates[self.is_within_margin(coordinates)]
+
+        if show == True: self.show_coordinates(image,coordinates)
+
+        return coordinates
     def calculate_acceptor_coordinates(self, donor_coordinates):
         # acceptor_coordinates = polywarp_apply(self.mapping.P,self.mapping.Q,donor_coordinates)
         acceptor_coordinates = self.mapping.transform_coordinates(donor_coordinates)

@@ -19,10 +19,9 @@ from trace_analysis.mapping.mapping import Mapping2
 # Define path to data, replace by your own directory
 # (Now it is set to the twoColourExampleData folder in the traceAnalysis directory)
 mainPath = r'D:\pathToDataFolder'
-mainPath = r'O:\Ivo\20190906 - Single-molecule setup (TIR-I)'
 
 # Initialize an experiment
-exp = Experiment(mainPath)
+exp = Experiment(mainPath, cropping = True)
 
 # Select mapping file
 map_file = exp.files[-2]
@@ -36,6 +35,7 @@ for file in exp.files:
     file.movie.generate_pks_file(channel='d')
 
     file.importExtension('.pks')
+    file.movie.show_coordinates(file.movie.average_image, file.coordinates)
 
     all_coordinates = np.concatenate([molecule.coordinates[:, :] for molecule in file.molecules])
     traces = file.movie.get_all_traces(all_coordinates)

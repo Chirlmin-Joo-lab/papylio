@@ -18,7 +18,8 @@ from trace_analysis.image_adapt.movie import Movie
 
 
 class SifxFile(Movie):
-    def __init__(self, arg, *args, **kwargs):
+    def __init__(self, arg,cropping = False, *args, **kwargs):
+        self.cropping = cropping
         super().__init__(arg, *args, **kwargs)
         
         self.folderpath = self.filepath.parent
@@ -154,6 +155,9 @@ class SifxFile(Movie):
         f.close()
 
 #        width = self.right - self.left + 1
+        if self.cropping == True:
+            self.width=int(self.width/4)
+            self.height=int(self.height/4)
         width=self.width
         mod = width % self.xbin
         self.width = int((width - mod) / self.ybin)
@@ -168,6 +172,9 @@ class SifxFile(Movie):
     
        
     def read_frame(self, frame_number):
+        if self.cropping == True:
+            self.height=int(self.height*4)
+            self.width=int(self.width*4)
         if (self.xbin == 2) and (self.ybin == 2):
              count=self.height*self.width*4
              #name should follow from A.filelist
@@ -197,9 +204,19 @@ class SifxFile(Movie):
              ALL[3::4] = DD
                   
         im=np.reshape(ALL,(self.height, self.width))
-        im=np.rot90(im)     
+        if self.cropping == True:
+            xstart_green = int((1024 - 256) / 2)
+            xend_green = int(1024 - xstart_green)
+            xstart_red = int((1024 - 256) / 2)+1024
+            xend_red = int(1024 - xstart_red)
+            ystart = int((2048 - 512) / 2)
+            yend = int(2048 - ystart)
+            self.height=int(self.height/4)
+            self.width=int(self.width/4)
+            im=np.concatenate((im[xstart_green:xend_green,ystart:yend],im[xstart_red:xend_red,ystart:yend]))
+        im = np.rot90(im)
         if 0: # for testing match real data
             plt.imshow(im)
             tifffile.imwrite(self.writepath.joinPath(f'{self.name}_fr{frame_number}.tif') , im ,  photometric='minisblack')
         
-        return im   
+        return im

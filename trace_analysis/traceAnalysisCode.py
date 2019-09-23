@@ -31,7 +31,7 @@ from trace_analysis.image_adapt.pma_file import PmaFile
 
 
 class Experiment:
-    def __init__(self, mainPath, colours = ['g','r'], import_all = True):
+    def __init__(self, mainPath, colours = ['g','r'], import_all = True, cropping = False):
         self.name = os.path.basename(mainPath)
         self.mainPath = Path(mainPath).absolute()
         self.files = list()
@@ -39,6 +39,7 @@ class Experiment:
         self._Ncolours = len(colours)
         self._pairs = [[c1, c2] for i1, c1 in enumerate(colours) for i2, c2 in enumerate(colours) if i2 > i1]
         self.import_all = import_all
+        self.cropping = cropping
 
         os.chdir(mainPath)
 
@@ -176,7 +177,7 @@ class File:
     def __init__(self, relativeFilePath, experiment):
         relativeFilePath = Path(relativeFilePath)
         self.experiment = experiment
-        
+        self.cropping = experiment.cropping
         
         self.relativePath = relativeFilePath.parent
         self.name = relativeFilePath.name
@@ -246,7 +247,7 @@ class File:
 
     def importSifxFile(self):
         imageFilePath = self.absoluteFilePath.joinpath('Spooled files.sifx')
-        self.movie = SifxFile(imageFilePath)
+        self.movie = SifxFile(imageFilePath, cropping=self.cropping)
     
     def importPmaFile(self):
         imageFilePath = self.absoluteFilePath.with_suffix('.pma')
