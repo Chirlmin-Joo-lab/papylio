@@ -291,7 +291,7 @@ class InteractivePlot(object):
 
 
     def save_molecule(self, event=None, move=True, draw=True):
-        #  Assume acceptance of auto matically found and manually selected dwell times
+#       Assume acceptance of automatically found and manually selected dwell times
         lines = self.axes[0].get_lines() + self.axes[1].get_lines()
         lines = [l for l in lines if l.get_label().split()[0] in ["man", "thres"]]
         self.mol.kon_boolean = self.kon
@@ -312,7 +312,7 @@ class InteractivePlot(object):
 
                 d = {'time': l.get_xdata()[0], 'trace': l.get_label().split()[1],
                      'state': 1, 'method': method, 'thres': thres, 'kon': kon}
-                self.mol.steps= self.mol.steps.append(d, ignore_index=True)
+                self.mol.steps = self.mol.steps.append(d, ignore_index=True)
             self.mol.steps.drop_duplicates(inplace=True)
 
             # sorting the timepoints
@@ -321,18 +321,8 @@ class InteractivePlot(object):
             for i in self.mol.steps.columns:
                 self.mol.steps[i] = list(self.mol.steps[i][i_a])
 
-            #calculating average FRET for dwells
-#            fret = self.mol.E(Imin=self.Imin, Iroff=self.Iroff, Igoff=self.Igoff)
-#            avg_fret=[]
-#            for i in range(len(self.mol.steps['time'])):
-#                if i % 2 != 0:
-#                    istart = int(round(self.mol.steps['time'][i-1]/self.exp_time))
-#                    iend = int(round(self.mol.steps['time'][i]/self.exp_time))
-#                    avg_fret.append(round(np.mean(fret[istart:iend]),2))
-#                else:
-#                    avg_fret.append('')
-#            avgfret = pd.DataFrame({'avg_FRET': avg_fret})
-#            self.mol.steps = pd.concat([self.mol.steps, avgfret], axis=1)
+#           Sort the timepoints
+            self.mol.steps = self.mol.steps.sort_values(by=['time'])
 
 
         if move:
@@ -494,7 +484,7 @@ class Draw_lines(object):
         sel = self.radio.value_selected
         l = ax.axvline(0, zorder=0, lw=0.65, c='yellow', label="man "+sel)
         self.lines.append(l)
-        self.fig.canvas.draw()
+        self.fig.canvas.draw_idle()
 
     def select_endtrace(self, event,endtime):
         if event.inaxes is None:
@@ -503,7 +493,7 @@ class Draw_lines(object):
         sel = self.radio.value_selected
         l = ax.axvline(endtime, zorder=0, lw=0.65, c='yellow', label="man "+sel)
         self.lines.append(l)
-        self.fig.canvas.draw()
+        self.fig.canvas.draw_idle()
 
     def clear_all(self, event):
         while self.lines:

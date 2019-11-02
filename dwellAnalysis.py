@@ -9,7 +9,6 @@ import os
 import numpy as np
 import sys
 import pandas as pd
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(style="ticks")
@@ -17,7 +16,7 @@ sns.set_color_codes()
 
 import traceAnalysisCode as analysis
 
-def get_dwell_hist(dwells, dwelltype='offtime', save=True, plot=True, extra_label='', log=False):
+def get_dwell_hist(dwells, dwelltype='offtime', nbins=20, save=True, plot=True, extra_label='', log=False):
 
     #  select only the ones that don't exceed the total measurement time minus 10 sec
 #    dwells_in = dwells[dwells < dwells.max() - 10]
@@ -25,7 +24,7 @@ def get_dwell_hist(dwells, dwelltype='offtime', save=True, plot=True, extra_labe
 
 
 
-    values, bins = np.histogram(dwells, bins=20, density=True)
+    values, bins = np.histogram(dwells, bins=nbins, density=True)
     centers = (bins[1:] + bins[:-1]) / 2.0
     if not plot:
         return values, centers
@@ -35,7 +34,7 @@ def get_dwell_hist(dwells, dwelltype='offtime', save=True, plot=True, extra_labe
 
         plt.xlabel('time (s)')
         plt.ylabel('Prob.')
-        plt.title(f'{dwelltype} histogram: N = {dwells.size}')
+        plt.title(f'{dwelltype} histogram: nbins={nbins} N={dwells.size}')
         plt.legend(prop={'size': 16})
         # plot a 1exp ML 'fit' for the average dwelltime
         t = np.arange(0, dwells.max(), 0.1)
