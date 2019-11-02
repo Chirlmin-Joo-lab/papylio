@@ -164,7 +164,7 @@ class File:
 
     @property
     def time(self):  # the time axis of the experiment
-        return np.arange(0, self.Nframes*self.exposure_time)*self.exposure_time
+        return np.arange(0, self.Nframes)*self.exposure_time
 
     def __repr__(self):
         return(f'{self.__class__.__name__}({self.name})')

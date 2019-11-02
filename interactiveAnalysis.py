@@ -315,7 +315,7 @@ class InteractivePlot(object):
                 self.mol.steps= self.mol.steps.append(d, ignore_index=True)
             self.mol.steps.drop_duplicates(inplace=True)
 
-#            sorting the timepoints
+            # sorting the timepoints
             a = np.array(self.mol.steps['time'])
             i_a = np.argsort(a)
             for i in self.mol.steps.columns:
