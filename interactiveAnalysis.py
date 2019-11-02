@@ -317,8 +317,15 @@ class InteractivePlot(object):
                 self.mol.steps = self.mol.steps.append(d, ignore_index=True)
             self.mol.steps.drop_duplicates(inplace=True)
 
+            # sorting the timepoints
+            a = np.array(self.mol.steps['time'])
+            i_a = np.argsort(a)
+            for i in self.mol.steps.columns:
+                self.mol.steps[i] = list(self.mol.steps[i][i_a])
+
 #           Sort the timepoints
             self.mol.steps = self.mol.steps.sort_values(by=['time'])
+
 
         if move:
             if event.inaxes == self.axnextb or event.key in ['right']:
