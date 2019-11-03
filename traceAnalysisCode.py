@@ -23,6 +23,7 @@ from pathlib import Path # For efficient path manipulation
 import pickle
 import time
 import sys
+from PIL import Image
 
 
 class Experiment:
@@ -149,15 +150,12 @@ class File:
     def __init__(self, relativeFilePath, experiment):
         relativeFilePath = Path(relativeFilePath)
         self.experiment = experiment
-
-
         self.relativePath = relativeFilePath.parent
         self.name = relativeFilePath.name
         self.extensions = list()
-
         self.molecules = list()
-        self.exposure_time = None #Here the exposure time is given but it should be found from the log file if possible
-
+        self.exposure_time = None
+        self.avgImage = None
         self.isSelected = False
 
         self.findAndAddExtensions()
@@ -202,7 +200,8 @@ class File:
                            '.traces'     : self.importTracesFile,
                            '.sifx'       : self.importSifxFile,
                            '.log'        : self.importExposuretime,
-                           '.sim'        : self.importSimFile
+                           '.sim'        : self.importSimFile,
+                           '.tif'        : self.importavgImage
                            }
 
         importFunctions.get(extension, self.noneFunction)()
@@ -216,10 +215,13 @@ class File:
     def importExposuretime(self):
         self.exposure_time = np.genfromtxt(f'{self.relativeFilePath}.log', max_rows=1)[2]
 
+    def importavgImage(self):
+        self.avgImage = Image.open(f'{self.relativeFilePath}.tif')
+
     def importPksFile(self):
         # Background value stored in pks file is not imported yet
         Ncolours = self.experiment.Ncolours
-
+        
    #     pks = np.genfromtxt(self.name + '.pks', delimiter='      ')  #MD190104 you get an error when using 6 spaces for tab
         try:
             pks = np.genfromtxt(str(self.relativeFilePath) + '.pks')  #MD190104 By default, any consecutive whitespaces act as delimiter.
@@ -227,18 +229,16 @@ class File:
             if not self.molecules:
                 for molecule in range(0, Ntraces, Ncolours):
                     self.addMolecule()
-
             for i, molecule in enumerate(self.molecules):
-                molecule.coordinates = pks[(i*Ncolours):((i+1)*Ncolours), 1:3]
-
+                molecule.coordinates = pks[(i*Ncolours):((i+1)*Ncolours), 1:3]      
         except ValueError: #assuming the .pks file is from the Han lab programm
             Ntraces = int(np.genfromtxt(str(self.relativeFilePath) + '.pks', skip_header=5, max_rows=1))
-            for molecule in enumerate(self.molecules):
-                molecule.coordinates = [pks[0][0], pks[0][2], pks[0][5], pks[0][7]]
-
-#        for trace in range(0, Ntraces, Ncolours):
-#            coordinates = pks[trace:(trace+Ncolours),1:3]
-#            self.addMolecule(coordinates)
+            if not self.molecules:
+                for molecule in range(0, Ntraces, Ncolours):
+                    self.addMolecule()
+            pks = np.genfromtxt(str(self.relativeFilePath) + '.pks', skip_header=6)        
+            for i, molecule in enumerate(self.molecules):
+                molecule.coordinates = [pks[i][0], pks[i][2], pks[i][5], pks[i][7]]
 
 
     def importTracesFile(self):

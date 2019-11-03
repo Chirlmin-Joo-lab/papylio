@@ -17,6 +17,7 @@ import matplotlib.widgets
 import seaborn as sns
 from pathlib import Path, PureWindowsPath
 import functools
+from PIL import Image
 #plt.rcParams['toolbar'] = 'toolmanager'
 #from matplotlib.backend_tools import ToolBase
 #mainPath = r'D:\ivoseverins\SURFdrive\Promotie\Code\Python\traceAnalysis\twoColourExampleData\HJ A'
@@ -26,13 +27,12 @@ class InteractivePlot(object):
     def __init__(self, file, import_excel=True):
         plt.ioff()
         self.file = file
-        self.mol_indx = 0  #From which molecule to start the analysis
+        self.mol_indx = 0  #   From which molecule to start the analysis
         self.exp_time = self.file.exposure_time
         self.time = np.arange(0, len(self.file.molecules[0].I(0)))*self.exp_time  # the array is multiplied with exposure time in the end to ensure equal dimensions
         #  See if there are saved analyzed molecules
         if import_excel:
             self.file.importExcel(filename=self.file.name+'_steps_data.xlsx')
-
 
     def plot_initialize(self):
 
@@ -40,18 +40,23 @@ class InteractivePlot(object):
         sns.set_color_codes()
         plt.style.use('dark_background')
 
-        self.fig, self.axes = plt.subplots(2, 1, sharex=True, figsize=(10,5))
+        self.fig, self.axes = plt.subplots(3, 1, figsize=(10, 7))
         self.fig.canvas.set_window_title(f'Dataset: {self.file.name}')
-        self.axes[0].set_ylim((-50,500))  # Det default intensity limits
-        self.axes[0].set_ylabel("intensity (a.u)\n")
-        self.axes[1].set_ylim((-0.1,1.1))  # Det default fret limits
-        self.axes[1].set_xlabel("time (s)")
-        self.axes[1].set_ylabel("FRET\n")
-        self.axes[1].set_xlim((-2, self.time[-1]+2))  # Set default x limits dependent on measurement time
+        self.axes[0].axis('off')
+        self.axes[1].set_ylim((-50, 500))  # Det default intensity limits
+        self.axes[1].set_ylabel("intensity (a.u)\n")
+        self.axes[1].set_xlim((-2, self.time[-1] + 2))
+        self.axes[1].axis('off')
+        self.axes[2].set_ylim((-0.1, 1.1))  # Det default fret limits
+        self.axes[2].set_xlabel("time (s)")
+        self.axes[2].set_ylabel("FRET\n")
+        self.axes[2].set_xlim((-2, self.time[-1] + 2))  # Set default x limits dependent on measurement time
 
+        #plt.subplots_adjust(top=0.75)
         plt.subplots_adjust(bottom=0.23)
 
         # Create the axes for the widgets
+        #self.axROI = plt.axes([0.6, 0.8, 0.2, 0.15])
         self.rax = plt.axes([0.91, 0.72, 0.08, 0.15])
         self.axtotal = plt.axes([0.91, 0.66, 0.08, 0.08])
 
@@ -70,7 +75,7 @@ class InteractivePlot(object):
 
         self.axnextb = plt.axes([0.17, 0.90, 0.065, 0.062])  # Buttons to cycle through molecules
         self.axprevb = plt.axes([0.083, 0.90, 0.08, 0.062])
-        [ax.set_frame_on(False) for ax in self.fig.get_axes()[2:]]
+        [ax.set_frame_on(False) for ax in self.fig.get_axes()[3:]]
 
         #  Radiobutton to select red or green
         self.radio = matplotlib.widgets.RadioButtons(self.rax, ("red", "green"))
@@ -99,10 +104,9 @@ class InteractivePlot(object):
         self.bprev = matplotlib.widgets.Button(self.axprevb,'Previous' , **bp)
         self.bprev.on_clicked(self.save_molecule)
 
-
         #  A checkbutton for whether to display the total intensity
         self.checkbtotal = matplotlib.widgets.CheckButtons(self.axtotal, ["Total"],
-                                                          actives=[False])
+                                                           actives=[False])
 
         #  A checkbutton for fret autothreshold dwell-time calculation
         self.checkbfret = matplotlib.widgets.CheckButtons(self.axcheckfret, ["E fret"],
@@ -146,10 +150,9 @@ class InteractivePlot(object):
         self.checkbtotal.on_clicked(self.check_total)
         self.checkbfret.on_clicked(self.checkbutton_color)
 
-
     def plot_molecule(self, draw_plot=True):
         # clear the appropriate lines from axes first
-        [ax.lines.clear() for ax in self.fig.get_axes()[:2]]
+        [ax.lines.clear() for ax in self.fig.get_axes()[:3]]
         # find the current molecule instance
         self.mol = self.file.molecules[self.mol_indx]
 
@@ -158,14 +161,14 @@ class InteractivePlot(object):
             self.select_molecule(toggle=False)
         else:
             self.select_molecule(toggle=False, deselect=True)
-        #load saved steps if available
+        # load saved steps if available
         self.load_from_Molecule()
 
         # load kon if existing or assign a False 3x3 boolean
         self.prev_mol = self.file.molecules[self.mol_indx - 1]
         if all(kon is None for kon in [self.mol.kon_boolean, self.prev_mol.kon_boolean]):
-            self.kon = np.zeros((3,3), dtype=bool)
-        elif self.mol.kon_boolean is  None:
+            self.kon = np.zeros((3, 3), dtype=bool)
+        elif self.mol.kon_boolean is None:
             self.kon = np.copy(self.prev_mol.kon_boolean)  # if no kon is defined for current molecule
         else:
             self.kon = self.mol.kon_boolean
@@ -178,35 +181,59 @@ class InteractivePlot(object):
         self.red = self.mol.I(1, Ioff=self.Iroff)
         self.green = self.mol.I(0, Ioff=self.Igoff)
 
-
         self.fret = self.mol.E(Imin=self.Imin, Iroff=self.Iroff, Igoff=self.Igoff)
 
         if not draw_plot:
             return
 
         #  if draw_plot is true
-        self.axes[0].plot(self.time, self.green, "g", lw=.75)
-        self.axes[0].plot(self.time, self.red, "r", lw=.75)
+        self.axes[1].plot(self.time, self.green, "g", lw=.75)
+        self.axes[1].plot(self.time, self.red, "r", lw=.75)
         self.total = self.red + self.green
-        self.ltotal = self.axes[0].plot(self.time, self.total, "bisque", lw=.65,
+        self.ltotal = self.axes[1].plot(self.time, self.total, "bisque", lw=.65,
                                zorder=0, visible=self.checkbtotal.get_status()[0])[0]
 
-        self.axes[1].plot(self.time, self.fret, "b", lw=.75)
+        self.axes[2].plot(self.time, self.fret, "b", lw=.75)
+   
+        self.axes[0].imshow(self.plotROI())
 
         # vertical lines to indicate the threshold in the two axes
-        self.slidel = [ax.axhline(0, lw=1, ls=":", zorder=3, visible=False) for ax in self.axes]
+        self.slidel = [ax.axhline(0, lw=1, ls=":", zorder=3, visible=False) for ax in self.axes[1:]]
         #  Creat cursor particular to the molelcule and connect it to mouse movement event
         self.cursors = []
         cursor_kws = {'useblit': True, 'color': 'white', 'ls': "--", 'lw': 1, 'alpha': 0.5}
-        self.cursors.append(matplotlib.widgets.Cursor(self.axes[0], **cursor_kws))
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[1], **cursor_kws))
+        self.cursors.append(matplotlib.widgets.Cursor(self.axes[2], **cursor_kws))
 
         self.fig.canvas.draw_idle()
+     
+    def plotROI(self):
+        img = self.file.avgImage
+        print(img)
+        coor = self.file.molecules[self.mol_indx].coordinates
+        bnd = 5
+        totwidth = 4*bnd+2
+        totheight = 2*bnd+1
+
+        ROI1 = img.crop((coor[0]-bnd-1, coor[1]-bnd-1, coor[0]+bnd, coor[1]+bnd))
+        ROI2 = img.crop((coor[2]-bnd-1, coor[3]-bnd-1, coor[2]+bnd, coor[3]+bnd))
+        ROI_mrg = Image.new("RGB", (totwidth, totheight))
+        ROI_mrg.paste(ROI1, (0, 0))
+        ROI_mrg.paste(ROI2, (2*bnd+1, 0))
+        pixels = ROI_mrg.load()
+        
+        for x in range(2*bnd+1):
+            for y in range(2*bnd+1):
+                if (x-bnd)**2 + (y-bnd)**2 == (bnd)**2:
+                    pixels[x, y] = (200, 200, 0)
+                    pixels[x+2*bnd+1, y] = (200, 200, 0)
+
+        return ROI_mrg    
 
     def change_axis(self, event_type, event):
         ax = event.inaxes
         if event_type == 'enter':
-            if ax == self.axes[1]:
+            if ax == self.axes[2]:
                 self.fret_edge_lock = False
             elif ax in self.axthrsliders:
                 indx = int(ax == self.axthrsliders[1])  # gives 0 if ax is upper (I) plot, 1 if ax is lower (E) plot
@@ -214,7 +241,7 @@ class InteractivePlot(object):
                 self.slidel[indx].set_visible(True)
                 self.fig.canvas.draw()
         elif event_type in ['leave', 'slider_change']:
-            if ax == self.axes[1]:
+            if ax == self.axes[2]:
                 self.fret_edge_lock = True
             elif ax in self.axthrsliders:
                 indx = int(ax == self.axthrsliders[1])  # gives 0 if ax is upper (I) plot, 1 if ax is lower (E) plot
@@ -259,11 +286,11 @@ class InteractivePlot(object):
             return
         else:
             s = self.mol.steps
-            [self.axes[0].axvline(f, zorder=0, lw=0.65, label="saved r")
+            [self.axes[1].axvline(f, zorder=0, lw=0.65, label="saved r")
              for f in s.time[s.trace == 'red'].values]
-            [self.axes[0].axvline(f, zorder=0, lw=0.65, label="saved g")
+            [self.axes[1].axvline(f, zorder=0, lw=0.65, label="saved g")
              for f in s.time[s.trace == 'green'].values]
-            [self.axes[1].axvline(f, zorder=0, lw=0.65, label="saved E")
+            [self.axes[2].axvline(f, zorder=0, lw=0.65, label="saved E")
              for f in s.time[s.trace == 'E'].values]
 
     def select_molecule(self, toggle=True, deselect=False):
@@ -278,13 +305,13 @@ class InteractivePlot(object):
         title += '  (S)'*(self.mol.isSelected)
         rgba = matplotlib.colors.to_rgba
         c = rgba('g')*self.mol.isSelected + rgba('w')*(not self.mol.isSelected)
-        self.axes[0].set_title(title, color=c)
+        self.axes[1].set_title(title, color=c)
         self.fig.canvas.draw_idle()
 
     def throw_away(self, event):
         if self.mol.steps is not None:
             self.mol.steps = None
-            lines = self.axes[0].get_lines() + self.axes[1].get_lines()
+            lines = self.axes[1].get_lines() + self.axes[2].get_lines()
             [l.remove() for l in lines if l.get_label().split()[0] in ['man', 'thres', 'saved']]
             self.select_molecule(toggle=False, deselect=True)
             self.fig.canvas.draw_idle()
@@ -292,7 +319,7 @@ class InteractivePlot(object):
 
     def save_molecule(self, event=None, move=True, draw=True):
 #       Assume acceptance of automatically found and manually selected dwell times
-        lines = self.axes[0].get_lines() + self.axes[1].get_lines()
+        lines = self.axes[1].get_lines() + self.axes[2].get_lines()
         lines = [l for l in lines if l.get_label().split()[0] in ["man", "thres"]]
         self.mol.kon_boolean = self.kon
         if lines:
@@ -311,17 +338,11 @@ class InteractivePlot(object):
                 method = l.get_label().split()[0]
                 thres = "N/A"*(method=='man') + str(self.thrsliders[0].val)*(method =='thres')
 
-                d = {'time': l.get_xdata()[0], 'trace': l.get_label().split()[1],
+                d = {'time': l.get_xdata()[1], 'trace': l.get_label().split()[1],
                      'state': 1, 'method': method, 'thres': thres, 'kon': kon,
                       'Iroff': self.Iroff, 'Igoff': self.Igoff, 'Imin': self.Imin}
                 self.mol.steps = self.mol.steps.append(d, ignore_index=True)
             self.mol.steps.drop_duplicates(inplace=True)
-
-            # sorting the timepoints
-            a = np.array(self.mol.steps['time'])
-            i_a = np.argsort(a)
-            for i in self.mol.steps.columns:
-                self.mol.steps[i] = list(self.mol.steps[i][i_a])
 
 #           Sort the timepoints
             self.mol.steps = self.mol.steps.sort_values(by=['time'])
@@ -357,11 +378,11 @@ class InteractivePlot(object):
         color = self.red*bool(sel == "red") + self.green*bool(sel == "green")  # Select trace data for red  or green
         steps = self.mol.find_steps(color, threshold=self.thrsliders[0].val)
         l_props = {"lw": 0.75, "zorder": 5, "label": "thres "+sel}
-        [self.axes[0].axvline(s*self.exp_time, **l_props) for s in steps["frames"]]
+        [self.axes[1].axvline(s*self.exp_time, **l_props) for s in steps["frames"]]
         if self.checkbfret.get_status()[0]:
             steps = self.mol.find_steps(self.fret, threshold=self.thrsliders[1].val)
             l_props = {"lw": 0.75, "zorder": 5, "label": "thres E"}
-            [self.axes[1].axvline(s*self.exp_time, **l_props) for s in steps["frames"]]
+            [self.axes[2].axvline(s*self.exp_time, **l_props) for s in steps["frames"]]
         self.fig.canvas.draw()
         if find_all:
             for mol in self.file.molecules:
@@ -387,17 +408,17 @@ class InteractivePlot(object):
             s.poly.set_color(color); s.label.set(text=label)
 
         indx = int(label == 'green')  # 1 if green, 0 if red
-        self.axes[0].get_lines()[not indx].set_zorder((not indx)+2)
-        self.axes[0].get_lines()[indx].set_zorder(indx)
+        self.axes[1].get_lines()[not indx].set_zorder((not indx)+2)
+        self.axes[1].get_lines()[indx].set_zorder(indx)
         self.radio.circles[indx].set_color(label[0])
         self.radio.circles[not indx].set_color("black")
         update_slider(label[0], r"$I_G$"*bool(indx)+r"$I_R$"*bool(not indx))
         # Check the edge colors and set to white if not selected color
         sel = self.radio.value_selected
         selcol = matplotlib.colors.to_rgba(sel[0])
-        spcol = [self.axes[0].spines[s].get_edgecolor() for s in ['left','bottom','right']]
+        spcol = [self.axes[1].spines[s].get_edgecolor() for s in ['left','bottom','right']]
         if selcol not in spcol:
-            [self.axes[0].spines[s].set_color('white') for s in ['left','bottom','right']]
+            [self.axes[1].spines[s].set_color('white') for s in ['left','bottom','right']]
 
         self.load_edges()
 
@@ -416,10 +437,10 @@ class InteractivePlot(object):
 
     def select_edge(self, key):
         if self.fret_edge_lock:
-            ax = self.axes[0]
+            ax = self.axes[1]
             sel = self.radio.value_selected[0]  # get the selected color of the radiobutton
         elif not self.fret_edge_lock:
-            ax = self.axes[1]
+            ax = self.axes[2]
             sel = 'blueviolet'  # this refers to the fret color
 
         side = 'left'*(key == ',')  + 'bottom'*(key == '.') + 'right'*(key == '/')
@@ -469,8 +490,8 @@ class Draw_lines(object):
             return
         ax = event.inaxes
         if event.button == 1:
-            if ax == self.fig.get_axes()[0] or ax == self.fig.get_axes()[1]:
-                sel = self.radio.value_selected*(ax == self.fig.get_axes()[0])
+            if ax == self.fig.get_axes()[1] or ax == self.fig.get_axes()[2]:
+                sel = self.radio.value_selected*(ax == self.fig.get_axes()[1])
                 sel = sel + "E"*(ax == self.fig.get_axes()[1])
                 l = ax.axvline(x=event.xdata, zorder=0, lw=0.65, label="man "+sel)
                 self.lines.append(l)
