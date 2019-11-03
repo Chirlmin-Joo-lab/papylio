@@ -29,18 +29,21 @@ def plotROI(exp_file, mole):
 
     ROI1 = img.crop((coor[0]-bnd-1, coor[1]-bnd-1, coor[0]+bnd, coor[1]+bnd))
     ROI2 = img.crop((coor[2]-bnd-1, coor[3]-bnd-1, coor[2]+bnd, coor[3]+bnd))
-    ROI_mrg = Image.new('RGBA', (totwidth, totheight))
+    ROI_mrg = Image.new("P", (totwidth, totheight))
     ROI_mrg.paste(ROI1, (0, 0))
     ROI_mrg.paste(ROI2, (2*bnd+1, 0))
-
+    
+    
     pixels = ROI_mrg.load()
 
     for x in range(2*bnd+1):
         for y in range(2*bnd+1):
             if (x-bnd)**2 + (y-bnd)**2 == (bnd)**2:
-                pixels[x, y] = (200, 200, 0)
-                pixels[x+2*bnd+1, y] = (200, 200, 0)
-
+                pixels[x, y] = 30
+                pixels[x+2*bnd+1, y] = 30
+    #print(ROI1.getcolors())
+    print(ROI_mrg.getbands())
+    
     return img, ROI1, ROI2, ROI_mrg
 
 

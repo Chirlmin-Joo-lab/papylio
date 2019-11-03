@@ -206,10 +206,8 @@ class InteractivePlot(object):
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[2], **cursor_kws))
 
         self.fig.canvas.draw_idle()
-     
     def plotROI(self):
         img = self.file.avgImage
-        print(img)
         coor = self.file.molecules[self.mol_indx].coordinates
         bnd = 5
         totwidth = 4*bnd+2
@@ -217,7 +215,7 @@ class InteractivePlot(object):
 
         ROI1 = img.crop((coor[0]-bnd-1, coor[1]-bnd-1, coor[0]+bnd, coor[1]+bnd))
         ROI2 = img.crop((coor[2]-bnd-1, coor[3]-bnd-1, coor[2]+bnd, coor[3]+bnd))
-        ROI_mrg = Image.new("RGB", (totwidth, totheight))
+        ROI_mrg = Image.new("P", (totwidth, totheight))
         ROI_mrg.paste(ROI1, (0, 0))
         ROI_mrg.paste(ROI2, (2*bnd+1, 0))
         pixels = ROI_mrg.load()
@@ -225,8 +223,8 @@ class InteractivePlot(object):
         for x in range(2*bnd+1):
             for y in range(2*bnd+1):
                 if (x-bnd)**2 + (y-bnd)**2 == (bnd)**2:
-                    pixels[x, y] = (200, 200, 0)
-                    pixels[x+2*bnd+1, y] = (200, 200, 0)
+                    pixels[x, y] = 30
+                    pixels[x+2*bnd+1, y] = 30
 
         return ROI_mrg    
 
