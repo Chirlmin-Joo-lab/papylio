@@ -234,7 +234,7 @@ class File:
         except ValueError: #assuming the .pks file is from the Han lab programm
             Ntraces = int(np.genfromtxt(str(self.relativeFilePath) + '.pks', skip_header=5, max_rows=1))
             if not self.molecules:
-                for molecule in range(0, Ntraces, Ncolours):
+                for molecule in range(0, Ntraces):
                     self.addMolecule()
             pks = np.genfromtxt(str(self.relativeFilePath) + '.pks', skip_header=6)        
             for i, molecule in enumerate(self.molecules):

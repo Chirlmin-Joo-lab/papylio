@@ -35,12 +35,13 @@ def plotROI(exp_file, mole):
     
     
     pixels = ROI_mrg.load()
+    pxmax = int(np.max(ROI_mrg.getextrema()))
 
     for x in range(2*bnd+1):
         for y in range(2*bnd+1):
             if (x-bnd)**2 + (y-bnd)**2 == (bnd)**2:
-                pixels[x, y] = 30
-                pixels[x+2*bnd+1, y] = 30
+                pixels[x, y] = pxmax
+                pixels[x+2*bnd+1, y] = 42
     #print(ROI1.getcolors())
     print(ROI_mrg.getbands())
     

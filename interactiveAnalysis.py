@@ -38,7 +38,7 @@ class InteractivePlot(object):
 
         sns.set(style="dark")
         sns.set_color_codes()
-        plt.style.use('dark_background')
+        #plt.style.use('dark_background')
 
         self.fig, self.axes = plt.subplots(3, 1, figsize=(10, 7))
         self.fig.canvas.set_window_title(f'Dataset: {self.file.name}')
@@ -46,7 +46,7 @@ class InteractivePlot(object):
         self.axes[1].set_ylim((-50, 500))  # Det default intensity limits
         self.axes[1].set_ylabel("intensity (a.u)\n")
         self.axes[1].set_xlim((-2, self.time[-1] + 2))
-        self.axes[1].axis('off')
+        self.axes[1].set_xticklabels([])
         self.axes[2].set_ylim((-0.1, 1.1))  # Det default fret limits
         self.axes[2].set_xlabel("time (s)")
         self.axes[2].set_ylabel("FRET\n")
@@ -195,24 +195,25 @@ class InteractivePlot(object):
 
         self.axes[2].plot(self.time, self.fret, "b", lw=.75)
    
-        self.axes[0].imshow(self.plotROI())
+        if self.file.avgImage is not None:
+            self.axes[0].imshow(self.plotROI())
 
         # vertical lines to indicate the threshold in the two axes
         self.slidel = [ax.axhline(0, lw=1, ls=":", zorder=3, visible=False) for ax in self.axes[1:]]
         #  Creat cursor particular to the molelcule and connect it to mouse movement event
         self.cursors = []
-        cursor_kws = {'useblit': True, 'color': 'white', 'ls': "--", 'lw': 1, 'alpha': 0.5}
+        cursor_kws = {'useblit': True, 'color': 'black', 'ls': "--", 'lw': 1, 'alpha': 0.5}
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[1], **cursor_kws))
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[2], **cursor_kws))
 
         self.fig.canvas.draw_idle()
+        
     def plotROI(self):
         img = self.file.avgImage
-        coor = self.file.molecules[self.mol_indx].coordinates
         bnd = 5
         totwidth = 4*bnd+2
         totheight = 2*bnd+1
-
+        coor = self.file.molecules[self.mol_indx].coordinates
         ROI1 = img.crop((coor[0]-bnd-1, coor[1]-bnd-1, coor[0]+bnd, coor[1]+bnd))
         ROI2 = img.crop((coor[2]-bnd-1, coor[3]-bnd-1, coor[2]+bnd, coor[3]+bnd))
         ROI_mrg = Image.new("P", (totwidth, totheight))
@@ -223,10 +224,9 @@ class InteractivePlot(object):
         for x in range(2*bnd+1):
             for y in range(2*bnd+1):
                 if (x-bnd)**2 + (y-bnd)**2 == (bnd)**2:
-                    pixels[x, y] = 30
-                    pixels[x+2*bnd+1, y] = 30
-
-        return ROI_mrg    
+                    pixels[x, y] = int(np.max(ROI_mrg.getextrema()))
+                    pixels[x+2*bnd+1, y] = int(np.max(ROI_mrg.getextrema()))
+        return ROI_mrg
 
     def change_axis(self, event_type, event):
         ax = event.inaxes
@@ -302,7 +302,7 @@ class InteractivePlot(object):
         title = f'Molecule: {self.mol.index} /{len(self.file.molecules)}'
         title += '  (S)'*(self.mol.isSelected)
         rgba = matplotlib.colors.to_rgba
-        c = rgba('g')*self.mol.isSelected + rgba('w')*(not self.mol.isSelected)
+        c = rgba('g')*self.mol.isSelected + rgba('b')*(not self.mol.isSelected)
         self.axes[1].set_title(title, color=c)
         self.fig.canvas.draw_idle()
 
@@ -334,8 +334,7 @@ class InteractivePlot(object):
 
             for l in lines:
                 method = l.get_label().split()[0]
-                thres = "N/A"*(method=='man') + str(self.thrsliders[0].val)*(method =='thres')
-
+                thres = "N/A" * (method == 'man') + str(self.thrsliders[0].val) * (method == 'thres')
                 d = {'time': l.get_xdata()[1], 'trace': l.get_label().split()[1],
                      'state': 1, 'method': method, 'thres': thres, 'kon': kon,
                       'Iroff': self.Iroff, 'Igoff': self.Igoff, 'Imin': self.Imin}
@@ -416,7 +415,7 @@ class InteractivePlot(object):
         selcol = matplotlib.colors.to_rgba(sel[0])
         spcol = [self.axes[1].spines[s].get_edgecolor() for s in ['left','bottom','right']]
         if selcol not in spcol:
-            [self.axes[1].spines[s].set_color('white') for s in ['left','bottom','right']]
+            [self.axes[1].spines[s].set_color('black') for s in ['left','bottom','right']]
 
         self.load_edges()
 
@@ -490,7 +489,7 @@ class Draw_lines(object):
         if event.button == 1:
             if ax == self.fig.get_axes()[1] or ax == self.fig.get_axes()[2]:
                 sel = self.radio.value_selected*(ax == self.fig.get_axes()[1])
-                sel = sel + "E"*(ax == self.fig.get_axes()[1])
+                sel = sel + "E"*(ax == self.fig.get_axes()[2])
                 l = ax.axvline(x=event.xdata, zorder=0, lw=0.65, label="man "+sel)
                 self.lines.append(l)
 
