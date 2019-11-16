@@ -22,7 +22,9 @@ def analyze_dwelltimes(exp_file, save=True, filename=None):
     for i, mol in enumerate(exp_file.molecules):
         if mol.steps is None:
             continue
+        mol.steps.reset_index(inplace=True, drop=True)
         times = mol.steps.time.sort_values().values
+        #print(mol.steps)
         try:
             times1 = times.reshape((int(times.size/2), 2))
         except ValueError:
