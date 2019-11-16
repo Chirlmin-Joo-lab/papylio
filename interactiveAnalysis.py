@@ -319,6 +319,7 @@ class InteractivePlot(object):
 
 #           Sort the timepoints
             self.mol.steps = self.mol.steps.sort_values(by=['time'])
+            mol.steps.reset_index(inplace=True, drop=True)
 
         if move:
             if event.inaxes == self.axnextb or event.key in ['right']:
