@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path, PureWindowsPath
 import traceAnalysisCode as trace_ana
 
-mainPath = PureWindowsPath('C:\\Users\\pimam\\Documents\\MEP\\tracesfiles')
+#mainPath = PureWindowsPath('C:\\Users\\pimam\\Documents\\MEP\\tracesfiles')
+mainPath = PureWindowsPath('F:\\20191127_wtCas9\\#2_strept_100pMDNA20biot_10nMwtCas9_1to2_snaps\\peaks5collect4_red_green')
 mainPath = Path(mainPath)
 exp = trace_ana.Experiment(mainPath)
 k=0

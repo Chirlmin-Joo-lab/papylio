@@ -24,8 +24,9 @@ from PIL import Image
 
 
 class InteractivePlot(object):
-    def __init__(self, file, import_excel=True):
+    def __init__(self, file, import_excel=True, backcolor='black'):
         plt.ioff()
+        self.backcolor = backcolor
         self.file = file
         self.mol_indx = 0  #   From which molecule to start the analysis
         self.exp_time = self.file.exposure_time
@@ -38,7 +39,8 @@ class InteractivePlot(object):
 
         sns.set(style="dark")
         sns.set_color_codes()
-        #plt.style.use('dark_background')
+        if self.backcolor == 'black':
+            plt.style.use('dark_background')
 
         self.fig, self.axes = plt.subplots(3, 1, figsize=(10, 7))
         self.fig.canvas.set_window_title(f'Dataset: {self.file.name}')
@@ -52,6 +54,7 @@ class InteractivePlot(object):
         self.axes[2].set_ylabel("FRET\n")
         self.axes[2].set_xlim((-2, self.time[-1] + 2))  # Set default x limits dependent on measurement time
 
+        
         #plt.subplots_adjust(top=0.75)
         plt.subplots_adjust(bottom=0.23)
 
@@ -112,9 +115,12 @@ class InteractivePlot(object):
         self.checkbfret = matplotlib.widgets.CheckButtons(self.axcheckfret, ["E fret"],
                                                           actives=[False])
 
-
+        
         for chbutton in [self.checkbtotal, self.checkbfret]:
-            chbutton.rectangles[0].set_color("black")
+            if self.backcolor == 'black' :
+                chbutton.rectangles[0].set_color("black")
+            else:
+                chbutton.rectangles[0].set_color("white")
             chbutton.rectangles[0].set_height( 0.2)
             [line.remove() for line in chbutton.lines[0]]
 
@@ -190,8 +196,10 @@ class InteractivePlot(object):
         self.axes[1].plot(self.time, self.green, "g", lw=.75)
         self.axes[1].plot(self.time, self.red, "r", lw=.75)
         self.total = self.red + self.green
-        self.ltotal = self.axes[1].plot(self.time, self.total, "bisque", lw=.65,
-                               zorder=0, visible=self.checkbtotal.get_status()[0])[0]
+        if self.backcolor == 'black':
+            self.ltotal = self.axes[1].plot(self.time, self.total, "bisque", lw=.65, zorder=0, visible=self.checkbtotal.get_status()[0])[0]
+        else:    
+            self.ltotal = self.axes[1].plot(self.time, self.total, "black", lw=.65, zorder=0, visible=self.checkbtotal.get_status()[0])[0]
 
         self.axes[2].plot(self.time, self.fret, "b", lw=.75)
    
@@ -202,7 +210,10 @@ class InteractivePlot(object):
         self.slidel = [ax.axhline(0, lw=1, ls=":", zorder=3, visible=False) for ax in self.axes[1:]]
         #  Creat cursor particular to the molelcule and connect it to mouse movement event
         self.cursors = []
-        cursor_kws = {'useblit': True, 'color': 'black', 'ls': "--", 'lw': 1, 'alpha': 0.5}
+        if self.backcolor == 'black':
+            cursor_kws = {'useblit': True, 'color': 'white', 'ls': "--", 'lw': 1, 'alpha': 0.5}
+        else:
+            cursor_kws = {'useblit': True, 'color': 'black', 'ls': "--", 'lw': 1, 'alpha': 0.5}
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[1], **cursor_kws))
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[2], **cursor_kws))
 
@@ -302,7 +313,10 @@ class InteractivePlot(object):
         title = f'Molecule: {self.mol.index} /{len(self.file.molecules)}'
         title += '  (S)'*(self.mol.isSelected)
         rgba = matplotlib.colors.to_rgba
-        c = rgba('g')*self.mol.isSelected + rgba('b')*(not self.mol.isSelected)
+        if self.backcolor == 'black':
+            c = rgba('g')*self.mol.isSelected + rgba('w')*(not self.mol.isSelected)
+        else:
+            c = rgba('g')*self.mol.isSelected + rgba('b')*(not self.mol.isSelected)
         self.axes[1].set_title(title, color=c)
         self.fig.canvas.draw_idle()
 
@@ -337,7 +351,7 @@ class InteractivePlot(object):
                 thres = "N/A" * (method == 'man') + str(self.thrsliders[0].val) * (method == 'thres')
                 d = {'time': l.get_xdata()[1], 'trace': l.get_label().split()[1],
                      'state': 1, 'method': method, 'thres': thres, 'kon': kon,
-                      'Iroff': self.Iroff, 'Igoff': self.Igoff, 'Imin': self.Imin}
+                     'Iroff': self.Iroff, 'Igoff': self.Igoff, 'Imin': self.Imin}
                 self.mol.steps = self.mol.steps.append(d, ignore_index=True)
             self.mol.steps.drop_duplicates(inplace=True)
 
@@ -408,14 +422,20 @@ class InteractivePlot(object):
         self.axes[1].get_lines()[not indx].set_zorder((not indx)+2)
         self.axes[1].get_lines()[indx].set_zorder(indx)
         self.radio.circles[indx].set_color(label[0])
-        self.radio.circles[not indx].set_color("black")
+        if self.backcolor == 'black':
+            self.radio.circles[not indx].set_color("black")
+        else:
+            self.radio.circles[not indx].set_color("white")
         update_slider(label[0], r"$I_G$"*bool(indx)+r"$I_R$"*bool(not indx))
         # Check the edge colors and set to white if not selected color
         sel = self.radio.value_selected
         selcol = matplotlib.colors.to_rgba(sel[0])
         spcol = [self.axes[1].spines[s].get_edgecolor() for s in ['left','bottom','right']]
         if selcol not in spcol:
-            [self.axes[1].spines[s].set_color('black') for s in ['left','bottom','right']]
+            if self.backcolor == 'black':
+                [self.axes[1].spines[s].set_color('white') for s in ['left','bottom','right']]
+            else:
+                [self.axes[1].spines[s].set_color('black') for s in ['left','bottom','right']]
 
         self.load_edges()
 
@@ -428,7 +448,10 @@ class InteractivePlot(object):
             selected_sides = list(itertools.compress(['left','bottom','right'], kon))
             unselected_sides = list(itertools.compress(['left','bottom','right'], np.invert(kon)))
             [self.axes[i].spines[s].set_color(colors[i]) for s in selected_sides]
-            [self.axes[i].spines[s].set_color('white') for s in unselected_sides]
+            if self.backcolor == 'black':
+                [self.axes[i].spines[s].set_color('white') for s in unselected_sides]
+            else:
+                [self.axes[i].spines[s].set_color('b') for s in unselected_sides]
 
         self.fig.canvas.draw_idle()
 
@@ -471,7 +494,10 @@ class InteractivePlot(object):
         if chbutton.get_status()[0]:
             chbutton.rectangles[0].set_color(c)
         elif not chbutton.get_status()[0]:
-            chbutton.rectangles[0].set_color("black")
+            if self.backcolor == 'black':
+                chbutton.rectangles[0].set_color("black")
+            else:
+                chbutton.rectangles[0].set_color("white")
         self.fig.canvas.draw_idle()
 
 class Draw_lines(object):

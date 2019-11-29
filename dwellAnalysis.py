@@ -19,7 +19,7 @@ import traceAnalysisCode as analysis
 def get_dwell_hist(dwells, dwelltype='offtime', nbins=20, save=True, plot=True, extra_label='', log=False):
 
     #  select only the ones that don't exceed the total measurement time minus 10 sec
-#    dwells_in = dwells[dwells < dwells.max() - 10]
+    dwells_in = dwells[dwells < dwells.max() - 10]
     avrg_dwell = get_average_dwell(dwells)
 
 
