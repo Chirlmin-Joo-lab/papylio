@@ -21,8 +21,7 @@ if platform == "darwin":
     use('WXAgg')
 
 
-#from matplotlib import use
-#use('WXAgg')
+
 import matplotlib as mpl
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar

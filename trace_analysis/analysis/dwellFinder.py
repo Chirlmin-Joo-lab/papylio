@@ -100,22 +100,22 @@ def find_dwelltimes(exp_file, trace='red', save=True, filename=None):
 if __name__ == '__main__':
 
     start = timetime.time()
-#    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-#    expPath = 'O:/SM-data/20191024_dcas9_DNA05-06-09-Cy3'
-#    for chamberFolder in os.listdir(expPath):
-#        if 'movies' in chamberFolder:
-#            mainPath = expPath + f'/{chamberFolder}'
-#            exp = analysis.Experiment(mainPath)
-#            for file in exp.files:
-#                data = find_dwelltimes(file, save=True)
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    expPath = 'H:/SM-data/20191206_dcas9_flow_DNA20-03-08-07-05'
+    for chamberFolder in os.listdir(expPath):
+        if 'movies' in chamberFolder or 'movie' in chamberFolder:
+            mainPath = expPath + f'/{chamberFolder}'
+            exp = Experiment(mainPath)
+            for file in exp.files:
+                data = find_dwelltimes(file, save=True)
 
 
-#    mainPath='./traces'
-    mainPath = 'G:/SM-data/20191101_dcas9_flow_DNA04_DNA20/#4.20_streptavidin_0.5nM_dcas9-crRNA-Cy5_10nM_DNA04-Cy3_G_flow'
-    exp = Experiment(mainPath)
-    file = exp.files[1]
+# #    mainPath='./traces'
+#     mainPath = 'G:/SM-data/20191101_dcas9_flow_DNA04_DNA20/#4.20_streptavidin_0.5nM_dcas9-crRNA-Cy5_10nM_DNA04-Cy3_G_flow'
+#     exp = Experiment(mainPath)
+#     file = exp.files[1]
 
-#    data = find_dwelltimes(file, trace='red', save=True)
+# #    data = find_dwelltimes(file, trace='red', save=True)
 
-#
-    print(f'Analysis time: {timetime.time() - start} sec')
+# #
+#     print(f'Analysis time: {timetime.time() - start} sec')

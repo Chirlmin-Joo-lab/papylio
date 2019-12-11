@@ -209,7 +209,7 @@ class InteractivePlot(object):
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[0], **cursor_kws))
         self.cursors.append(matplotlib.widgets.Cursor(self.axes[1], **cursor_kws))
 
-        self.fig.canvas.draw_idle()
+        self.fig.canvas.draw()
 
     def change_axis(self, event_type, event):
         ax = event.inaxes
@@ -240,14 +240,14 @@ class InteractivePlot(object):
         k = event.key
         if k == 'a': self.autoThreshold_plot(event, find_all=False)
         if k == 'ctrl+a': self.autoThreshold_plot(event, find_all=True)
-        elif k in ['left', 'right']: self.save_molecule(event, move=True)
+        elif k in ['w', 'e']: self.save_molecule(event, move=True)
         elif k == 'z': self.auto_reject(event)
         elif k == 'c': self.draw.clear_all(event)
         elif k in [',', '.', '/']: self.select_edge(k)
         elif k == ' ': self.select_molecule(toggle=True)
         elif k == 'r': self.radio_manage('red')
         elif k == 't': self.radio_manage('green')
-        elif k == 'e':
+        elif k == 'f':
             self.checkbfret.set_active(0)
             self.checkbutton_color('E fret')
         elif k == 'i':
@@ -299,6 +299,7 @@ class InteractivePlot(object):
 
 
     def save_molecule(self, event=None, move=True, draw=True):
+
 #       Assume acceptance of automatically found and manually selected dwell times
         lines = self.axes[0].get_lines() + self.axes[1].get_lines()
         lines = [l for l in lines if l.get_label().split()[0] in ["man", "thres"]]
@@ -329,15 +330,14 @@ class InteractivePlot(object):
             self.mol.steps = self.mol.steps.sort_values(by=['time'])
 
         if move:
-            if event.inaxes == self.axnextb or event.key in ['right']:
+            if event.inaxes == self.axnextb or event.key in ['e']:
                 self.mol_indx += 1
                 if self.mol_indx >= len(self.molecules):
                     self.mol_indx = 0
 
 
-            elif event.inaxes == self.axprevb or event.key in ['left']:
+            elif event.inaxes == self.axprevb or event.key in ['w']:
                 self.mol_indx -= 1
-
             self.plot_molecule(draw_plot=draw)
 
     def conclude_analysis(self, event=None, save=True, filename=None):
