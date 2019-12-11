@@ -72,8 +72,8 @@ if __name__ == '__main__':
     except IOError:
         print('monitor file not present')
 
-#    # Import data and prepare for fitting
-#    Path = 'C:\\Users\\pimam\\Documents\\MEP\\tracesfiles'
+    # Import data and prepare for fitting
+#    Path = 'C:\\Users\\pimam\\Documents\\MEP\\traces1'
 #    mainPath = PureWindowsPath(Path)
 #    exp = trace_ana.Experiment(mainPath)
 #    file = exp.files[0]
@@ -97,11 +97,11 @@ if __name__ == '__main__':
 #    dwells_rec = dwells[dwells < max_alldwells - 10]
 #    dwells_cut = dwells[dwells >= max_alldwells - 10]
 
-    dwells_rec = np.load('./data/2exp_N=1000_rep=1_tau1=10_tau2=100_a=0.5.npy')
+    dwells_rec = np.load('./data/2exp1_N=10000_rep=1_tau1=10_tau2=100_a=0.5.npy')
     dwells_cut = []
 
     # Set parameters for simmulated annealing
-    N = 5
+    N = 10
     max_dwells = dwells_rec.max()
     avg_dwells = np.average(dwells_rec)
     x_initial = [0.5, avg_dwells, avg_dwells]
@@ -136,14 +136,14 @@ if __name__ == '__main__':
     centers = (bins[1:] + bins[:-1]) / 2.0
     plt.plot(centers, values, '.', label='All dwells')
 
-    iMaxLike = np.argmax(LLike)
+    iMaxLike = np.argmax(LLike[1:])
     bestparams = fitparams[iMaxLike]
     bestfit = P(timearray, fitparams[iMaxLike])
     plt.plot(timearray, bestfit, label='P1:'+"{0:.2f}".format(fitparams[iMaxLike][0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(fitparams[iMaxLike][1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(fitparams[iMaxLike][2]))
     plt.xlabel('dwell time (sec)')
     plt.ylabel('fraction')
     plt.legend()
-#    plt.savefig(f'{len(exp.files)}files_bestfit.png', facecolor='white', dpi=300)
+    #plt.savefig(f'{len(exp.files)}files_bestfit.png', facecolor='white', dpi=300)
 
     plt.figure()
     plt.semilogy(centers, values, '.', label='All dwells')
@@ -151,4 +151,4 @@ if __name__ == '__main__':
     plt.xlabel('dwell time (sec)')
     plt.ylabel('logfraction')
     plt.legend()
-#    plt.savefig(f'{len(exp.files)}files_bestfit_log.png', facecolor='white', dpi=300)
+    #plt.savefig(f'{len(exp.files)}files_bestfit_log.png', facecolor='white', dpi=300)
