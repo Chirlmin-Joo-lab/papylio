@@ -8,7 +8,6 @@ from trace_analysis import InteractivePlot
 
 # Define path to data, replace by your own directory
 mainPath = r'D:\pathToDataFolder'
-mainPath = r'D:\ivoseverins\SURFdrive\Promotie\Code\Python\traceAnalysis\twoColourExampleData\20141017 - Holliday junction - Copy'
 
 # Initialize an experiment
 exp = Experiment(mainPath)

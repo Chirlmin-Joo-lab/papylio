@@ -4,6 +4,11 @@ Created on Sat Apr 27 23:12:58 2019
 
 @author: iason
 """
+if __name__ == '__main__':
+    import sys
+    from pathlib import Path
+    p = Path(__file__).parents[2]  # include two levels up directory where the trace_analysis package lies
+    sys.path.insert(0, str(p))
 
 import numpy as np
 
@@ -18,7 +23,6 @@ from pathlib import Path, PureWindowsPath
 import functools
 #plt.rcParams['toolbar'] = 'toolmanager'
 # from matplotlib.backend_tools import ToolBase
-#mainPath = r'D:\ivoseverins\SURFdrive\Promotie\Code\Python\traceAnalysis\twoColourExampleData\HJ A'
 
 
 class InteractivePlot(object):
@@ -36,6 +40,7 @@ class InteractivePlot(object):
         return self.molecules[self.mol_indx].file
     @property
     def time(self):
+        
         return self.molecules[self.mol_indx].file.time
 
     def plot_initialize(self):
@@ -59,8 +64,8 @@ class InteractivePlot(object):
         plt.subplots_adjust(bottom=0.23)
 
         # Create the axes for the widgets
-        self.rax = plt.axes([0.91, 0.72, 0.08, 0.15])
-        self.axtotal = plt.axes([0.91, 0.66, 0.08, 0.08])
+        self.rax = plt.axes([0.91, 0.71, 0.08, 0.2])
+
 
         self.axcheckfret = plt.axes([0.91, 0.35, 0.08, 0.08])
         self.axcorred = plt.axes([0.95, 0.6, 0.028, 0.06])
@@ -77,10 +82,14 @@ class InteractivePlot(object):
 
         self.axnextb = plt.axes([0.17, 0.90, 0.065, 0.062])  # Buttons to cycle through molecules
         self.axprevb = plt.axes([0.083, 0.90, 0.08, 0.062])
+
+        self.axsavetraceb = plt.axes([0.27, 0.90, 0.065, 0.062])
+        self.axtotal = plt.axes([0.77, 0.90, 0.08,  0.062])
         [ax.set_frame_on(False) for ax in self.fig.get_axes()[2:]]
 
+
         #  Radiobutton to select red or green
-        self.radio = matplotlib.widgets.RadioButtons(self.rax, ("red", "green"))
+        self.radio = matplotlib.widgets.RadioButtons(self.rax, ("red", "green", 'total'))
         self.radio.circles[0].set_color("r")
         for circle in self.radio.circles: # adjust radius here. The default is 0.05
             circle.set_radius(0.07)
@@ -106,9 +115,12 @@ class InteractivePlot(object):
         self.bprev = matplotlib.widgets.Button(self.axprevb,'Previous' , **bp)
         self.bprev.on_clicked(self.save_molecule)
 
+        self.bsavetrace = matplotlib.widgets.Button(self.axsavetraceb,'save trace' , **bp)
+        self.bsavetrace.on_clicked(self.save_trace)
+
 
         #  A checkbutton for whether to display the total intensity
-        self.checkbtotal = matplotlib.widgets.CheckButtons(self.axtotal, ["Total"],
+        self.checkbtotal = matplotlib.widgets.CheckButtons(self.axtotal, ["Show Total"],
                                                           actives=[False])
 
         #  A checkbutton for fret autothreshold dwell-time calculation
@@ -141,7 +153,7 @@ class InteractivePlot(object):
         [slider.vline.remove() for slider in self.thrsliders]  # remove the default vertical lines showing the initial value
 
         self.connect_events_to_canvas()
-#        self.fig.show()
+
 
     def connect_events_to_canvas(self):
         self.fig.canvas.mpl_connect('button_press_event', self.draw.onclick)
@@ -155,6 +167,9 @@ class InteractivePlot(object):
 
 
     def plot_molecule(self, draw_plot=True):
+        sns.set(style="dark")
+        sns.set_color_codes()
+        plt.style.use('dark_background')
         # clear the appropriate lines from axes first
         [ax.lines.clear() for ax in self.fig.get_axes()[:2]]
         # find the current molecule instance
@@ -172,7 +187,7 @@ class InteractivePlot(object):
         # load kon if existing or assign a False 3x3 boolean
         self.prev_mol = self.molecules[self.mol_indx - 1]
         if all(kon is None for kon in [self.mol.kon_boolean, self.prev_mol.kon_boolean]):
-            self.kon = np.zeros((3,3), dtype=bool)
+            self.kon = np.zeros((4,3), dtype=bool)
         elif self.mol.kon_boolean is  None:
             self.kon = np.copy(self.prev_mol.kon_boolean)  # if no kon is defined for current molecule
         else:
@@ -185,6 +200,7 @@ class InteractivePlot(object):
 
         self.red = self.mol.I(1, Ioff=self.Iroff)
         self.green = self.mol.I(0, Ioff=self.Igoff)
+        self.total = self.red + self.green
 
 
         self.fret = self.mol.E(Imin=self.Imin, Iroff=self.Iroff, Igoff=self.Igoff)
@@ -193,11 +209,12 @@ class InteractivePlot(object):
             return
 
         #  if draw_plot is true
-        self.axes[0].plot(self.time, self.green, "g", lw=.75)
-        self.axes[0].plot(self.time, self.red, "r", lw=.75)
-        self.total = self.red + self.green
+        # The order in which the traces are plotted matters later for the order of the axes lines.
+        # it should always follow the order of the radio button
+        self.lred = self.axes[0].plot(self.time, self.red, "r", lw=.75)[0]
+        self.lgreen = self.axes[0].plot(self.time, self.green, "g", lw=.75)[0]
         self.ltotal = self.axes[0].plot(self.time, self.total, "bisque", lw=.65,
-                               zorder=0, visible=self.checkbtotal.get_status()[0])[0]
+                               zorder=-1, visible=self.checkbtotal.get_status()[0])[0]
 
         self.axes[1].plot(self.time, self.fret, "b", lw=.75)
 
@@ -271,6 +288,8 @@ class InteractivePlot(object):
              for f in s.time[s.trace == 'red'].values]
             [self.axes[0].axvline(f, zorder=0, lw=0.65, label="saved g")
              for f in s.time[s.trace == 'green'].values]
+            [self.axes[0].axvline(f, zorder=0, lw=0.65, label="saved t")
+             for f in s.time[s.trace == 'total'].values]
             [self.axes[1].axvline(f, zorder=0, lw=0.65, label="saved E")
              for f in s.time[s.trace == 'E'].values]
 
@@ -320,14 +339,14 @@ class InteractivePlot(object):
                 method = l.get_label().split()[0]
                 thres = "N/A"*(method=='man') + str(self.thrsliders[0].val)*(method =='thres')
 
-                d = {'time': l.get_xdata()[0], 'trace': l.get_label().split()[1],
+                d = {'time': max(l.get_xdata()[0], 0), 'trace': l.get_label().split()[1],
                      'state': 1, 'method': method, 'thres': thres, 'kon': kon,
                       'Iroff': self.Iroff, 'Igoff': self.Igoff, 'Imin': self.Imin}
                 self.mol.steps = self.mol.steps.append(d, ignore_index=True)
             self.mol.steps.drop_duplicates(inplace=True)
 
-#           Sort the timepoints
-            self.mol.steps = self.mol.steps.sort_values(by=['time'])
+           #fSort the timepoints first by trace type and then in ascending order
+            self.mol.steps = self.mol.steps.sort_values(by=['trace', 'time'])
 
         if move:
             if event.inaxes == self.axnextb or event.key in ['e']:
@@ -355,20 +374,21 @@ class InteractivePlot(object):
         self.auto_reject()
         #  Find the steps for the checked buttons
         sel = self.radio.value_selected
-        color = self.red*bool(sel == "red") + self.green*bool(sel == "green")  # Select trace data for red  or green
+        color = self.red*bool(sel == 'red') + self.green*bool(sel == 'green') \
+                + self.total*bool(sel == 'total')  # Select trace data for red  or green
         steps = self.mol.find_steps(color, threshold=self.thrsliders[0].val)
         l_props = {"lw": 0.75, "zorder": 5, "label": "thres "+sel}
         [self.axes[0].axvline(s*self.file.exposure_time, **l_props) for s in steps["frames"]]
         if self.checkbfret.get_status()[0]:
             steps = self.mol.find_steps(self.fret, threshold=self.thrsliders[1].val)
             l_props = {"lw": 0.75, "zorder": 5, "label": "thres E"}
-            [self.axes[1].axvline(s*self.exp_time, **l_props) for s in steps["frames"]]
+            [self.axes[1].axvline(s*self.mol.file.exposure_time, **l_props) for s in steps["frames"]]
         self.fig.canvas.draw()
         if find_all:
             for mol in self.molecules:
                 self.autoThreshold_plot(find_all=False)
                 print(f'Analyzed mol {self.mol.index} /{len(self.molecules)}')
-                e = matplotlib.backend_bases.KeyEvent('key_press_event', self.fig.canvas, 'right')
+                e = matplotlib.backend_bases.KeyEvent('key_press_event', self.fig.canvas, 'e')
                 if mol != self.molecules[-1]:
                     self.save_molecule(event=e, move=True, draw=False)
                 elif mol == self.molecules[-1]:
@@ -387,16 +407,22 @@ class InteractivePlot(object):
             s = self.thrsliders[0]
             s.poly.set_color(color); s.label.set(text=label)
 
-        indx = int(label == 'green')  # 1 if green, 0 if red
-        self.radio.value_selected = label
-        self.axes[0].get_lines()[not indx].set_zorder((not indx)+2)
-        self.axes[0].get_lines()[indx].set_zorder(indx)
-        self.radio.circles[indx].set_color(label[0])
-        self.radio.circles[not indx].set_color("black")
-        update_slider(label[0], r"$I_G$"*bool(indx)+r"$I_R$"*bool(not indx))
+        indx = [l.get_text() for l in self.radio.labels].index(label)
+        color = 'r'*(label=='red') + 'g'*(label=='green') + 'bisque'*(label=='total')
+
+        lines =  [self.lred, self.lgreen, self.ltotal]
+        [l.set_zorder(-lines.index(l)) for l in lines if lines.index(l) != indx ]
+        print(indx, color)
+        lines[indx].set_zorder(10)
+        self.radio.circles[indx].set_color(color)
+        [c.set_color('black') for c in self.radio.circles if self.radio.circles.index(c) != indx]
+        update_slider(color, r"$I_G$"*(label=='green') + \
+                                r"$I_R$"*(label=='red') + \
+                                r"$I_T$"*(label=='total') )
+
         # Check the edge colors and set to white if not selected color
-        sel = self.radio.value_selected
-        selcol = matplotlib.colors.to_rgba(sel[0])
+        # sel = self.radio.value_selected
+        selcol = matplotlib.colors.to_rgba(color)
         spcol = [self.axes[0].spines[s].get_edgecolor() for s in ['left','bottom','right']]
         if selcol not in spcol:
             [self.axes[0].spines[s].set_color('white') for s in ['left','bottom','right']]
@@ -404,9 +430,13 @@ class InteractivePlot(object):
         self.load_edges()
 
     def load_edges(self, load_fret=False):  # loads edge color from kon array
-        sel = self.radio.value_selected
-        kons = [self.kon[int(sel == 'green')]] ; colors = [sel[0]]
-        if load_fret: kons.append(self.kon[2]) ;colors.append('blueviolet')
+        label = self.radio.value_selected
+        indx = [l.get_text() for l in self.radio.labels].index(label)
+        color = 'r'*(label=='red') + 'g'*(label=='green') + 'sandybrown'*(label=='total')
+
+        kons = [self.kon[indx]]
+        colors = [color]
+        if load_fret: kons.append(self.kon[3]) ;colors.append('blueviolet')
 
         for i, kon in enumerate(kons):
             selected_sides = list(itertools.compress(['left','bottom','right'], kon))
@@ -419,22 +449,23 @@ class InteractivePlot(object):
     def select_edge(self, key):
         if self.fret_edge_lock:
             ax = self.axes[0]
-            sel = self.radio.value_selected[0]  # get the selected color of the radiobutton
+            label = self.radio.value_selected  # get the selected color of the radiobutton
+            color = 'r'*(label=='red') + 'g'*(label=='green') + 'sandybrown'*(label=='total')
         elif not self.fret_edge_lock:
             ax = self.axes[1]
-            sel = 'blueviolet'  # this refers to the fret color
+            color = 'blueviolet'  # this refers to the fret color
 
         side = 'left'*(key == ',')  + 'bottom'*(key == '.') + 'right'*(key == '/')
 
         spcolor = ax.spines[side].get_edgecolor()
-        selcol, w = matplotlib.colors.to_rgba(sel), matplotlib.colors.to_rgba('white')
+        selcol, w = matplotlib.colors.to_rgba(color), matplotlib.colors.to_rgba('white')
         c = selcol*(spcolor == w) + w*(spcolor == selcol)
         ax.spines[side].set_color(c)
 
-        self.update_kon(sel, selcol, side, ax)
+        self.update_kon(color, selcol, side, ax)
 
     def update_kon(self, sel=None, selcol=None, side=None, ax=None):
-        i = ['r', 'g', 'blueviolet'].index(sel)  # These are the colors of the sides. blueviolet refers to fret
+        i = ['r', 'g', 'sandybrown', 'blueviolet'].index(sel)  # These are the colors of the sides. blueviolet refers to fret
         j = ['left', 'bottom', 'right'].index(side)
         self.kon[i][j] = (ax.spines[side].get_edgecolor() == selcol)
 
@@ -449,14 +480,23 @@ class InteractivePlot(object):
     def checkbutton_color(self, label):  # changes the color of the fret checkbutton. Purely for aesthetics
         if label == 'E fret':
             chbutton = self.checkbfret ; c = 'b'
-        elif label == 'Total':
-            chbutton = self.checkbtotal ; c = 'darkgoldenrod'
+        elif label == 'Show Total':
+            chbutton = self.checkbtotal ; c = 'bisque'
 
         if chbutton.get_status()[0]:
             chbutton.rectangles[0].set_color(c)
         elif not chbutton.get_status()[0]:
             chbutton.rectangles[0].set_color("black")
         self.fig.canvas.draw_idle()
+
+    def save_trace(self, event=None):
+
+        Ioff = [self.Igoff, self.Iroff]
+        self.mol.plot(xlim=self.axes[0].get_xlim(),
+                      ylim=self.axes[0].get_ylim(),
+                      Ioff=Ioff, Imin=self.Imin,
+                      Iroff=self.Iroff, Igoff=self.Igoff, save=True)
+
 
 class Draw_lines(object):
     def __init__(self, fig, iplot_radio):
@@ -506,17 +546,19 @@ class Draw_lines(object):
         self.fig.canvas.draw_idle()
 
 if __name__ == '__main__':
+
     # Just as a working example of how the interactive plot whould be called. Here an example dataset is included inside the traces folder
-        os.chdir(os.path.dirname(os.path.abspath(__file__)))
-        mainPath = './traces'
-        mainPath = Path(mainPath)
-        exp = Experiment(mainPath)
-        file = exp.files[0]
-        molecules = file.molecules
-        i = InteractivePlot(molecules)
-        i.plot_initialize()
-        i.plot_molecule()
-        plt.show()
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    p = Path(__file__).parents[2]
+#    mainPath = str(p) + '/traces'
+    mainPath = 'F:\\20191211_dCas9_DNA5_7_8_20_Vikttracr\\#2_strept_1nMCas9_red'
+    exp = Experiment(mainPath)
+    file = exp.files[0]
+    molecules = file.molecules
+    i = InteractivePlot(molecules)
+    i.plot_initialize()
+    i.plot_molecule()
+    plt.show()
 
 
 #self.fig.canvas.manager.toolmanager.add_tool('Next', NextTool)

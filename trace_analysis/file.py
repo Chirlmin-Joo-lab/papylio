@@ -1,3 +1,9 @@
+if __name__ == '__main__':
+    import sys
+    from pathlib import Path
+    p = Path(__file__).parents[1]
+    sys.path.insert(0, str(p))
+
 from pathlib import Path # For efficient path manipulation
 import numpy as np #scientific computing with Python
 import pandas as pd
@@ -12,7 +18,7 @@ from trace_analysis.peak_finding import find_peaks
 from trace_analysis.coordinate_optimization import coordinates_within_margin, coordinates_after_gaussian_fit, coordinates_without_intensity_at_radius
 from trace_analysis.trace_extraction import extract_traces
 from trace_analysis.coordinate_transformations import translate, transform
-
+from trace_analysis.analysis.stepsDataAnalysis import analyze_steps
 
 class File:
     def __init__(self, relativeFilePath, experiment):
@@ -152,7 +158,8 @@ class File:
                             '.map': self.import_map_file,
                             '.pks': self.import_pks_file,
                             '.traces': self.import_traces_file,
-                            '.log' : self.import_log_file
+                            '.log' : self.import_log_file,
+                            '_steps_data.xlsx': self.import_excel_file
                             }
 
         importFunctions.get(extension, self.noneFunction)()
@@ -213,6 +220,9 @@ class File:
         self.coordinates = coordinates
 
     def find_coordinates(self, configuration = None):
+        # Refresh configuration
+        self.experiment.import_config_file()
+
         #image = self.movie.make_average_tif(write=False)
 
         if configuration is None: configuration = self.experiment.configuration['find_coordinates']
@@ -284,6 +294,9 @@ class File:
         #self.traces = np.reshape(rawData.ravel(), (self.number_of_colours * self.number_of_molecules, self.number_of_frames), order='F') # 2d array of traces
 
     def extract_traces(self):
+        # Refresh configuration
+        self.experiment.import_config_file()
+
         if self.movie is None: raise FileNotFoundError('No movie file was found')
         self.traces = extract_traces(self.movie, self.coordinates, channel='all', gauss_width = 11)
         self.export_traces_file()
@@ -323,14 +336,14 @@ class File:
     def histogram(self):
         histogram(self.molecules)
 
-    def importExcel(self, filename=None):
+    def import_excel_file(self, filename=None):
         if filename is None:
             filename = self.name+'_steps_data.xlsx'
         try:
             steps_data = pd.read_excel(filename, index_col=[0,1],
                                             dtype={'kon':np.str})       # reads from the 1st excel sheet of the file
         except FileNotFoundError:
-            print(f'No saved analysis for {self.name}')
+            print(f'No saved analysis for {self.name} as {filename}')
             return
         molecules = steps_data.index.unique(0)
         indices = [int(m.split()[-1]) for m in molecules]
@@ -340,18 +353,25 @@ class File:
             mol.steps = steps_data.loc[f'mol {mol.index}']
             if 'kon' in mol.steps.columns:
                 k = [int(i) for i in mol.steps.kon[0]]
-                mol.kon_boolean = np.array(k).astype(bool).reshape((3,3))
+                mol.kon_boolean = np.array(k).astype(bool).reshape((4,3))
         return steps_data
 
     def savetoExcel(self, filename=None, save=True):
         if filename is None:
             filename = self.name+'_steps_data.xlsx'
+
+        # Find the molecules for which steps were selected
+        molecules_with_data = [mol for mol in self.molecules if mol.steps is not None]
+
+
         # Concatenate all steps dataframes that are not None
-        mol_data = [mol.steps for mol in self.molecules if mol.steps is not None]
+        mol_data = [mol.steps for mol in molecules_with_data]
         if not mol_data:
             print(f'no data to save for {self.name}')
             return
-        keys = [f'mol {mol.index}' for mol in self.molecules if mol.steps is not None]
+        keys = [f'mol {mol.index}' for mol in molecules_with_data]
+
+
         steps_data = pd.concat(mol_data, keys=keys, sort=False)
         if save:
             print("data saved in: " + filename)
@@ -389,6 +409,9 @@ class File:
             input("Press enter to continue")
 
     def perform_mapping(self, configuration = None):
+        # Refresh configuration
+        self.experiment.import_config_file()
+
         image = self.average_image
         if configuration is None: configuration = self.experiment.configuration['mapping']
 

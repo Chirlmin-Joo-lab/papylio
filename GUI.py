@@ -41,10 +41,12 @@ class MainFrame(wx.Frame):
         # File menu in Menu bar
         fileMenu = wx.Menu()
         fileMenuOpen = fileMenu.Append(wx.ID_OPEN, "&Open", "Open directory")
+        fileMenuFindNewFiles = fileMenu.Append(wx.ID_ANY, "&Find new files")
         fileMenuAbout = fileMenu.Append(wx.ID_ABOUT, "&About")
         fileMenuExit = fileMenu.Append(wx.ID_EXIT, "&Exit")
 
         self.Bind(wx.EVT_MENU, self.OnOpen, fileMenuOpen)
+        self.Bind(wx.EVT_MENU, self.OnFindNewFiles, fileMenuFindNewFiles)
         self.Bind(wx.EVT_MENU, self.OnAbout, fileMenuAbout)
         self.Bind(wx.EVT_MENU, self.OnExit, fileMenuExit)
 
@@ -158,7 +160,15 @@ class MainFrame(wx.Frame):
 #
 #            self.tree.Expand(self.experimentRoot)
 
+    def OnFindNewFiles(self, event):
+        originalFiles = [file for file in self.experiment.files]
+        self.experiment.addAllFilesInMainPath()
+        newFiles = [file for file in self.experiment.files if file not in originalFiles]
 
+        for file in newFiles:
+            self.tree.AddFile(file, self.experiment.item)
+
+        self.tree.insertDataIntoColumns()
 
     def OnAbout(self,event):
         dlg = wx.MessageDialog(self, 'Software for trace analysis', 'About Trace Analysis', wx.OK)
@@ -365,6 +375,7 @@ class HyperTreeListPlus(HTL.HyperTreeList):
         experimentItemNames = [item.GetText() for item in self.root.GetChildren()]
         if experiment.name not in experimentItemNames:
             experimentItem = self.AppendItem(self.root, experiment.name, ct_type = 1, data = experiment)
+            experiment.item = experimentItem
 
         print(experiment.name)
 

@@ -54,6 +54,8 @@ def simmulated_annealing(data, objective_function, model, x_initial,
         for i in range(1, len(x)):
             x_trial[i] = np.random.uniform(np.max([x[i] - delta2, lwrbnd[i]]),
                                            np.min([x[i] + delta2, uprbnd[i]]))
+#        x_trial = np.exp(x_trial)
+#        x = np.exp(x)
         x = Metropolis(objective_function, model, x, x_trial, T, data)
     return x
 
@@ -70,37 +72,26 @@ def Metropolis(f, model, x, x_trial, T, data):
 if __name__ == '__main__':
 
 
-    # Import data and prepare for fitting
-#    Path = 'C:\\Users\\pimam\\Documents\\MEP\\traces1'
-#    mainPath = PureWindowsPath(Path)
-#    exp = trace_ana.Experiment(mainPath)
-#    file = exp.files[0]
-#    filename = './'+file.name+'_dwells_data.xlsx'
-#    data = pd.read_excel(filename, index_col=[0, 1], dtype={'kon': np.str})
-#
-#    if len(exp.files) > 1:  # time of traces should be of the same length
-#        for file in exp.files[1:]:
-#            filename = './'+file.name+'_dwells_data.xlsx'
-#            print(filename)
-#            data2 = pd.read_excel(filename, index_col=[0, 1], dtype={'kon': np.str})
-#            data = data.append(data2, ignore_index=True)
-#
-#    dwelltype = 'offtime'
-#    dwells_all = []
-#    dwells = data[dwelltype].values
-#    dwells = dwells[~np.isnan(dwells)]
-#    dwells_all.append(dwells)
-#    dwells_all = np.concatenate(dwells_all)
-#    max_alldwells = dwells_all.max()
-#    dwells_rec = dwells[dwells < max_alldwells - 10]
-#    dwells_cut = dwells[dwells >= max_alldwells - 10]
-#    dwells = dwells_rec
+#    # Import data and prepare for fitting
 
-    filename = '2exp1_N=10000_rep=1_tau1=10_tau2=100_a=0.5'
-    dwells = np.load('./data/2exp1_N=10000_rep=1_tau1=10_tau2=100_a=0.5.npy')
-    
+    filename = 'H:/SM-data/20191101_dcas9_flow_DNA04_DNA20/'
+    chamber = '#5.10_streptavidin_0.5nM_biot-dcas9-Cy5_10nM_DNA05-Cy3_G_movies_flow'
+    filename += chamber + '/' + 'hel9_dwells_red_data.xlsx'
+
+    data = pd.read_excel(filename, index_col=[0, 1], dtype={'kon': np.str})
+
+
+    dwelltype = 'offtime'
+
+    dwells = data[dwelltype].values
+    dwells = dwells[~np.isnan(dwells)]
+
+    # dwells_rec = dwells[dwells < dwells.max() - 5]
+    # dwells_cut = dwells[dwells >= dwells.max() - 5]
+
+
     # Set parameters for simmulated annealing
-    N = 2
+    N = 5  # number of fits performed
     max_dwells = dwells.max()
     avg_dwells = np.average(dwells)
     x_initial = [0.5, avg_dwells, avg_dwells]
@@ -108,13 +99,13 @@ if __name__ == '__main__':
     uprbnd = [1, max_dwells, max_dwells]
 
     # Perform N fits on data using simmulated annealing
-    for i in range(0, N):
+    fitdata = simmulated_annealing(data=dwells, objective_function=LogLikeLihood, model=P, x_initial=x_initial, lwrbnd=lwrbnd, uprbnd=uprbnd)
+    print("fit found: ", str(fitdata))
+    fitparams = [fitdata]
+    for i in range(1, N):
         fitdata = simmulated_annealing(data=dwells, objective_function=LogLikeLihood, model=P, x_initial=x_initial, lwrbnd=lwrbnd, uprbnd=uprbnd)
         print("fit found: ", str(fitdata))
-        if i == 0:
-            fitparams = [fitdata]
-        else:
-            fitparams = np.concatenate((fitparams, [fitdata]), axis=0)
+        fitparams = np.concatenate((fitparams, [fitdata]), axis=0)
 
     # Plot the dwell time histogram and the corresponding fits
     plt.figure()
@@ -122,36 +113,26 @@ if __name__ == '__main__':
     centers = (bins[1:] + bins[:-1]) / 2.0
     plt.plot(centers, values, 'r.', label=f'offtimes N={dwells.size}')
 
+
+
     LLike = np.zeros(N)
     timearray = np.linspace(0, max_dwells, num=1000)
     for i in range(0, np.size(fitparams, 0)):
         fit = P(timearray, fitparams[i])
         LLike[i] = LogLikeLihood(dwells, fitparams[i], P)
-        plt.plot(timearray, fit, label='fit'+str(i))
-
-    # Find best fit, plot with histogram and save
-    plt.figure()
-    values, bins = np.histogram(dwells, bins=60, density=True)
-    centers = (bins[1:] + bins[:-1]) / 2.0
-    plt.plot(centers, values, '.', label='All dwells')
-
+        # plt.plot(timearray, fit, label='fit'+str(i))
     iMaxLike = np.argmax(LLike)
     bestparams = fitparams[iMaxLike]
     bestfit = P(timearray, fitparams[iMaxLike])
-    plt.plot(timearray, bestfit, label='P1:'+"{0:.2f}".format(fitparams[iMaxLike][0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(fitparams[iMaxLike][1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(fitparams[iMaxLike][2]))
+    plt.plot(timearray, bestfit, 'b', label='p: '+"{0:.2f}".format(fitparams[iMaxLike][0])+"\n"+r'$\tau_1$: '+"{0:.1f}".format(fitparams[iMaxLike][1])+"\n"+r'$\tau_2$: '+"{0:.1f}".format(fitparams[iMaxLike][2]))
+
+
+    # plot single exponential fit
+    exp = 1/avg_dwells*np.exp(-timearray/avg_dwells)
+    plt.plot(timearray, exp, 'orange', label = rf'$\tau$: {avg_dwells: .1f}')
+
     plt.xlabel('dwell time (sec)')
     plt.ylabel('prob. density')
     plt.legend(fontsize='x-large')
-    #plt.savefig(f'{len(exp.files)}files_bestfit.png', facecolor='white', dpi=200)
-
-    # Plot data with double and single exponential fit
-    plt.figure()
-    plt.semilogy(centers, values, '.', label='All dwells')
-    plt.semilogy(timearray, bestfit, label='P1:'+"{0:.2f}".format(fitparams[iMaxLike][0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(fitparams[iMaxLike][1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(fitparams[iMaxLike][2]))
-    exp = 1/avg_dwells*np.exp(-timearray/avg_dwells)
-    plt.plot(timearray, exp, 'orange', label = rf'$\tau$:{avg_dwells:.1f}')
-    plt.xlabel('dwell time (sec)')
-    plt.ylabel('log prob. density')
-    plt.legend(fontsize='x-large')
-    #plt.savefig(filename+'files_1_2expfit__compared.png', dpi=200)
+    plt.savefig(filename[:-5] +'_offtime_dist_fit.png', dpi=200)
 

@@ -41,14 +41,13 @@ class Experiment:
         self._pairs = [[c1, c2] for i1, c1 in enumerate(colours) for i2, c2 in enumerate(colours) if i2 > i1]
         self.import_all = import_all
 
-
         # Load custom config file or otherwise load the default config file
         if self.mainPath.joinpath('config.yml').is_file():
-            with self.mainPath.joinpath('config.yml').open('r') as yml_file:
-                self.configuration = yaml.load(yml_file, Loader=yaml.SafeLoader)
+            self.import_config_file()
         else:
             with Path(__file__).with_name('default_configuration.yml').open('r') as yml_file:
                 self.configuration = yaml.load(yml_file, Loader=yaml.SafeLoader)
+            self.export_config_file()
 
         os.chdir(mainPath)
 
@@ -87,6 +86,10 @@ class Experiment:
     @property
     def selectedMoleculesInAllFiles(self):
         return [molecule for file in self.files for molecule in file.selectedMolecules]
+
+    def import_config_file(self):
+        with self.mainPath.joinpath('config.yml').open('r') as yml_file:
+            self.configuration = yaml.load(yml_file, Loader=yaml.SafeLoader)
 
     def export_config_file(self):
         with self.mainPath.joinpath('config.yml').open('w') as yml_file:

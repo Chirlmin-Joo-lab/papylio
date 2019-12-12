@@ -24,6 +24,10 @@ class Molecule:
     def coordinates(self, coordinates):
         self._coordinates = np.atleast_2d(coordinates)
 
+    @property  # this is just for the stepfinder to be called through Molecule. Maybe not needed
+    def find_steps(self):
+        return stepfinder
+
     def I(self, emission, Ioff=0):
         return self.intensity[emission, :] - Ioff - self.file.background[emission]
 
@@ -35,33 +39,39 @@ class Molecule:
         E = np.nan_to_num(E)  # correct for divide with zero = None values
         return E
 
-    def plot(self, figure = None):
-        if not figure: figure = plt.gcf() # Or possibly e.g. plt.figure('Trace plot')
-        figure.clf()
+    def plot(self, ylim=(0, 500), xlim=(), Ioff=[],  save=False, **fretkwargs):
+        plt.style.use('seaborn-dark')
+        plt.style.use('seaborn-colorblind')
+        figure = plt.figure(f'{self.file.name}_mol_{self.index}', figsize=(7,4))
         if len(self.file.experiment.pairs) > 0:
             axis_I = figure.add_subplot(211)
         else:
             axis_I = figure.gca()
 
-        axis_I.set_xlabel('Time (s)')
         axis_I.set_ylabel('Intensity (a.u.)')
-        axis_I.set_ylim(0, 500)
+        axis_I.set_ylim(ylim[0], ylim[1])
+        if xlim == ():
+            axis_I.set_xlim(0, self.file.time.max()+1)
+        else:
+            axis_I.set_xlim(xlim[0], xlim[1])
+
+        axis_I.set_title(f'Molecule {self.index} /{len(self.file.molecules)}')
+        if Ioff == []:
+            Ioff = [0]*len(self.file.experiment.colours)
         for i, colour in enumerate(self.file.experiment.colours):
-            axis_I.plot(self.file.time, self.I(i), colour)
+            axis_I.plot(self.file.time, self.I(i, Ioff=Ioff[i]), colour)
 
         if len(self.file.experiment.pairs) > 0:
-            axis_E = figure.add_subplot(212, sharex = axis_I)
+            axis_E = figure.add_subplot(212, sharex=axis_I)
             axis_E.set_xlabel('Time (s)')
-            axis_E.set_ylabel('FRET (-)')
-            axis_E.set_ylim(0,1)
+            axis_E.set_ylabel('FRET')
+            axis_E.set_ylim(0,1.1)
             for i, pair in enumerate(self.file.experiment.pairs):
-                axis_E.plot(self.file.time, self.E())
-    @property  # this is just for the stepfinder to be called through Molecule. Maybe not needed
-    def find_steps(self):
-        return stepfinder
-        #plt.show()
-#MD190104: why not add a subplot with FRET here as well, to match with display Matlab?
+                axis_E.plot(self.file.time, self.E(**fretkwargs), 'b')
 
-#    @property
-#    def find_steps(self):
-#        return stepfinder
+        plt.tight_layout()
+        if save:
+            plt.savefig(f'{self.file.name}_mol_{self.index}.eps', transparent=True)
+            plt.savefig(f'{self.file.name}_mol_{self.index}.png', facecolor='white', dpi=300, transparent=True)
+
+
