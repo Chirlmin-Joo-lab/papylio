@@ -351,9 +351,9 @@ class File:
             if mol.index not in indices:
                 continue
             mol.steps = steps_data.loc[f'mol {mol.index}']
-            if 'kon' in mol.steps.columns:
-                k = [int(i) for i in mol.steps.kon[0]]
-                mol.kon_boolean = np.array(k).astype(bool).reshape((4,3))
+#            if 'kon' in mol.steps.columns:
+#                k = [int(i) for i in mol.steps.kon[0]]
+#                mol.kon_boolean = np.array(k).astype(bool).reshape((4,3))
         return steps_data
 
     def savetoExcel(self, filename=None, save=True):
