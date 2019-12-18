@@ -11,7 +11,7 @@ if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     p = Path(__file__).parents[3]
     sys.path.insert(0, str(p))
-    mainPath = PureWindowsPath('C:\\Users\\pimam\\Documents\\MEP\\traces1')
+    mainPath = PureWindowsPath('F:\\20191211_dCas9_DNA5_7_8_20_Vikttracr\\#3_strept_1nMCas9_10nMDNA7_movies\\peaks5collect4\\analysis_green_red')
 
 from trace_analysis import Experiment
 import numpy as np
@@ -117,10 +117,12 @@ if __name__ == '__main__':
     dwells = dwells[~np.isnan(dwells)]
     dwells_all.append(dwells)
     dwells_all = np.concatenate(dwells_all)
+    Ntot = len(dwells_all)
     Tmax = dwells_all.max()
     Tcut = Tmax - 10
     dwells_rec = dwells_all[dwells_all < Tcut]
     Ncut = np.size(dwells_all[dwells_all >= Tcut])
+    print('Ntot ', Ntot)
     print('Tcut ', Tcut)
     print('Ncut ', Ncut)
     dwells = dwells_rec

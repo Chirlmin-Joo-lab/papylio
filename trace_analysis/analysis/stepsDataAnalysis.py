@@ -77,7 +77,7 @@ def find_mol_dwells(mol, trace='red'):
         # else:
         #     avg_fret.append(None)
 
-    avgFRET = pd.DataFrame({'avrgFRET': avg_fret})
+    avgFRET = pd.DataFrame({'avgFRET': avg_fret})
 
     return pd.concat([offtimes, ontimes, avgFRET], axis=1)
 
