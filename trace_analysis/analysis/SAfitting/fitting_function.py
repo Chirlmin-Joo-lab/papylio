@@ -271,38 +271,25 @@ def fitting(dwells_all, mdl, Nfits, include_over_Tmax=True,
 if __name__ == '__main__':
 
     # Import data and prepare for fitting
-    exp = Experiment(mainPath)
-    file = exp.files[0]
-    filename = './'+file.name+'_dwells_data.xlsx'
-    data = pd.read_excel(filename, index_col=[0, 1], dtype={'kon': np.str})
-
-    if len(exp.files) > 1:  # time of traces should be of the same length
-        for file in exp.files[1:]:
-            filename = './'+file.name+'_dwells_data.xlsx'
-            print(filename)
-            data2 = pd.read_excel(filename, index_col=[0, 1], dtype={'kon': np.str})
-            data = data.append(data2, ignore_index=True)
-
-    dwelltype = 'offtime'
-    dwells_all = []
-    dwells = data[dwelltype].values
-    dwells = dwells[~np.isnan(dwells)]
-    dwells_all.append(dwells)
-    dwells_all = np.concatenate(dwells_all)
-
-#    filename = '2exp1_N=10000_rep=1_tau1=10_tau2=100_a=0.5'
-#    dwells_all = np.load('./data/2exp1_N=10000_rep=1_tau1=10_tau2=100_a=0.5.npy')
+    filename = '2exp_N=10000_rep=1_tau1=10_tau2=200_a=0.5'
+    dwells_all = np.load('./data/2exp_N=10000_rep=1_tau1=10_tau2=200_a=0.5.npy')
+    dwells_all = dwells_all[0]
 
     # Start fitting
     mdl = '2Exp'
     include_over_Tmax = True
-    Nfits = 2
+    Nfits = 200
     bootstrap = True
     boot_repeats = 200
-    fitdata = fitting(dwells_all, mdl, Nfits, include_over_Tmax, bootstrap, boot_repeats)
+    fitdata = fitfunc.fitting(dwells_all, mdl, Nfits, include_over_Tmax, bootstrap, boot_repeats)
     print(fitdata)
-    fitdata.to_csv(f'{mdl}_inclTmax_{include_over_Tmax}_bootstrap{boot_repeats}.csv', index=False)
-    newdata = pd.read_csv(f'{mdl}_inclTmax_{include_over_Tmax}_bootstrap{boot_repeats}.csv')
+    if bootstrap is True:
+        fitdata.to_csv(f'{mdl}_inclTmax_{include_over_Tmax}_bootstrap{boot_repeats}.csv', index=False)
+    else:
+        fitdata.to_csv(f'{mdl}_inclTmax_{include_over_Tmax}_Nfits{Nfits}.csv', index=False)
+
+#    newdata = pd.read_csv(f'{mdl}_inclTmax_{include_over_Tmax}_bootstrap{boot_repeats}.csv')
+
     # Getting measures and plotting the parameter values found
     taubnd = 100
     fitP1 = []
