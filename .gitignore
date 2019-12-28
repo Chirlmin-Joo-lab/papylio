@@ -8,7 +8,6 @@ __pycache__/*.pyc
 twoColourExampleData/
 traces/
 trace_analysis/analysis/SAfitting/data/
-trace_analysis/analysis/SAfitting/fitting_Pim.py
 Start_analysis.py
 *test*
 *.xml
