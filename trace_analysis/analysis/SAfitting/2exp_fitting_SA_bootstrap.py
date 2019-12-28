@@ -113,6 +113,7 @@ if __name__ == '__main__':
     centers = (bins[1:] + bins[:-1]) / 2.0
     plt.plot(centers, values, '.', label='All dwells')
 
+    #Bootstrapping
     for j in range(0, num):
         idwell = np.random.randint(np.size(dwells_rec), size=Ntrial)
         dwells = dwells_rec[0][idwell]

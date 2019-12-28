@@ -11,7 +11,7 @@ if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     p = Path(__file__).parents[3]
     sys.path.insert(0, str(p))
-    mainPath = PureWindowsPath('F:\\20191211_dCas9_DNA5_7_8_20_Vikttracr\\#3_strept_1nMCas9_10nMDNA7_movies\\peaks5collect4\\analysis_green_red')
+    mainPath = PureWindowsPath('C:\\Users\\pimam\\Documents\\MEP\\tracesfiles')
 
 from trace_analysis import Experiment
 import numpy as np
@@ -80,9 +80,10 @@ def Metropolis(f, model, x, x_trial, T, data, Tcut, Ncut):
     return x
 
 
-def Nfits_sim_anneal(dwells, N, model, Tcut=0, Ncut=0):
+def Nfits_sim_anneal(dwells, Nfits, model, x_initial, lwrbnd, uprbnd, Tcut=0, Ncut=0):
     # Perform N fits on data using simmulated annealing
-    for i in range(0, N):
+    LLike = np.empty(Nfits)
+    for i in range(0, Nfits):
         fitdata = simmulated_annealing(data=dwells,
                                        objective_function=LogLikeLihood,
                                        model=model, x_initial=x_initial,
@@ -93,7 +94,10 @@ def Nfits_sim_anneal(dwells, N, model, Tcut=0, Ncut=0):
             fitparams = [fitdata]
         else:
             fitparams = np.concatenate((fitparams, [fitdata]), axis=0)
-    return fitparams
+        LLike[i] = LogLikeLihood(dwells, fitparams[i], model, Tcut, Ncut)
+    iMaxLike = np.argmax(LLike)
+    bestparams = fitparams[iMaxLike]
+    return fitparams, bestparams
 
 
 if __name__ == '__main__':
@@ -118,14 +122,9 @@ if __name__ == '__main__':
     dwells_all.append(dwells)
     dwells_all = np.concatenate(dwells_all)
     Ntot = len(dwells_all)
-    Tmax = dwells_all.max()
-    Tcut = Tmax - 10
-    dwells_rec = dwells_all[dwells_all < Tcut]
-    Ncut = np.size(dwells_all[dwells_all >= Tcut])
-    print('Ntot ', Ntot)
-    print('Tcut ', Tcut)
-    print('Ncut ', Ncut)
-    dwells = dwells_rec
+
+    mdl = '2Exp'
+    include_over_Tmax = True
 
 #    filename = '2exp1_N=10000_rep=1_tau1=10_tau2=100_a=0.5'
 #    dwells_all = np.load('./data/2exp1_N=10000_rep=1_tau1=10_tau2=100_a=0.5.npy')
@@ -135,17 +134,34 @@ if __name__ == '__main__':
 #    Ncut = np.sum(dwells_all >= Tcut) + 40
 #    print('Ncut: ', Ncut)
 
+    if mdl == '2Exp':
+        model = P2expcut
+#    elif mdl == '1Exp':
+#        model = P1exp
+    else:
+        print('no valid model given')
+
+    if include_over_Tmax is True:
+        Tmax = dwells_all.max()
+        Tcut = Tmax - 10
+        dwells_rec = dwells_all[dwells_all < Tcut]
+        Ncut = dwells_all[dwells_all >= Tcut].size
+        dwells = dwells_rec
+    else:
+        Tcut = 0
+        Ncut = 0
+        dwells = dwells_all
+
     # Set parameters for simmulated annealing
-    N = 10
-    model = P2expcut
+    Nfits = 2
     avg_dwells = np.average(dwells)
     x_initial = [0.5, avg_dwells, avg_dwells]
     lwrbnd = [0, 0, 0]
-    uprbnd = [1, 1.5*Tmax, 1.5*Tmax]
+    uprbnd = [1, 2*Tmax, 2*Tmax]
 
     # Perform N fits on data using simmulated annealing
     # If you want to use P2exp without Ncut, just fil in Ncut=0 and Tcut=0
-    fitparams = Nfits_sim_anneal(dwells, N, model=model, Tcut=Tcut, Ncut=Tcut)
+    fitparams, bestparams = Nfits_sim_anneal(dwells, Nfits, model=model, x_initial=x_initial, lwrbnd=lwrbnd, uprbnd=uprbnd, Tcut=Tcut, Ncut=Tcut)
 
     # Plot the dwell time histogram and the corresponding fits
     plt.figure()
@@ -153,11 +169,9 @@ if __name__ == '__main__':
     centers = (bins[1:] + bins[:-1]) / 2.0
     plt.plot(centers, values, 'r.', label=f'offtimes N={dwells.size}')
 
-    LLike = np.zeros(N)
     timearray = np.linspace(0, Tmax, num=1000)
     for i in range(0, np.size(fitparams, 0)):
         fit, Pcut = model(timearray, fitparams[i], Tcut)
-        LLike[i] = LogLikeLihood(dwells, fitparams[i], model, Tcut, Ncut)
         plt.plot(timearray, fit, label='fit'+str(i))
 
     # Find best fit, plot with histogram and save
@@ -166,22 +180,20 @@ if __name__ == '__main__':
     centers = (bins[1:] + bins[:-1]) / 2.0
     plt.plot(centers, values, '.', label=f'Dwells with Ncut:{Ncut}')
 
-    iMaxLike = np.argmax(LLike)
-    bestparams = fitparams[iMaxLike]
-    bestfit, Pcutbest = model(timearray, fitparams[iMaxLike], Tcut)
-    plt.plot(timearray, bestfit, label='P1:'+"{0:.2f}".format(fitparams[iMaxLike][0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(fitparams[iMaxLike][1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(fitparams[iMaxLike][2]))
+    bestfit, Pcutbest = model(timearray, bestparams, Tcut)
+    plt.plot(timearray, bestfit, label='P1:'+"{0:.2f}".format(bestparams[0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(bestparams[1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(bestparams[2]))
     plt.xlabel('dwell time (sec)')
     plt.ylabel('prob. density')
     plt.legend(fontsize='x-large')
-    plt.savefig(f'{len(exp.files)}files_bestfit.png', facecolor='white', dpi=200)
+    #plt.savefig(f'{len(exp.files)}files_bestfit.png', facecolor='white', dpi=200)
 
     # Plot data with double and single exponential fit
     plt.figure()
     plt.semilogy(centers, values, '.', label=f'Dwells with Ncut:{Ncut}')
-    plt.semilogy(timearray, bestfit, label='P1:'+"{0:.2f}".format(fitparams[iMaxLike][0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(fitparams[iMaxLike][1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(fitparams[iMaxLike][2]))
+    plt.semilogy(timearray, bestfit, label='P1:'+"{0:.2f}".format(bestparams[0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(bestparams[1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(bestparams[2]))
     singlexp = 1/avg_dwells*np.exp(-timearray/avg_dwells)
     plt.plot(timearray, singlexp, 'orange', label = rf'$\tau$:{avg_dwells:.1f}')
     plt.xlabel('dwell time (sec)')
     plt.ylabel('log prob. density')
     plt.legend(fontsize='x-large')
-    plt.savefig(f'{len(exp.files)}files_1_2expfit__compared.png', dpi=200)
+  #  plt.savefig(f'{len(exp.files)}files_1_2expfit__compared.png', dpi=200)

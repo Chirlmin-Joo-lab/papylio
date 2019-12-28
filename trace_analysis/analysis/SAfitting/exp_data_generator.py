@@ -29,10 +29,10 @@ def exp2_gen(tau1, tau2, a, N):
 
 tau_fix = 1
 tau1_fix = 10
-tau2_fix = 100
+tau2_fix = 200
 a_fix = 0.5
-N = np.array([100, 1000]) #, 10000])
-train_rep = 10
+N = np.array([10000])#, 1000]) #, 10000])
+train_rep = 1
 save = True
 # select to generate 1 or 2 exponential
 exp_type = "2"
