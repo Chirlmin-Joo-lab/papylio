@@ -161,7 +161,7 @@ def fitting(dwells_all, mdl, Nfits, include_over_Tmax=True,
             bootstrap=False, boot_repeats=0):
     Tmax = dwells_all.max()
     if include_over_Tmax is True:
-        Tcut = 300  # Tmax - 10
+        Tcut = Tmax - 10
         dwells = dwells_all[dwells_all < Tcut]
         Ncut = dwells_all[dwells_all >= Tcut].size
     else:
@@ -183,16 +183,6 @@ def fitting(dwells_all, mdl, Nfits, include_over_Tmax=True,
         data = pd.DataFrame({'P1': [100], 'tau1': [bestparam], 'tau2': ['Nan'],
                              'Nsteps': ['Nan'], 'Ncut': [Ncut]})
 
-        # Simple plot of fit to the histogram
-        plt.figure()
-        timearray = np.linspace(0, Tmax, 1000)
-        values, bins = np.histogram(dwells, bins=40, density=True)
-        centers = (bins[1:] + bins[:-1]) / 2.0
-        plt.semilogy(centers, values, '.', label=f'Dwells')
-        plt.semilogy(timearray, fit, label=rf'$\tau$ML:{bestparam:.1f}')
-        plt.xlabel('dwell time (sec)')
-        plt.ylabel('log prob. density')
-        plt.legend()
     elif mdl == '2Exp':
         model = P2expcut
 
@@ -241,29 +231,17 @@ def fitting(dwells_all, mdl, Nfits, include_over_Tmax=True,
         idx.append('Bestfit')
         data.index = idx
 
-        # Quick plot of the dwell time histogram and the corresponding fits
-        plt.figure()
-        values, bins = np.histogram(dwells, bins=40, density=True)
-        centers = (bins[1:] + bins[:-1]) / 2.0
-        plt.plot(centers, values, 'r.', label=f'offtimes N={dwells.size}')
-        timearray = np.linspace(0, Tmax, num=1000)
-        for i in range(0, np.size(fitparam, 0)):
-            fit, Pcut = model(timearray, fitparam[i], Tcut, Ncut)
-            plt.plot(timearray, fit, label='fit'+str(i+1))
-        plt.xlabel('dwell time (sec)')
-        plt.ylabel('prob. density')
-
-        # Quick plot of best fit with histogram
-        plt.figure()
-        plt.title('Best double exponential fit found')
-        values, bins = np.histogram(dwells, bins=40, density=True)
-        centers = (bins[1:] + bins[:-1]) / 2.0
-        plt.semilogy(centers, values, '.', label=f'Dwells')
-        bestfit, Pcutbest = model(timearray, bestparam, Tcut, Ncut)
-        plt.semilogy(timearray, bestfit, label='P1:'+"{0:.2f}".format(bestparam[0])+"\n"+r'$\tau$1:'+"{0:.1f}".format(bestparam[1])+"\n"+r'$\tau$2:'+"{0:.1f}".format(bestparam[2]))
-        plt.xlabel('dwell time (sec)')
-        plt.ylabel('log prob. density')
-        plt.legend()
+#        # Quick plot of the dwell time histogram and the corresponding fits
+#        plt.figure()
+#        values, bins = np.histogram(dwells, bins=40, density=True)
+#        centers = (bins[1:] + bins[:-1]) / 2.0
+#        plt.plot(centers, values, 'r.', label=f'offtimes N={dwells.size}')
+#        timearray = np.linspace(0, Tmax, num=1000)
+#        for i in range(0, np.size(fitparam, 0)):
+#            fit, Pcut = model(timearray, fitparam[i], Tcut, Ncut)
+#            plt.plot(timearray, fit, label='fit'+str(i+1))
+#        plt.xlabel('dwell time (sec)')
+#        plt.ylabel('prob. density')
 
     return data
 
