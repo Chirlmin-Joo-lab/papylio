@@ -10,9 +10,12 @@ class Molecule:
         self.index = None
         self._coordinates = None
         self.intensity = None
-
+        self.frames_per_second = int(self.file.experiment.configuration['frames']['frames_per_second'])
+        self.total_frames= int(self.file.experiment.configuration['frames']['total_frames'])
+        self.tracestart = int(0)
+        self.traceend = len(self.file.time)/self.frames_per_second-1/self.frames_per_second
         self.isSelected = False
-
+        self.time=np.linspace(self.tracestart, self.traceend, (self.traceend - self.tracestart) * self.frames_per_second + 1)
         self.steps = None  #Defined in other classes as: pd.DataFrame(columns=['frame', 'trace', 'state', 'method','thres'])
         self.kon_boolean = None  # 3x3 matrix that is indicates whether the kon will be calculated from the beginning, in-between molecules or for the end only
 
@@ -25,7 +28,7 @@ class Molecule:
         self._coordinates = np.atleast_2d(coordinates)
 
     def I(self, emission, Ioff=0):
-        return self.intensity[emission, :] - Ioff - self.file.background[emission]
+        return (self.intensity[emission, :] - Ioff - self.file.background[emission])[int(self.tracestart*self.frames_per_second):int(self.traceend*self.frames_per_second+int(1))]
 
     def E(self, Imin=0, alpha=0, Iroff=0, Igoff=0):
         red = np.copy(self.I(1, Ioff=Iroff))
@@ -47,7 +50,7 @@ class Molecule:
         axis_I.set_ylabel('Intensity (a.u.)')
         axis_I.set_ylim(0, 500)
         for i, colour in enumerate(self.file.experiment.colours):
-            axis_I.plot(self.file.time, self.I(i), colour)
+            axis_I.plot(self.time, self.I(i), colour)
 
         if len(self.file.experiment.pairs) > 0:
             axis_E = figure.add_subplot(212, sharex = axis_I)
@@ -55,7 +58,7 @@ class Molecule:
             axis_E.set_ylabel('FRET (-)')
             axis_E.set_ylim(0,1)
             for i, pair in enumerate(self.file.experiment.pairs):
-                axis_E.plot(self.file.time, self.E())
+                axis_E.plot(self.time, self.E())
     @property  # this is just for the stepfinder to be called through Molecule. Maybe not needed
     def find_steps(self):
         return stepfinder

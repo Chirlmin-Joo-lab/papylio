@@ -410,14 +410,35 @@ class File:
         return data
 
     def select(self, figure=None):
+        total_molecules= len(self.molecules)
         plt.ion()
-        for index, molecule in enumerate(self.molecules):
+        index=0
+        while index < len(self.molecules):
+            molecule=self.molecules[index]
             molecule.plot(figure=figure)
             plt.title('Molecule ' + str(index), y=-0.01)
+            print('Molecule ' + str(index) + ' out of ' + str(total_molecules))
             plt.show()
-            plt.pause(0.001)
-            print('Molecule ' + str(index))
-            input("Press enter to continue")
+            plt.pause(0.1)
+            decision=input("Press y or n to select")
+            index += 1
+            if decision=='y': #if input is 'y' the molecule is selected and function asks for the start and the end of the trace in seconds.
+                molecule.isSelected=True
+                input_start=input('choose starting timepoint of trace (seconds)')
+                if input_start=='':
+                    input_start=0
+                molecule.tracestart = int(input_start)
+                input_end=input('choose ending timepoint of trace (seconds)')
+                if input_end=='':
+                    input_end=len(molecule.file.time)/molecule.frames_per_second-1/molecule.frames_per_second
+                molecule.traceend = int(input_end)
+                molecule.time=np.linspace(molecule.tracestart, molecule.traceend, (molecule.traceend - molecule.tracestart) * molecule.frames_per_second + 1)
+            if decision=='n':   # if input is 'n' continue to next molecule without selecting the current molecule (no input has the same effect)
+                molecule.isSelected=False
+            elif decision=='exit':
+                break
+            elif decision.isdigit()==True:  #If input is a digit go to the molecule that corresponds to that index.
+                index=int(decision)
 
     def perform_mapping(self, configuration = None):
         # Refresh configuration
