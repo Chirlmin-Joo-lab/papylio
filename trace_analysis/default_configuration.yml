@@ -30,6 +30,3 @@ mapping:
             fraction_of_peak_max: 0.35
         coordinates_within_margin:
             margin: 20
-frames:
-    frames_per_second: 10
-    total_frames: 500

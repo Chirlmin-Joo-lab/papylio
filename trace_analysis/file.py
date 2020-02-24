@@ -433,12 +433,17 @@ class File:
                     input_end=len(molecule.file.time)/molecule.frames_per_second-1/molecule.frames_per_second
                 molecule.traceend = int(input_end)
                 molecule.time=np.linspace(molecule.tracestart, molecule.traceend, (molecule.traceend - molecule.tracestart) * molecule.frames_per_second + 1)
+                new_donor_intensity=molecule.intensity[0][np.where(molecule.file.time==molecule.time[0])[0][0]:np.where(molecule.file.time==molecule.time[-1])[0][0]+1]
+                new_acceptor_intensity=molecule.intensity[-1][np.where(molecule.file.time==molecule.time[0])[0][0]:np.where(molecule.file.time==molecule.time[-1])[0][0]+1]
+                molecule.intensity=np.array([new_donor_intensity,new_acceptor_intensity])
             if decision=='n':   # if input is 'n' continue to next molecule without selecting the current molecule (no input has the same effect)
                 molecule.isSelected=False
-            elif decision=='exit':
+            elif decision=='x':
                 break
             elif decision.isdigit()==True:  #If input is a digit go to the molecule that corresponds to that index.
                 index=int(decision)
+            elif decision=='b':  # if input is 'b' go back to previous molecule without selecting the current molecule
+                index=int(index)-2
 
     def perform_mapping(self, configuration = None):
         # Refresh configuration

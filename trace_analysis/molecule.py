@@ -10,8 +10,8 @@ class Molecule:
         self.index = None
         self._coordinates = None
         self.intensity = None
-        self.frames_per_second = int(self.file.experiment.configuration['frames']['frames_per_second'])
-        self.total_frames= int(self.file.experiment.configuration['frames']['total_frames'])
+        self.frames_per_second = round(1/self.file.movie.cycletime)
+        self.total_frames= len(self.file.time)
         self.tracestart = int(0)
         self.traceend = len(self.file.time)/self.frames_per_second-1/self.frames_per_second
         self.isSelected = False
@@ -28,7 +28,7 @@ class Molecule:
         self._coordinates = np.atleast_2d(coordinates)
 
     def I(self, emission, Ioff=0):
-        return (self.intensity[emission, :] - Ioff - self.file.background[emission])[int(self.tracestart*self.frames_per_second):int(self.traceend*self.frames_per_second+int(1))]
+        return (self.intensity[emission, :] - Ioff - self.file.background[emission])
 
     def E(self, Imin=0, alpha=0, Iroff=0, Igoff=0):
         red = np.copy(self.I(1, Ioff=Iroff))
