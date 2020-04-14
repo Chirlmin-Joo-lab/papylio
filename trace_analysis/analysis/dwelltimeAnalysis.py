@@ -78,11 +78,13 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1,
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto', scale='log',
          style='dots', color='from_trace', fit_result=None):
-    if fit_result.Ncut[0] > 0:
-        Tmax = dwells.max() - 5
-        Ncut2 = dwells[dwells >= Tmax].size
-        dwells = dwells[dwells < Tmax]
-        print('Ncut2', Ncut2)
+    
+    if fit_result is not None:
+        if fit_result.Ncut[0] > 0:
+            Tmax = dwells.max() - 5
+            Ncut2 = dwells[dwells >= Tmax].size
+            dwells = dwells[dwells < Tmax]
+            print('Ncut2', Ncut2)
 
     try:
         bsize = float(binsize)
