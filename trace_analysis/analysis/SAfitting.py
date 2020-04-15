@@ -116,6 +116,7 @@ def Best_of_Nfits_sim_anneal(dwells, Nfits, model, x_initial,
     bestNsteps = Nsteps[ibestparam]
     return bestparam, bestNsteps
 
+
 def Bootstrap_data(dwells, Ncut):
     dwells_Ncut = np.concatenate((dwells, np.zeros(Ncut)))
     dwells_rand = np.random.choice(dwells_Ncut, dwells_Ncut.size)
@@ -139,7 +140,6 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
     # the initial holder for the fit result irrespective of the fit model
     fit_result = pd.DataFrame({'Dataset': [dataset_name], 'model': [mdl]})
 
-
     if mdl == '1Exp':
         #  The 1exp fit is given by analytic solution, just the average dwelltime
         fit, bestvalue = ML1expcut(dwells, Tmax, Ncut)
@@ -161,7 +161,6 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
                                'steps': ['N/A']})
 
         fit_result = pd.concat([fit_result, result], axis=1)
-
 
     elif mdl == '2Exp':
         # For 2exp fit the maximum likelihood of the 2exp model is obtained with
@@ -189,7 +188,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
             bestvalues = [1-bestvalues[0]] + [bestvalues[2], bestvalues[1]]
 
         errors = [0, 0, 0]
-        boot_params = np.empty((boot_repeats,3))
+        boot_params = np.empty((boot_repeats, 3))
         # Check if bootstrapping is used
         if bootstrap:
             LLike = np.empty(boot_repeats)
@@ -224,8 +223,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
                               'value': bestvalues, 'error': errors})
 
         result_rest = pd.DataFrame({'Tmax': [Tmax], 'Ncut': [Ncut],
-                               'BootRepeats': [boot_repeats*bootstrap],
-                               'steps': [bestNsteps]})
+                                    'BootRepeats': [boot_repeats*bootstrap],
+                                    'steps': [bestNsteps]})
 
         fit_result = pd.concat([fit_result, result, result_rest], axis=1)
 
