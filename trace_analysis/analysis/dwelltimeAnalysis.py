@@ -110,7 +110,7 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', scale='log',
             print('jstart ', izeros[i])
             print('jend ', izeros[i]+(j-i))
             print('values ', values[izeros[i]:(izeros[i]+j-i+1)])
-            print('sum', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
+            print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
             values[izeros[i]:(izeros[i]+j-i+1)] = np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1)
 
     fig = plt.figure(f'Histogram {trace} {dist}s {name}', figsize=(4,3), dpi=200)
