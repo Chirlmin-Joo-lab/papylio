@@ -17,12 +17,13 @@ else:
     from trace_analysis.analysis import common_PDF
 
 
-def Internal_rates_3state_model(P1, tau1, tau2, stdP1, stdtau1, stdtau2):
+def Internal_rates_3state_model(P1, tau1, tau2):
 #A double exponential binding time distribution can be described by a 3 state model
     k21 = 1/(tau1*(1-P1) + tau2*P1)
     k13 = P1/tau1 + (1-P1)/tau2
-    k12 = (1-P1)/tau1 + P1/tau2 - 1/(tau1*(1-P1) + tau2*P1)
-    
-    stdk21 = (k21**2)*np.sqrt(((1-P1)*stdtau1)**2 + (P1*stdtau2)**2 + ((tau2-tau1)*stdP1)**2)
+    k12 = (1-P1)/tau1 + P1/tau2 - k21
 
     return k21, k13, k12
+
+def Error_rates__3states_from_bootstrap(boot_data):
+    k21, k13, k12 = Internal_rates_3state_model(boot_data)

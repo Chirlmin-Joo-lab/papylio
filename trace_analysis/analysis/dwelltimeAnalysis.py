@@ -37,7 +37,10 @@ def analyze(dwells_data, dataset_name, dist, configuration):
         dwells = d[key].loc[:,dist].values
         dwells= dwells
         dwells = dwells[dwells>0]
+        idw_small = dwells<0.3
+        dwells[idw_small] = 0.3
         print(np.size(dwells), 'dwells selected')
+        print(np.where(idw_small)[0], 'too small dwells')
         if conf['FitBool']:
             fit_res = fit(dwells, model=conf['model'], dataset_name=dataset_name,
                           Nfits=int(conf['Nfits']),
@@ -56,7 +59,7 @@ def analyze(dwells_data, dataset_name, dist, configuration):
 
     if fit_data != []:
         fit_data = pd.concat(fit_data, axis=1, keys=keys_with_data)
-    return d, figures, fit_data
+    return dwells, figures, fit_data
 
 def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1,
         include_over_Tmax=True, bootstrap=True, boot_repeats=100):
@@ -78,27 +81,37 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1,
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto', scale='log',
          style='dots', color='from_trace', fit_result=None):
-    
+
     if fit_result is not None:
         if fit_result.Ncut[0] > 0:
             Tmax = dwells.max() - 5
-            Ncut2 = dwells[dwells >= Tmax].size
             dwells = dwells[dwells < Tmax]
-            print('Ncut2', Ncut2)
 
     try:
         bsize = float(binsize)
-        bin_edges = np.arange(min(dwells), max(dwells) + bsize, bsize)
+#        if scale == 'Log-Log':
+#            bin_edges = np.logspace(np.log10(min(dwells)), np.log10(max(dwells) + bsize))#, np.log10(bsize))
+        if scale == 'Log-Log':
+            bin_edges = min(dwells)*10**(np.arange(0, max(dwells) + bsize, bsize))
+            i_bin = np.where(bin_edges <= max(dwells) + bsize)[0]
+            i_binend = int(i_bin.max()+1)
+            bin_edges = np.concatenate((bin_edges[i_bin], [bin_edges[i_binend]]))
+            print('logbins', bin_edges)
+        else:
+            bin_edges = np.arange(min(dwells), max(dwells) + bsize, bsize)
     except ValueError:
         if binsize == 'Auto':
             binsize = 'auto'
         bin_edges = binsize
+
     values, bins = np.histogram(dwells, bins=bin_edges, density=True)
-    centers = (bins[1:] + bins[:-1]) / 2.0
-    
+    if scale == 'Log-Log':
+        centers = (bins[1:] * bins[:-1])**0.5  # geometric mean of bin edges
+    else:
+        centers = (bins[1:] + bins[:-1]) / 2.0
+
     # combine bins until it contains at least one data point (for log plots)
     if scale in ['Log', 'Log-Log']:
-        print('type_values:', type(values))
         izeros = np.where(values == 0)[0]
         print('izeros', izeros)
         j = 0
@@ -113,7 +126,8 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', scale='log',
             print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
             values[izeros[i]:(izeros[i]+j-i+1)] = np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1)
 
-    fig = plt.figure(f'Histogram {trace} {dist}s {name}', figsize=(4,3), dpi=200)
+    fig = plt.figure(f'Histogram {trace} {dist}s {name}', figsize=(4, 3), dpi=200)
+
     if color == 'from_trace':
         if dist == 'offtime':
             color = 'r'*(trace=='red') + 'g'*(trace=='green') + \
