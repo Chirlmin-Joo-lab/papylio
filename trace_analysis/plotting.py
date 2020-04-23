@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from trace_analysis.molecule import Molecule
 
-def histogram(molecules, axis = None, bins=100, parameter = 'E', molecule_averaging=False, makeFit=False, collection_name='', **kwargs):
+def histogram(molecules, axis=None, bins=100, parameter='E', molecule_averaging=False, makeFit=False, collection_name='', **kwargs):
     if not molecules: return None
     if not axis:
         axis = plt.gca()

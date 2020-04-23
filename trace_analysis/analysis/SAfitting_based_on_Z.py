@@ -34,19 +34,37 @@ def ML1expcut(dwells, Tcut, Ncut):
 
 
 def P2expcut(dwells, params, Tcut, Ncut):
-    P1, tau1, tau2 = params
+    P1, tau1, tau2 = Param2exp(params)
     Pi = P1/tau1*np.exp(-dwells/tau1)+(1-P1)/tau2*np.exp(-dwells/tau2)
     Pcut = P1*np.exp(-Tcut/tau1)+(1-P1)*np.exp(-Tcut/tau2)
     return Pi, Pcut
 
 
 def P3expcut(dwells, params, Tcut, Ncut):
-    P1, P2, tau1, tau2, tau3 = params
+    P1, P2, tau1, tau2, tau3 = Param3exp(params)
     Pi = P1/tau1*np.exp(-dwells/tau1)+P2/tau2*np.exp(-dwells/tau2) + \
         (1 - P1 - P2)/tau3*np.exp(-dwells/tau3)
     Pcut = P1*np.exp(-Tcut/tau1)+P2*np.exp(-Tcut/tau2) + \
         (1 - P1 - P2)*np.exp(-Tcut/tau3)
     return Pi, Pcut
+
+
+def Param2exp(params):
+    Z1, T1, T2 = params
+    P1 = np.exp(Z1)/(1 + np.exp(Z1))
+    tau1 = np.exp(T1)
+    tau2 = np.exp(T2)
+    return P1, tau1, tau2
+
+
+def Param3exp(params):
+    Z1, Z2, T1, T2, T3 = params
+    P1 = np.exp(Z1)/(1 + np.exp(Z1) + np.exp(Z2))
+    P2 = np.exp(Z2)/(1 + np.exp(Z1) + np.exp(Z2))
+    tau1 = np.exp(T1)
+    tau2 = np.exp(T2)
+    tau3 = np.exp(T3)
+    return P1, P2, tau1, tau2, tau3
 
 
 def CheckP123(params):
@@ -65,7 +83,6 @@ def BIC(dwells, k, LogLike):
 
 def LogLikelihood(dwells, params, model, Tcut, Ncut):
     Pi, Pcut = model(dwells, params, Tcut, Ncut)
-
     LLikecut = -Ncut * np.log(Pcut)
     LLike = np.sum(-np.log(Pi)) + LLikecut
     return LLike
@@ -83,9 +100,9 @@ def update_temp(T, alpha):
 
 
 def simulated_annealing(data, objective_function, model, x_initial, lwrbnd,
-                        uprbnd, restraint, Tcut, Ncut, Tstart=100.,
+                        uprbnd, Tcut, Ncut, Tstart=100.,
 #                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.90):
-                        Tfinal=0.001, delta1=0.6, delta2=2.5, alpha=0.90):
+                        Tfinal=0.001, delta1=1.5, delta2=2.5, alpha=0.99):
     i = 0
     T = Tstart
     step = 0
@@ -96,19 +113,11 @@ def simulated_annealing(data, objective_function, model, x_initial, lwrbnd,
         if (step % 100 == 0):
             T = update_temp(T, alpha)
         x_trial = np.zeros(len(x))
-        x_trial[0] = np.random.uniform(np.max([x[0] - delta1, lwrbnd[0]]),
-                                       np.min([x[0] + delta1, uprbnd[0]]))
-#        x_trial[1] = np.random.uniform(np.max([x[1] - delta1, lwrbnd[1]]),
-#                                       np.min([x[1] + delta1, uprbnd[1]]))
-        for i in range(1, len(x)):
-            x_trial[i] = np.random.uniform(np.max([x[i] - delta2, lwrbnd[i]]),
-                                           np.min([x[i] + delta2, uprbnd[i]]))
-        if restraint:
-            stepcheck = restraint(x_trial)
-#            print(x_trial)
-            if stepcheck is False:
-                print('Restraint in action')
-                continue
+#        x_trial[0] = np.random.uniform(np.max([x[0] - delta1, lwrbnd[0]]),
+#                                       np.min([x[0] + delta1, uprbnd[0]]))
+        for i in range(0, len(x)):
+            x_trial[i] = np.random.uniform(np.max([x[i] - delta1, lwrbnd[i]]),
+                                           np.min([x[i] + delta1, uprbnd[i]]))
         x, xstep = Metropolis(objective_function, model, x, x_trial, T, data,
                               Tcut, Ncut, xstep)
 
@@ -126,7 +135,7 @@ def Metropolis(f, model, x, x_trial, T, data, Tcut, Ncut, xstep):
 
 
 def Best_of_Nfits_sim_anneal(dwells, Nfits, model, x_initial,
-                             lwrbnd, uprbnd, restraint, Tcut, Ncut):
+                             lwrbnd, uprbnd, Tcut, Ncut):
     # Perform N fits on data using simmulated annealing
     LLike = np.empty(Nfits)
     for i in range(0, Nfits):
@@ -134,9 +143,7 @@ def Best_of_Nfits_sim_anneal(dwells, Nfits, model, x_initial,
                                              objective_function=LogLikelihood,
                                              model=model, x_initial=x_initial,
                                              lwrbnd=lwrbnd, uprbnd=uprbnd,
-                                             restraint=restraint,
                                              Tcut=Tcut, Ncut=Ncut)
-        print(f"fit{i} found: {fitdata}")
         if i == 0:
             fitparam = [fitdata]
             Nsteps = [xstep]
@@ -144,6 +151,9 @@ def Best_of_Nfits_sim_anneal(dwells, Nfits, model, x_initial,
             fitparam = np.concatenate((fitparam, [fitdata]), axis=0)
             Nsteps = np.concatenate((Nsteps, [xstep]), axis=0)
         LLike[i] = LogLikelihood(dwells, fitparam[i], model, Tcut, Ncut)
+        bic = BIC(dwells, len(fitparam[i]), LLike[i])
+        fitpar = Param2exp(fitparam[i])
+        print(f"fit{i} found: {fitpar} \n LL:{LLike[i]} BIC:{bic}")
     ibestparam = np.argmax(LLike)
     bestparam = fitparam[ibestparam]
     bestNsteps = Nsteps[ibestparam]
@@ -202,20 +212,21 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
-        x_initial = [0.5, avg_dwells, avg_dwells]
+        x_initial = np.log([1, avg_dwells, avg_dwells])
         lwrbnd = [0, 0, 0]
-        uprbnd = [1, 3*Tmax, 3*Tmax]
+        uprbnd = np.log([10**5, 3*Tmax, 3*Tmax])
 
         # Perform N fits on data using simmulated annealing and select best
-        bestvalues, bestNsteps = Best_of_Nfits_sim_anneal(
+        bestvaluesZ, bestNsteps = Best_of_Nfits_sim_anneal(
                                                         dwells, Nfits,
                                                         model=model,
                                                         x_initial=x_initial,
                                                         lwrbnd=lwrbnd,
                                                         uprbnd=uprbnd,
-                                                        restraint=[],
                                                         Tcut=Tmax,
                                                         Ncut=Ncut)
+
+        bestvalues = Param2exp(bestvaluesZ)
 
         # make sure the fit parameters are ordered from low to high dwelltimes
         if bestvalues[1] > bestvalues[2]:
@@ -231,7 +242,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
             print('bootrepeats: ', boot_repeats)
             for i in range(0, boot_repeats):
                 boot_dwells, boot_Ncut = Bootstrap_data(dwells, Ncut)
-                params, Nsteps =simulated_annealing(
+                paramsZ, Nsteps = simulated_annealing(
                                                     boot_dwells,
                                                     LogLikelihood,
                                                     model=model,
@@ -241,6 +252,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
                                                     Tcut=Tmax,
                                                     Ncut=boot_Ncut)
                 print(f'boot: {i+1}, steps: {Nsteps}')
+                params = Param2exp(paramsZ)
                 # make sure the fit parameters are ordered from low to high dwelltimes
                 if params[1] > params[2]:
                     params = [1-params[0]] + [params[2], params[1]]
@@ -248,7 +260,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
                 Ncutarray[i] = boot_Ncut
                 Nstepsarray[i] = Nsteps
                 boot_params[i] = params
-                LLike[i] = LogLikelihood(dwells,params, model, Tmax, Ncut)
+                LLike[i] = LogLikelihood(dwells,paramsZ, model, Tmax, Ncut)
             errors = np.std(boot_params, axis=0)
 
         # Put fit result into dataframe
@@ -257,7 +269,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
                               'value': bestvalues, 'error': errors})
 
         # Calculate the BIC
-        LogLike = LogLikelihood(dwells, bestvalues, model, Tmax, Ncut)
+        LogLike = LogLikelihood(dwells, bestvaluesZ, model, Tmax, Ncut)
         bic = BIC(dwells, len(bestvalues), LogLike)
 
         result_rest = pd.DataFrame({'Tmax': [Tmax], 'Ncut': [Ncut],
@@ -271,25 +283,25 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
         # For 2exp fit the maximum likelihood of the 2exp model is obtained with
         # simulated annealing minimization of -log(ML)
         model = P3expcut
-        restraint = CheckP123
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
-        x_initial = [0.5, 0.5, avg_dwells, avg_dwells, avg_dwells]
+        x_initial = np.log([1, 1, 0.5*avg_dwells, 0.5*avg_dwells, avg_dwells])
+        print('x_initial ', x_initial)
         lwrbnd = [0, 0, 0, 0, 0]
-        uprbnd = [1, 1, 3*Tmax, 3*Tmax, 3*Tmax]
+        uprbnd = np.log([10**5, 10**5, 3*Tmax, 3*Tmax, 3*Tmax])
 
         # Perform N fits on data using simmulated annealing and select best
-        bestvalues, bestNsteps = Best_of_Nfits_sim_anneal(
+        bestvaluesZ, bestNsteps = Best_of_Nfits_sim_anneal(
                                                         dwells, Nfits,
                                                         model=model,
                                                         x_initial=x_initial,
                                                         lwrbnd=lwrbnd,
                                                         uprbnd=uprbnd,
-                                                        restraint=restraint,
                                                         Tcut=Tmax,
                                                         Ncut=Ncut)
-
+        bestvalues = Param3exp(bestvaluesZ)
+        
         # make sure the fit parameters are ordered from low to high dwelltimes
         # if bestvalues[1] > bestvalues[2]:
         #     bestvalues = [1-bestvalues[0]] + [bestvalues[2], bestvalues[1]]
@@ -304,16 +316,17 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
             print('bootrepeats: ', boot_repeats)
             for i in range(0, boot_repeats):
                 boot_dwells, boot_Ncut = Bootstrap_data(dwells, Ncut)
-                params, Nsteps =simulated_annealing(
-                                                    boot_dwells,
-                                                    LogLikelihood,
-                                                    model=model,
-                                                    x_initial=x_initial,
-                                                    lwrbnd=lwrbnd,
-                                                    uprbnd=uprbnd,
-                                                    Tcut=Tmax,
-                                                    Ncut=boot_Ncut)
+                paramsZ, Nsteps = simulated_annealing(
+                                                      boot_dwells,
+                                                      LogLikelihood,
+                                                      model=model,
+                                                      x_initial=x_initial,
+                                                      lwrbnd=lwrbnd,
+                                                      uprbnd=uprbnd,
+                                                      Tcut=Tmax,
+                                                      Ncut=boot_Ncut)
                 print(f'boot: {i+1}, steps: {Nsteps}')
+                params = Param3exp(paramsZ)
                 # make sure the fit parameters are ordered from low to high dwelltimes
                 # if params[1] > params[2]:
                 #     params = [1-params[0]] + [params[2], params[1]]
@@ -321,7 +334,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
                 Ncutarray[i] = boot_Ncut
                 Nstepsarray[i] = Nsteps
                 boot_params[i] = params
-                LLike[i] = LogLikelihood(dwells,params, model, Tmax, Ncut)
+                LLike[i] = LogLikelihood(dwells, paramsZ, model, Tmax, Ncut)
             errors = np.std(boot_params, axis=0)
 
         # Put fit result into dataframe
@@ -329,7 +342,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
         result = pd.DataFrame({'param': ['p1', 'p2', 'tau1', 'tau2', 'tau3'],
                               'value': bestvalues, 'error': errors})
         # Calculate the BIC
-        LogLike = LogLikelihood(dwells, bestvalues, model, Tmax, Ncut)
+        LogLike = LogLikelihood(dwells, bestvaluesZ, model, Tmax, Ncut)
         bic = BIC(dwells, len(bestvalues), LogLike)
 
         result_rest = pd.DataFrame({'Tmax': [Tmax], 'Ncut': [Ncut],

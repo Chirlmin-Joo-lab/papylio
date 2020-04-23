@@ -1,0 +1,39 @@
+compute_image:
+  numFrames: All
+show_movie:
+  image: average_image
+  annotate: false
+find_coordinates:
+  channel: d
+  image: average_image
+  peak_finding:
+    method: local-maximum
+    minimum_intensity_difference: 10
+    maximum_intensity_difference: 40
+  coordinate_optimization:
+    coordinates_within_margin:
+      margin: 20
+    coordinates_after_gaussian_fit:
+      gaussian_width: 9
+    coordinates_without_intensity_at_radius:
+      radius: 4
+      cutoff: image_median
+      fraction_of_peak_max: 0.25
+mapping:
+  transformation_type: linear
+  peak_finding:
+    donor:
+      method: local-maximum
+      minimum_intensity_difference: 200
+    acceptor:
+      method: local-maximum
+      minimum_intensity_difference: 50
+  coordinate_optimization:
+    coordinates_after_gaussian_fit:
+      gaussian_width: 9
+    coordinates_without_intensity_at_radius:
+      radius: 4
+      cutoff: image_median
+      fraction_of_peak_max: 0.35
+    coordinates_within_margin:
+      margin: 20

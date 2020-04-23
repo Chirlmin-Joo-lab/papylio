@@ -83,7 +83,11 @@ class Experiment:
         else:
             with Path(__file__).with_name('default_configuration.yml').open('r') as yml_file:
                 self.configuration = yaml.load(yml_file, Loader=yaml.SafeLoader)
-            self.export_config_file()
+            try:
+                self.export_config_file()
+            except:
+                FileNotFoundError
+                pass
 
         os.chdir(mainPath)
 
@@ -163,7 +167,7 @@ class Experiment:
         """
 
         files = [p.relative_to(self.mainPath).with_suffix('') for p in self.mainPath.glob('**/*')
-                    if  (p.is_file() & 
+                    if  (p.is_file() &
                         ('_' not in p.name) &
                         ('Analysis ' not in str(p)) &
                         #('\\.' not in str(p.with_suffix(''))) & # Can be removed, line below is better  - Ivo
@@ -197,7 +201,7 @@ class Experiment:
 
         # if there is no extension, add all files with the same name with all extensions
         # if there is an extension just add that file if the filename is the same
-        
+
         # Test whether file is already in experiment
         for file in self.files:
             if file.relativeFilePath == relativeFilePath:

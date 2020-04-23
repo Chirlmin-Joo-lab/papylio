@@ -19,7 +19,7 @@ import itertools
 import matplotlib.pyplot as plt
 import matplotlib.widgets
 import seaborn as sns
-from pathlib import Path
+from pathlib import Path, WindowsPath
 import functools
 #plt.rcParams['toolbar'] = 'toolmanager'
 # from matplotlib.backend_tools import ToolBase
@@ -83,7 +83,9 @@ class InteractivePlot(object):
         self.axprevb = plt.axes([0.075, 0.90, 0.08, 0.062])
 
         self.axsavetraceb = plt.axes([0.26, 0.90, 0.065, 0.062])
-        self.axtotal = plt.axes([0.77, 0.90, 0.08,  0.062])
+        self.axplotselected = plt.axes([0.63, 0.90, 0.065, 0.062])
+        self.axsaveselectedb = plt.axes([0.77, 0.90, 0.065, 0.062])
+        self.axtotal = plt.axes([0.865, 0.90, 0.065,  0.062])
         [ax.set_frame_on(False) for ax in self.fig.get_axes()[2:]]
 
 
@@ -116,10 +118,16 @@ class InteractivePlot(object):
 
         self.bsavetrace = matplotlib.widgets.Button(self.axsavetraceb,'save trace' , **bp)
         self.bsavetrace.on_clicked(self.save_trace)
+        # A button to save selected molecules
+        self.bsaveselected = matplotlib.widgets.Button(self.axsaveselectedb,'save selected' , **bp)
+        self.bsaveselected.on_clicked(self.save_selected)
 
+        self.checkbplotselected = matplotlib.widgets.CheckButtons(self.axplotselected,
+                                                                  ["plot selected"],
+                                                                  actives=[False])
 
         #  A checkbutton for whether to display the total intensity
-        self.checkbtotal = matplotlib.widgets.CheckButtons(self.axtotal, ["Show Total"],
+        self.checkbtotal = matplotlib.widgets.CheckButtons(self.axtotal, ["show total"],
                                                           actives=[False])
 
         #  A checkbutton for fret autothreshold dwell-time calculation
@@ -161,6 +169,7 @@ class InteractivePlot(object):
         self.fig.canvas.mpl_connect('axes_enter_event', functools.partial(self.change_axis, 'enter'))
         [entry.on_submit(lambda _: self.plot_molecule()) for entry in self.correntries]
         [slider.on_changed(functools.partial(self.change_slider, slider)) for slider in self.thrsliders]
+        self.checkbplotselected.on_clicked(self.plot_molecule)
         self.checkbtotal.on_clicked(self.check_total)
         self.checkbfret.on_clicked(self.checkbutton_color)
 
@@ -332,7 +341,7 @@ class InteractivePlot(object):
                 self.mol.steps = pd.DataFrame(columns=['time', 'trace', 'state',
                                                        'method','thres','kon',
                                                        'Iroff', 'Igoff', 'Imin'])
-            self.mol.isSelected = True  # Molecule is not automatically selected if steps are indicated
+            # self.mol.isSelected = True  # Molecule is automatically selected if steps are indicated
             kon = [f'{int(i)}' for i in self.mol.kon_boolean.flatten()]
             kon = ''.join(kon)
 
@@ -342,7 +351,8 @@ class InteractivePlot(object):
 
                 d = {'time': max(l.get_xdata()[0], 0), 'trace': l.get_label().split()[1],
                      'state': 1, 'method': method, 'thres': thres, 'kon': kon,
-                      'Iroff': self.Iroff, 'Igoff': self.Igoff, 'Imin': self.Imin}
+                      'Iroff': self.Iroff, 'Igoff': self.Igoff, 'Imin': self.Imin,
+                      'isSelected': self.mol.isSelected}
                 self.mol.steps = self.mol.steps.append(d, ignore_index=True)
             self.mol.steps.drop_duplicates(inplace=True)
 
@@ -350,15 +360,22 @@ class InteractivePlot(object):
             self.mol.steps = self.mol.steps.sort_values(by=['trace', 'time'])
 
         if move:
-            if event.inaxes == self.axnextb or event.key in ['e']:
-                self.mol_indx += 1
-                if self.mol_indx >= len(self.molecules):
-                    self.mol_indx = 0
+            self.move_molecule(event, draw)
 
 
-            elif event.inaxes == self.axprevb or event.key in ['w']:
-                self.mol_indx -= 1
-            self.plot_molecule(draw_plot=draw)
+    def move_molecule(self, event, draw):
+        if event.inaxes == self.axnextb or event.key in ['e']:
+            self.mol_indx += 1
+            if self.mol_indx >= len(self.molecules) \
+                or self.mol_indx <= -len(self.molecules):
+                self.mol_indx = 0
+
+
+        elif event.inaxes == self.axprevb or event.key in ['w']:
+            self.mol_indx -= 1
+
+
+        self.plot_molecule(draw_plot=draw)
 
     def conclude_analysis(self, event=None, save=True, filename=None):
         # Save current molecule if it was analyzed
@@ -498,6 +515,29 @@ class InteractivePlot(object):
                       Ioff=Ioff, Imin=self.Imin,
                       Iroff=self.Iroff, Igoff=self.Igoff, save=True)
 
+    def save_selected(self, event=None):
+        selected_molecules = []
+        file = self.molecules[0].file
+        for mol in self.molecules:
+
+            if mol.isSelected:
+                current_file = mol.file
+                if current_file == file:
+                    selected_molecules.append(mol.index+1)
+                else:
+                    if bool(selected_molecules):
+                        np.savetxt(f'{file.relativeFilePath}_selected_molecules.txt',
+                                   np.array(selected_molecules, dtype=int))
+                        file = current_file
+                        selected_molecules = []
+        if bool(selected_molecules):
+
+            np.savetxt(f'{file.relativeFilePath}_selected_molecules.txt',
+                                   np.array(selected_molecules, dtype=int))
+        else:
+            print('no molecules selected')
+
+
 
 class Draw_lines(object):
     def __init__(self, fig, iplot_radio):
@@ -551,7 +591,10 @@ if __name__ == '__main__':
     # Just as a working example of how the interactive plot whould be called. Here an example dataset is included inside the traces folder
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     p = Path(__file__).parents[2]
-    mainPath = str(p) + '/traces'
+
+    # mainPath = Path(str(p) + '/traces')
+    mainPath = os.path.join(p, WindowsPath('traces'))  # This path cannot be found strangely
+    mainPath = r'C:\Users\iason\Desktop\traceanalysis\trace_analysis\traces'
     exp = Experiment(mainPath)
     file = exp.files[0]
     molecules = file.molecules

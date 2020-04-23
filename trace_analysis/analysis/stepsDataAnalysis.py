@@ -98,7 +98,7 @@ def analyze_steps(file, save=True):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = [executor.submit(process_molecule, mol)
                    for mol in molecules_with_data]
-    # if the results need to be manipulated uncomments the following lines:
+    # if the results need to be manipulated uncomment the following lines:
     # for f in concurrent.futures.as_completed(results):
     #     print(f.result())
 

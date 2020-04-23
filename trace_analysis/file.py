@@ -123,9 +123,10 @@ class File:
 
         #return np.concatenate([[molecule.coordinates[0, :] for molecule in self.molecules]])
         coordinates = [molecule.coordinates for molecule in self.molecules]
-        if coordinates: return np.concatenate(coordinates)
-        else: return None
-
+        if coordinates:
+            return np.concatenate(coordinates)
+        else:
+            return None
 
     @coordinates.setter
     def coordinates(self, coordinates, number_of_colours = None):
@@ -325,7 +326,7 @@ class File:
 
         self.coordinates = coordinates
 
-    def find_coordinates(self, configuration = None):
+    def find_coordinates(self, configuration=None):
         # Refresh configuration
         self.experiment.import_config_file()
 
@@ -436,18 +437,24 @@ class File:
             if mol.index + 1 not in indices:
                 continue
             mol.steps = steps_data.loc[f'mol {mol.index + 1}']
-            mol.isSelected = True
+            # mol.isSelected = True
             if 'kon' in mol.steps.columns:
                 k = [int(i) for i in mol.steps.kon[0]]
                 mol.kon_boolean = np.array(k).astype(bool).reshape((4,3))
         return steps_data
 
-    def extract_traces(self):
+
+    def extract_traces(self, configuration = None):
         # Refresh configuration
         self.experiment.import_config_file()
 
         if self.movie is None: raise FileNotFoundError('No movie file was found')
-        self.traces = extract_traces(self.movie, self.coordinates, channel='all', gauss_width = 11)
+
+        if configuration is None: configuration = self.experiment.configuration['trace_extraction']
+        channel = configuration['channel']  # Default was 'all'
+        gaussian_width = configuration['gaussian_width']  # Default was 11
+
+        self.traces = extract_traces(self.movie, self.coordinates, channel=channel, gauss_width = gaussian_width)
         self.export_traces_file()
         if '.traces' not in self.extensions: self.extensions.append('.traces')
 
@@ -472,7 +479,8 @@ class File:
     def histogram(self, axis=None, bins=100, parameter='E', molecule_averaging=False,
                   makeFit=False, export=False, **kwargs):
         histogram(self.molecules, axis=axis, bins=bins, parameter=parameter, molecule_averaging=molecule_averaging, makeFit=makeFit, collection_name=self, **kwargs)
-        if export: plt.savefig(self.absoluteFilePath.with_name(f'{self.name}_{parameter}_histogram').with_suffix('.png'))
+        if export:
+            plt.savefig(self.absoluteFilePath.with_name(f'{self.name}_{parameter}_histogram').with_suffix('.png'))
 
 
 
@@ -636,13 +644,16 @@ class File:
     def show_average_image(self, mode='2d', figure=None):
         self.show_image(image_type='average_image', mode=mode, figure=figure)
 
-    def show_coordinates(self, figure=None, annotate=False, **kwargs):
+    def show_coordinates(self, figure=None, annotate=None, **kwargs):
         # Refresh configuration
         self.experiment.import_config_file()
 
         if not figure: figure = plt.figure()
 
+
         annotate = self.experiment.configuration['show_movie']['annotate']
+        if annotate is None:
+            annotate = self.experiment.configuration['show_movie']['annotate']
 
         if self.coordinates is not None:
             axis = figure.gca()

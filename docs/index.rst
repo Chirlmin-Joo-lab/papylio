@@ -29,6 +29,7 @@ Getting started
    Getting started
    GUI
    Main classes
+   Contributing
 
 
 :class:`trace_analysis.experiment.Experiment`
