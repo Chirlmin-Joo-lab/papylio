@@ -62,7 +62,7 @@ def analyze(dwells_data, dataset_name, dist, configuration):
 
     if fit_data != []:
         fit_data = pd.concat(fit_data, axis=1, keys=keys_with_data)
-    return dwells, figures, fit_data
+    return d, figures, fit_data
 
 
 def Short_time_cutoff(dwells, bsize):
@@ -130,18 +130,13 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
             j += 1
             while j < len(izeros) and izeros[j] - izeros[j-1] == 1:
                 j += 1
-            print('jstart ', izeros[i])
-            print('jend ', izeros[i]+(j-i))
-            print('values ', values[izeros[i]:(izeros[i]+j-i+1)])
-            print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
+            # print('jstart ', izeros[i])
+            # print('jend ', izeros[i]+(j-i))
+            # print('values ', values[izeros[i]:(izeros[i]+j-i+1)])
+            # print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
             values[izeros[i]:(izeros[i]+j-i+1)] = np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1)
 
     fig = plt.figure(f'Histogram {trace} {dist}s {name}', figsize=(4, 3), dpi=200)
-
-#    if t_cut:
-#        t_cut = bins[np.argmax(values)]
-#        y_cut = np.arange(0, max(values), min(values))
-#        plt.plot(t_cut*np.ones(len(y_cut)), y_cut, '-', color='red')
 
     if color == 'from_trace':
         if dist == 'offtime':
@@ -201,7 +196,7 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
         if fit_result.Ncut[0] > 0:
             label = f', Ncut={int(Ncut)}' + label
 
-        plt.plot(time, fit, color='r', label=f'{fit_result.model[0]}fit{label}')
+        plt.plot(time, fit, color='k', label=f'{fit_result.model[0]}fit{label}')
 
     if scale in ['Log', 'Log-Log']:
         plt.yscale('log')

@@ -29,21 +29,24 @@ def stepfinder(trace, threshold=100, max_steps=20):
         dif1 = trace[i+1] - trace[i]
         dif2 = trace[i+2] - trace[i]
 
-        if (dif1 > threshold and
+        if ((dif1 > threshold and
             dif2 > threshold and
-            trace[i] < threshold or
-            i==0 and start_frames ): # this will not catch stoichiometry of 2
-            start_frames.append(i+1)
+            trace[i] < threshold) or
+            (i==0 and start_frames) ): # this will not catch stoichiometry of 2
+            # start_frames.append(i+1)
             for j in range(i+2, trace.size - 2):  # start 2 positions after the step start until the length of the original trace
                 dif1 = trace[j+1] - trace[j]
                 dif2 = trace[j+2] - trace[j]
 
                 if dif1 < -threshold and dif2 < -threshold\
                             and trace[j+2] < threshold:
-
+                    start_frames.append(i+1)
                     stop_frames.append(j+1)
+                    i = j+1
                     break
-        i +=1
+        else:
+            i +=1
+        # i += 1 # start the next loop from the last stop frame
 
     if len(start_frames) != len(stop_frames):  # sometimes 2 consecutive frames both satisfy the threshold condition for very big jumps
         start_temp = np.copy(start_frames)
@@ -59,16 +62,20 @@ def stepfinder(trace, threshold=100, max_steps=20):
                 stop_frames.remove(stop)
 
     if len(start_frames) != len(stop_frames): # if the problem remains
-#        print ("something is wrong")
-#        print ("start frames: "+str(start_frames))
-#        print ("stop frames: "+str(stop_frames))
+        print ("something is wrong")
+        print ("start frames: "+str(start_frames))
+        print ("stop frames: "+str(stop_frames))
         return {"frames": np.array([])}
 
     elif len(start_frames) > max_steps:
-#        print ("Found more steps than the limit of "+str(max_steps))
+        print ("Found more steps than the limit of "+str(max_steps))
         return {"frames": np.array([])}
     else:
-#        print "steps found: " + str(len(start_frames))
+        print ("steps found: " + str(len(start_frames+stop_frames)))
+        if len(start_frames+stop_frames) % 2 > 0:
+            print('odd number of steps found. Result discarded.')
+        print ("start frames: "+str(start_frames))
+        print ("stop frames: "+str(stop_frames))
         res={ "frames": np.array(start_frames+stop_frames),
              "threshold": threshold}
         return res

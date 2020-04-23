@@ -218,13 +218,13 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
 
         # Perform N fits on data using simmulated annealing and select best
         bestvaluesZ, bestNsteps = Best_of_Nfits_sim_anneal(
-                                                        dwells, Nfits,
-                                                        model=model,
-                                                        x_initial=x_initial,
-                                                        lwrbnd=lwrbnd,
-                                                        uprbnd=uprbnd,
-                                                        Tcut=Tmax,
-                                                        Ncut=Ncut)
+                                                           dwells, Nfits,
+                                                           model=model,
+                                                           x_initial=x_initial,
+                                                           lwrbnd=lwrbnd,
+                                                           uprbnd=uprbnd,
+                                                           Tcut=Tmax,
+                                                           Ncut=Ncut)
 
         bestvalues = Param2exp(bestvaluesZ)
 
