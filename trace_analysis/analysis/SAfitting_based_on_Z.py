@@ -102,7 +102,7 @@ def update_temp(T, alpha):
 def simulated_annealing(data, objective_function, model, x_initial, lwrbnd,
                         uprbnd, Tcut, Ncut, Tstart=100.,
 #                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.90):
-                        Tfinal=0.001, delta1=1.5, delta2=2.5, alpha=0.99):
+                        Tfinal=0.001, delta1=1, delta2=2.5, alpha=0.99):
     i = 0
     T = Tstart
     step = 0
@@ -152,7 +152,7 @@ def Best_of_Nfits_sim_anneal(dwells, Nfits, model, x_initial,
             Nsteps = np.concatenate((Nsteps, [xstep]), axis=0)
         LLike[i] = LogLikelihood(dwells, fitparam[i], model, Tcut, Ncut)
         bic = BIC(dwells, len(fitparam[i]), LLike[i])
-        fitpar = Param2exp(fitparam[i])
+        fitpar = Param3exp(fitparam[i])
         print(f"fit{i} found: {fitpar} \n LL:{LLike[i]} BIC:{bic}")
     ibestparam = np.argmax(LLike)
     bestparam = fitparam[ibestparam]
@@ -293,18 +293,25 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
 
         # Perform N fits on data using simmulated annealing and select best
         bestvaluesZ, bestNsteps = Best_of_Nfits_sim_anneal(
-                                                        dwells, Nfits,
-                                                        model=model,
-                                                        x_initial=x_initial,
-                                                        lwrbnd=lwrbnd,
-                                                        uprbnd=uprbnd,
-                                                        Tcut=Tmax,
-                                                        Ncut=Ncut)
+                                                            dwells, Nfits,
+                                                            model=model,
+                                                            x_initial=x_initial,
+                                                            lwrbnd=lwrbnd,
+                                                            uprbnd=uprbnd,
+                                                            Tcut=Tmax,
+                                                            Ncut=Ncut)
         bestvalues = Param3exp(bestvaluesZ)
-        
+    
         # make sure the fit parameters are ordered from low to high dwelltimes
-        # if bestvalues[1] > bestvalues[2]:
-        #     bestvalues = [1-bestvalues[0]] + [bestvalues[2], bestvalues[1]]
+        imax = np.argmax(bestvalues[2:])
+        imin = np.argmin(bestvalues[2:])
+        Parray = [bestvalues[0], bestvalues[1], 1 - bestvalues[0] - bestvalues[1]]
+        for i in range(0, 3):
+            if i != imin and i != imax:
+                imid = i
+        bestvalues = (Parray[imin], Parray[imid],
+                      bestvalues[imin+2], bestvalues[imid+2],
+                      bestvalues[imax+2])
 
         errors = [0, 0, 0, 0, 0]
         boot_params = np.empty((boot_repeats,5))
@@ -328,8 +335,15 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1,
                 print(f'boot: {i+1}, steps: {Nsteps}')
                 params = Param3exp(paramsZ)
                 # make sure the fit parameters are ordered from low to high dwelltimes
-                # if params[1] > params[2]:
-                #     params = [1-params[0]] + [params[2], params[1]]
+                imax = np.argmax(params[2:])
+                imin = np.argmin(params[2:])
+                Parray = [params[0], params[1], 1 - params[0] - params[1]]
+                for i in range(0, 3):
+                    if i != imin and i != imax:
+                        imid = i
+                params = (Parray[imin], Parray[imid],
+                              params[imin+2], params[imid+2],
+                              params[imax+2])
 
                 Ncutarray[i] = boot_Ncut
                 Nstepsarray[i] = Nsteps

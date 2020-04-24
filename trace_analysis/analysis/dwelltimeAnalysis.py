@@ -39,9 +39,8 @@ def analyze(dwells_data, dataset_name, dist, configuration):
         print(np.size(dwells), 'dwells selected')
         if conf['FitBool']:
             if conf['tcutBool']:
-                dwells, t_cut = Short_time_cutoff(dwells, float(conf['binsize']))
+                dwells, t_cut = Short_time_cutoff(dwells)
             else:
-                dwells_fit = dwells
                 t_cut = []
             fit_res = fit(dwells, model=conf['model'],
                           dataset_name=dataset_name,
@@ -62,15 +61,15 @@ def analyze(dwells_data, dataset_name, dist, configuration):
 
     if fit_data != []:
         fit_data = pd.concat(fit_data, axis=1, keys=keys_with_data)
-    return d, figures, fit_data
+    return dwells, figures, fit_data
 
 
-def Short_time_cutoff(dwells, bsize):
-    bin_edges = 10**(np.arange(np.log10(min(dwells)), np.log10(max(dwells)) + bsize, bsize))
-    values, bins = np.histogram(dwells, bins=bin_edges)
-#    t_cut = bins[np.argmax(values)-2]
-    t_cut = 0.8
-    dwells_cut = dwells[dwells > t_cut]
+def Short_time_cutoff(dwells):
+    t_cut = 0.6  # a bit higher than Nyquist (2*exposure time)
+    short_dwells = np.where(dwells < t_cut)[0]
+    print('Short dwells cut:', len(short_dwells))
+    dwells_cut = dwells
+    dwells_cut[short_dwells] = t_cut
     return dwells_cut, t_cut
 
 
@@ -93,8 +92,10 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1,
 
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
-         t_cut=[],
+         t_cut=None,
          scale='log', style='dots', color='from_trace', fit_result=None):
+    if t_cut is not None:
+        dwells = dwells[dwells >= t_cut]
 
     if fit_result is not None:
         if fit_result.Ncut[0] > 0:
@@ -112,13 +113,33 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
             binsize = 'auto'
         bin_edges = binsize
 
-    values, bins = np.histogram(dwells, bins=bin_edges, density=True) 
-
+    values, bins = np.histogram(dwells, bins=bin_edges, density=True)
+    print('values', np.sum(values*np.diff(bins)))
     # Determine position of bins
     if scale == 'Log-Log':
         centers = (bins[1:] * bins[:-1])**0.5  # geometric average of bin edges
     else:
         centers = (bins[1:] + bins[:-1]) / 2.0
+
+    print('bin edges', bin_edges)
+    # resolution correction bins
+    if scale == 'Log-Log':
+        t_reso = 0.3
+        ismbin = np.where(np.diff(bin_edges) < t_reso)[0]
+        ismbin = np.concatenate((ismbin, [ismbin[-1] + 1]))  # diff only gives index of first compared
+        print('small bins ', ismbin)
+         
+        j = 0
+        while j < len(ismbin):
+            i = j
+            j += 1
+            while j < len(ismbin) and centers[ismbin[j]] - centers[ismbin[i]] < t_reso:
+                j += 1
+            print('startbin ', centers[ismbin[i]])
+            print('endbin ', centers[ismbin[i]+j-i])
+            print('values ', values[ismbin[i]:(ismbin[i]+j-i)])
+#           print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
+            values[ismbin[i]:(ismbin[i]+j-i)] = np.sum(values[ismbin[i]:(ismbin[i]+j-i)])/(j-i)
 
     # combine bins until they contain at least one data point (for y-log plots)
     if scale in ['Log', 'Log-Log']:
