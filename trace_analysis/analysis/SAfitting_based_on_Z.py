@@ -66,16 +66,6 @@ def Param3exp(params):
     tau3 = np.exp(T3)
     return P1, P2, tau1, tau2, tau3
 
-
-def CheckP123(params):
-    P1, P2, tau1, tau2, tau3 = params
-    if P1 + P2 <= 1:
-        stepcheck = True
-    else:
-        stepcheck = False
-    return stepcheck
-
-
 def BIC(dwells, k, LogLike):
     bic = np.log(dwells.size)*k - 2*LogLike
     return bic
@@ -152,7 +142,7 @@ def Best_of_Nfits_sim_anneal(dwells, Nfits, model, x_initial,
             Nsteps = np.concatenate((Nsteps, [xstep]), axis=0)
         LLike[i] = LogLikelihood(dwells, fitparam[i], model, Tcut, Ncut)
         bic = BIC(dwells, len(fitparam[i]), LLike[i])
-        fitpar = Param3exp(fitparam[i])
+        fitpar = Param2exp(fitparam[i])
         print(f"fit{i} found: {fitpar} \n LL:{LLike[i]} BIC:{bic}")
     ibestparam = np.argmax(LLike)
     bestparam = fitparam[ibestparam]

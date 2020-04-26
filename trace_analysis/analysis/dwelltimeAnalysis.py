@@ -68,8 +68,7 @@ def Short_time_cutoff(dwells):
     t_cut = 0.6  # a bit higher than Nyquist (2*exposure time)
     short_dwells = np.where(dwells < t_cut)[0]
     print('Short dwells cut:', len(short_dwells))
-    dwells_cut = dwells
-    dwells_cut[short_dwells] = t_cut
+    dwells_cut = dwells[dwells > t_cut]
     return dwells_cut, t_cut
 
 
