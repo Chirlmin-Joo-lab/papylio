@@ -39,7 +39,7 @@ def analyze(dwells_data, dataset_name, dist, configuration):
         print(np.size(dwells), 'dwells selected')
         if conf['FitBool']:
             if conf['tcutBool']:
-                tcut = 0.95
+                tcut = 0.9
                 dwells = Short_time_cutoff(dwells, tcut)
                 print('tcut:', tcut)
             else:

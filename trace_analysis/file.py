@@ -439,7 +439,7 @@ class File:
                 continue
             mol.steps = steps_data.loc[f'mol {mol.index + 1}']
             # if saved steps are found for molecule it is assumed selected
-            mol.isSelected = True
+            # mol.isSelected = True
             if 'kon' in mol.steps.columns:
                 k = [int(i) for i in mol.steps.kon[0]]
                 mol.kon_boolean = np.array(k).astype(bool).reshape((4,3))
@@ -451,12 +451,12 @@ class File:
         '''
         try:
             filename = f'{self.relativeFilePath}_selected_molecules.txt'
-            selected = np.loadtxt(filename, dtype=int) - 1
+            selected = np.loadtxt(filename, dtype=int)
         except FileNotFoundError:
             return
 
-        for i in selected:
-            self.molecules[i].isSelected = True
+        for i in list(selected):
+            self.molecules[i-1].isSelected = True
 
 
 

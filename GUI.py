@@ -286,13 +286,14 @@ class DwelltimeAnalysisPanel(distributionsPanel.Panel):
         # initialize parent class and build the GUI
         super().__init__(parent, title=title)
         self.parent = parent
+        self.parent.Show()
 
     def combine_dwells_data(self):
         '''
 
         Returns
         -------
-        dwells_data : pd.DataFrame
+        dwells_data : pd.DataFrame4
             The concatenated pd.DataFrame from all the [..]_dwells_data.xlsx
             files for the selected files
 

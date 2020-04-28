@@ -152,7 +152,6 @@ def Metropolis(f, model, x, x_trial, T, data, Tcut, Ncut, tcut, xstep):
     if (np.random.uniform() < np.exp(-(Vnew - Vold) / T)):
         x = x_trial
         xstep += 1
-        print('LL:',Vnew)
     return x, xstep
 
 
@@ -174,8 +173,8 @@ def Best_of_Nfits_sim_anneal(dwells, Nfits, model, x_initial,
             Nsteps = np.concatenate((Nsteps, [xstep]), axis=0)
         LLike[i] = LogLikelihood(dwells, fitparam[i], model, Tcut, Ncut, tcut)
         bic = BIC(dwells, len(fitparam[i]), LLike[i])
-        fitpar = Param4exp(fitparam[i])
-        print(f"fit{i} found: {fitpar} \n LL:{LLike[i]} BIC:{bic}")
+#        fitpar = Param2exp(fitparam[i])
+#        print(f"fit{i} found: {fitpar} \n LL:{LLike[i]} BIC:{bic}")
     ibestparam = np.argmin(LLike)
     bestparam = fitparam[ibestparam]
     bestNsteps = Nsteps[ibestparam]

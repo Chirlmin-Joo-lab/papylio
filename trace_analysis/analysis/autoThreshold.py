@@ -9,8 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from os import listdir
 import os
-from scipy import signal
-from trace_analysis.analysis.decorators import timer
 
 
 #@timer
@@ -26,6 +24,7 @@ def stepfinder(trace, threshold=100, max_steps=20):
 
     i = 0
     while i < trace.size -2:
+        print(i)
         dif1 = trace[i+1] - trace[i]
         dif2 = trace[i+2] - trace[i]
 
@@ -44,8 +43,8 @@ def stepfinder(trace, threshold=100, max_steps=20):
                     stop_frames.append(j+1)
                     i = j+1
                     break
-        else:
-            i +=1
+
+        i +=1
         # i += 1 # start the next loop from the last stop frame
 
     if len(start_frames) != len(stop_frames):  # sometimes 2 consecutive frames both satisfy the threshold condition for very big jumps
@@ -111,83 +110,3 @@ def plot_steps(trace="red", exposure_time=0.1, steps={},
             plt.close()
             plt.pause(0.001)
     plt.ion()
-
-
-
-#read_selected = True
-#thresholds = [100]
-#differences = ["2"]
-#
-#
-#os.chdir("G:/TIRF Data/collected")
-#
-#if read_selected:
-#    dirs = []
-#    for path, subdirs, files in os.walk("."):
-#
-#        for name in subdirs:
-#            if "selected" in name:
-#                dirs.append(os.path.join(path, name))
-#
-#if not read_selected:
-#    dirs = []
-#    for d in os.listdir("."):
-#        dirs.append(os.path.abspath(d))
-#
-#for d in dirs:
-#    os.chdir(d)
-#    for thres in thresholds:
-#        for Ndif in differences:
-#            threshold = thres
-#            if read_selected:
-#                os.chdir("..")
-#                name = d[d.find("hel"):]
-#                dwell_times = analyzer(name, threshold, read_selected=read_selected, Ndif=Ndif)
-#                plt.figure("Dwell-times histogram - "+name)
-#                plt.hist(dwell_times, bins=30)
-#                plt.savefig("./dwell_times_threshold_"+str(threshold)+"_selected_"+Ndif+"dif_{}".format(name))
-#                plt.close()
-#
-#            if not read_selected:
-#                names = [n[:n.find(".traces")] for n in os.listdir(".") if ".traces" in n]
-#                for name in names:
-#                    dwell_times = analyzer(name, threshold, read_selected=read_selected, Ndif=Ndif)
-#
-#                    plt.figure("Dwell-times histogram - "+name)
-#                    plt.hist(dwell_times, bins=30)
-#                    plt.savefig("./dwell_times_threshold_"+str(threshold)+"_selected_"+Ndif+"dif_{}".format(name))
-#                    plt.close()
-#    os.chdir("..")
-
-
-#
-#    for i in range(len(acceptor)):
-#    plt.figure(data["names"][i])
-#    plt.plot(time, acceptor[i])
-#    plt.show()
-
-
-#trace = acceptor[0]
-#plt.figure("Trace")
-#plt.plot(trace)
-#trace_filt = signal.savgol_filter(trace, 11, 2)
-#plt.plot(trace_filt)
-#plt.figure()
-#plt.hist(trace, bins=100)
-
-#def check_differences(trace, threshold, Ndif=4):
-#    for i, t in enumerate(trace):
-#        if i <= len(trace) - Ndif+1:
-#            dif = [trace[i+j] - t for j in range(1,Ndif+1)]
-#            b_up = []
-#            b_down = []
-#            for d in dif:
-#                if d > threshold and t < threshold:
-#                    b_up.append(True)
-#                elif d < -threshold:
-#                    b.append(False)
-#
-#            if all(b):
-#                print "step at "+str(i)
-#                print dif
-#                print b

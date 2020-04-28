@@ -335,7 +335,7 @@ class Panel(wx.Frame):
 
     def OnQuitPress(self, event):
         print('Quit')
-        self.Close()
+        self.Hide()
 
     def save_enable(self):
         for child in self.gridSaveSizer.GetChildren():
