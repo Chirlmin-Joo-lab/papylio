@@ -16,7 +16,7 @@ if __name__ == '__main__':
     import SAfitting
     import common_PDF
 else:
-    from trace_analysis.analysis import SAfitting_based_on_Z as SAfitting
+    from trace_analysis.analysis import SAfitting_based_on_Z_with_tcut as SAfitting
     from trace_analysis.analysis import common_PDF
 # import SAfitting
 sns.set(style="ticks")
@@ -39,12 +39,15 @@ def analyze(dwells_data, dataset_name, dist, configuration):
         print(np.size(dwells), 'dwells selected')
         if conf['FitBool']:
             if conf['tcutBool']:
-                dwells, t_cut = Short_time_cutoff(dwells)
+                tcut = 0.95
+                dwells = Short_time_cutoff(dwells, tcut)
+                print('tcut:', tcut)
             else:
-                t_cut = []
+                tcut = 0
             fit_res = fit(dwells, model=conf['model'],
                           dataset_name=dataset_name,
                           Nfits=int(conf['Nfits']),
+                          tcut=tcut,
                           include_over_Tmax=conf['TmaxBool'],
                           bootstrap=conf['BootBool'],
                           boot_repeats=int(conf['BootRepeats']))
@@ -53,7 +56,7 @@ def analyze(dwells_data, dataset_name, dist, configuration):
             fit_res = None
         print(f'plotting {key} {dist}')
         figure = plot(dwells, dataset_name, dist, trace=key,
-                      binsize=conf['binsize'], t_cut=t_cut,
+                      binsize=conf['binsize'], tcut=tcut,
                       scale=conf['scale'], style=conf['PlotType'],
                       fit_result=fit_res)
         figures.append(figure)
@@ -64,37 +67,37 @@ def analyze(dwells_data, dataset_name, dist, configuration):
     return dwells, figures, fit_data
 
 
-def Short_time_cutoff(dwells):
-    t_cut = 0.6  # a bit higher than Nyquist (2*exposure time)
-    short_dwells = np.where(dwells < t_cut)[0]
+def Short_time_cutoff(dwells, tcut):
+    short_dwells = np.where(dwells < tcut)[0]
     print('Short dwells cut:', len(short_dwells))
-    dwells_cut = dwells[dwells > t_cut]
-    return dwells_cut, t_cut
+    dwells_cut = dwells[dwells >= tcut]
+    return dwells_cut
 
 
-def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1,
+def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, tcut=0,
         include_over_Tmax=True, bootstrap=True, boot_repeats=100):
 
     if model == '1Exp+2Exp':
         fit_result = []
         for model in ['1Exp', '2Exp']:
             result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
-                                   include_over_Tmax, bootstrap, boot_repeats)
+                                          tcut, include_over_Tmax,
+                                          bootstrap, boot_repeats)
             fit_result.append(result)
         fit_result = pd.concat(fit_result, axis=1, ignore_index=True)
         return fit_result
 
     fit_result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
-                                   include_over_Tmax, bootstrap, boot_repeats)
+                                      tcut, include_over_Tmax,
+                                      bootstrap, boot_repeats)
     # print(fit_result)
     return fit_result
 
 
-def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
-         t_cut=None,
+def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
          scale='log', style='dots', color='from_trace', fit_result=None):
-    if t_cut is not None:
-        dwells = dwells[dwells >= t_cut]
+    if tcut != 0:
+        dwells = dwells[dwells >= tcut]
 
     if fit_result is not None:
         if fit_result.Ncut[0] > 0:
@@ -113,7 +116,7 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
         bin_edges = binsize
 
     values, bins = np.histogram(dwells, bins=bin_edges, density=True)
-    print('values', np.sum(values*np.diff(bins)))
+
     # Determine position of bins
     if scale == 'Log-Log':
         centers = (bins[1:] * bins[:-1])**0.5  # geometric average of bin edges
@@ -121,24 +124,24 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
         centers = (bins[1:] + bins[:-1]) / 2.0
 
     print('bin edges', bin_edges)
-    # resolution correction bins
-    if scale == 'Log-Log':
-        t_reso = 0.3
-        ismbin = np.where(np.diff(bin_edges) < t_reso)[0]
-        ismbin = np.concatenate((ismbin, [ismbin[-1] + 1]))  # diff only gives index of first compared
-        print('small bins ', ismbin)
-         
-        j = 0
-        while j < len(ismbin):
-            i = j
-            j += 1
-            while j < len(ismbin) and centers[ismbin[j]] - centers[ismbin[i]] < t_reso:
-                j += 1
-            print('startbin ', centers[ismbin[i]])
-            print('endbin ', centers[ismbin[i]+j-i])
-            print('values ', values[ismbin[i]:(ismbin[i]+j-i)])
-#           print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
-            values[ismbin[i]:(ismbin[i]+j-i)] = np.sum(values[ismbin[i]:(ismbin[i]+j-i)])/(j-i)
+#    # resolution correction bins
+#    if scale == 'Log-Log':
+#        t_reso = 0.3
+#        ismbin = np.where(np.diff(bin_edges) < t_reso)[0]
+#        ismbin = np.concatenate((ismbin, [ismbin[-1] + 1]))  # diff only gives index of first compared
+#        print('small bins ', ismbin)
+#         
+#        j = 0
+#        while j < len(ismbin):
+#            i = j
+#            j += 1
+#            while j < len(ismbin) and centers[ismbin[j]] - centers[ismbin[i]] < t_reso:
+#                j += 1
+#            print('startbin ', centers[ismbin[i]])
+#            print('endbin ', centers[ismbin[i]+j-i])
+#            print('values ', values[ismbin[i]:(ismbin[i]+j-i)])
+##           print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
+#            values[ismbin[i]:(ismbin[i]+j-i)] = np.sum(values[ismbin[i]:(ismbin[i]+j-i)])/(j-i)
 
     # combine bins until they contain at least one data point (for y-log plots)
     if scale in ['Log', 'Log-Log']:
@@ -167,8 +170,8 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
                     'darkviolet'*(trace == ' FRET') + 'saddlebrown'*(trace == 'total')
 
     label = f'{dist} pdf, N={dwells.size}'
-    if t_cut:
-        label = label + f', tcut={t_cut:.1f}'
+    if tcut:
+        label = label + f', tcut={tcut:.2f}'
     if style == 'dots':
         plt.plot(centers, values, '.', color=color, label=label)
     if style == 'bars':
@@ -183,7 +186,7 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
             error = fit_result.error[0]
             Ncut = fit_result.Ncut[0]
             print(f'plotting 1Exp fit')
-            time, fit = common_PDF.Exp1(tau, Tmin=min(dwells),
+            time, fit = common_PDF.Exp1(tau, tcut=tcut,
                                         Tmax=centers[-1])
             label = f'\n tau={tau:.1f}'
             if error != 0:
@@ -196,7 +199,7 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
             Ncut = fit_result.Ncut[0]
             print(fit_result)
             print(f'errors: ', errp, err1, err2)
-            time, fit = common_PDF.Exp2(p, tau1, tau2, Tmin=min(dwells),
+            time, fit = common_PDF.Exp2(p, tau1, tau2, tcut=tcut,
                                         Tmax=centers[-1])
             label = f'\n p={p:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}'
 
@@ -210,8 +213,23 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
             print(fit_result)
             print(f'errors: ', errp1, errp2, err1, err2, err3)
             time, fit = common_PDF.Exp3(p1, p2, tau1, tau2, tau3,
-                                        Tmin=min(dwells), Tmax=centers[-1])
+                                        tcut=tcut, Tmax=centers[-1])
             label = f'\n p1={p1:.2f}, p2={p2:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}'
+
+        elif fit_result.model[0] == '4Exp':
+            p1, errp1 = fit_result.value[0], fit_result.error[0]
+            p2, errp2 = fit_result.value[1], fit_result.error[1]
+            p3, errp3 = fit_result.value[2], fit_result.error[2]
+            tau1, err1 = fit_result.value[3], fit_result.error[3]
+            tau2, err2 = fit_result.value[4], fit_result.error[4]
+            tau3, err3 = fit_result.value[5], fit_result.error[5]
+            tau4, err4 = fit_result.value[6], fit_result.error[6]
+            Ncut = fit_result.Ncut[0]
+            print(fit_result)
+            print(f'errors: ', errp1, errp2, errp3, err1, err2, err3, err4)
+            time, fit = common_PDF.Exp4(p1, p2, p3, tau1, tau2, tau3, tau4,
+                                        tcut=tcut, Tmax=centers[-1])
+            label = f'\n p1={p1:.2f}, p2={p2:.2f}, p3={p3:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}, tau4={int(tau4)}'
 
         if fit_result.Ncut[0] > 0:
             label = f', Ncut={int(Ncut)}' + label
