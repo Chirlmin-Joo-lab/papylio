@@ -14,10 +14,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tifffile
 
-from trace_analysis.image_adapt.movie import Movie
+from trace_analysis.movie.movie import Movie
 
 
-class PmaFile(Movie):
+class TifMovie(Movie):
     def __init__(self, arg, *args, **kwargs):
         super().__init__(arg, *args, **kwargs)
         
@@ -25,7 +25,7 @@ class PmaFile(Movie):
         self.name = self.filepath.with_suffix('').name
         
         #determine 8 bits or 16 bits
-        self.bitdepth = 16 if (self.filepath.name[-7:-4]=='_16') else 8
+        # self.bitdepth = 16 if (self.filepath.name[-7:-4]=='_16') else 8
 
         self.threshold = {  'view':             (0,200),
                             'point-selection':  (45,25)
@@ -71,16 +71,20 @@ class PmaFile(Movie):
 #        return res
 #
     def read_header(self):
-        statinfo = os.stat(self.filepath)       
-               
-        with self.filepath.open('rb') as fid:
-            self.width = np.fromfile(fid, np.int16,count=1)[0].astype(int)
-            self.height =  np.fromfile(fid, np.int16,count=1)[0].astype(int)
-        
-        self.number_of_frames = int((statinfo.st_size-4)/(self.width*self.height))
-        
-        
-#        
+        # im = self.read_frame(0)
+        # width, height = im.shape
+        with tifffile.TiffFile(self.filepath) as tif:
+            tif_tags = {}
+            for tag in tif.pages[0].tags.values():
+               name, value = tag.name, tag.value
+               tif_tags[name] = value
+            self.width = tif_tags['ImageWidth']
+            self.height = tif_tags['ImageLength']
+            self.number_of_frames = len(tif.pages)
+            self.bitdepth = tif_tags['BitsPerSample']
+            ## hdim,vdim=tif.pages[0].shape
+
+#
 #        f = open(self.filepath, 'rb')
 #
 #
@@ -146,28 +150,52 @@ class PmaFile(Movie):
 #        self.datasize = self.width * self.height * 4 * self.stacksize
 #        self.m_offset = self.filesize - self.datasize - 8
     
-       
-    def read_frame(self, frame_number,ii=0):
-        with self.filepath.open('rb') as fid:
-            np.fromfile(fid, np.uint16,count=1)
-            np.fromfile(fid, np.uint16,count=1)
-        
-            if self.bitdepth == 8: #8 bits
-    #        with open(root+'\\'+name, 'rb') as fid: #did the offset reset?    # is already open
-                # for image pageNb, 4 for skipping header, plus certain amount of images to read image pageNb
-                fid.seek(4 + (frame_number*(self.width*self.height)), os.SEEK_SET)
-                im = np.reshape(np.fromfile(fid,np.uint8,count=self.width*self.height),(self.width,self.height))
+
+
+    def read_frame(self, frame_number):
+        # t = time.time()
+
+        with tifffile.TiffFile(self.filepath) as tif:
+
+
+            tifpage = tif.pages
+            if self.number_of_frames == 1:
+                # return -1,0,0,0
+                im = tifpage[0].asarray()
+            elif (self.number_of_frames - 1) >= frame_number:
+                im = tifpage[frame_number].asarray()
             else:
-    #        with open(root+'\\'+name, 'rb') as fid: #did the offset reset?  #is already open
-                fid.seek(4+ 2*frame_number*(self.width*self.height), os.SEEK_SET)
-                msb=np.reshape(np.fromfile(fid,np.uint8,count=(self.width*self.height)),(self.width,self.height))
-                lsb=np.reshape(np.fromfile(fid,np.uint8,count=(self.width*self.height)),(self.width,self.height))
-    #            msb = np.core.records.fromfile(fid, 'int8', offset=4+ 2*pageNb*(hdim*vdim), shape=(hdim,vdim)) # for first image
-    #            lsb = np.core.records.fromfile(fid, 'int8', offset=4+ (1+2*pageNb)*(hdim*vdim), shape=(hdim,vdim)) # for first image
-                im=256*msb+lsb;
-        
-        if 0: # for testing match real data
-            plt.imshow(im)
-            tifffile.imwrite(self.writepath.joinPath(f'{self.name}_fr{frame_number}.tif') , im ,  photometric='minisblack')
-    
-        return im # still need to convert im
+                im = tifpage[self.number_of_frames - 1].asarray()
+                print('pageNb out of range, printed image {0} instead'.format(self.number_of_frames))
+        # elapsed = time.time() - t
+        # print(elapsed),
+        return im
+
+    # def read_frame(self, frame_number,ii=0):
+    #     with self.filepath.open('rb') as fid:
+    #         np.fromfile(fid, np.uint16,count=1)
+    #         np.fromfile(fid, np.uint16,count=1)
+    #
+    #         if self.bitdepth == 8: #8 bits
+    # #        with open(root+'\\'+name, 'rb') as fid: #did the offset reset?    # is already open
+    #             # for image pageNb, 4 for skipping header, plus certain amount of images to read image pageNb
+    #             fid.seek(4 + (frame_number*(self.width*self.height)), os.SEEK_SET)
+    #             im = np.reshape(np.fromfile(fid,np.uint8,count=self.width*self.height),(self.width,self.height))
+    #         else:
+    # #        with open(root+'\\'+name, 'rb') as fid: #did the offset reset?  #is already open
+    #             fid.seek(4+ 2*frame_number*(self.width*self.height), os.SEEK_SET)
+    #             msb=np.reshape(np.fromfile(fid,np.uint8,count=(self.width*self.height)),(self.width,self.height))
+    #             lsb=np.reshape(np.fromfile(fid,np.uint8,count=(self.width*self.height)),(self.width,self.height))
+    # #            msb = np.core.records.fromfile(fid, 'int8', offset=4+ 2*pageNb*(hdim*vdim), shape=(hdim,vdim)) # for first image
+    # #            lsb = np.core.records.fromfile(fid, 'int8', offset=4+ (1+2*pageNb)*(hdim*vdim), shape=(hdim,vdim)) # for first image
+    #             im=256*msb+lsb;
+    #
+    #     if 0: # for testing match real data
+    #         plt.imshow(im)
+    #         tifffile.imwrite(self.writepath.joinPath(f'{self.name}_fr{frame_number}.tif') , im ,  photometric='minisblack')
+    #
+    #     return im # still need to convert im
+
+
+if __name__ == "__main__":
+    print('test')

@@ -14,10 +14,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tifffile
 
-from trace_analysis.image_adapt.movie import Movie
+from trace_analysis.movie.movie import Movie
 
 
-class SifxFile(Movie):
+class SifxMovie(Movie):
     def __init__(self, arg, *args, **kwargs):
         super().__init__(arg, *args, **kwargs)
         

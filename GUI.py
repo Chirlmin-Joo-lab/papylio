@@ -169,10 +169,16 @@ class MainFrame(wx.Frame):
 
     # Select menu event handlers
     def OnInteractiveSelection(self, event):
-        molecules = [mol for file in self.experiment.selectedFiles
-                     for mol in file.molecules]
-#        print(f'{file.name} dataset selected')
-        self.interactive.start(molecules)
+        if self.experiment.selectedFiles:
+            molecules = [mol for file in self.experiment.selectedFiles
+                         for mol in file.molecules]
+    #        print(f'{file.name} dataset selected')
+            self.interactive.start(molecules)
+        else:
+            print('No file selected')
+            dlg = wx.MessageDialog(self, 'No file selected', 'Interactive analysis', wx.OK)
+            dlg.ShowModal()
+            dlg.Destroy()
 
     def OnAnalyzeStepsSelection(self, event):
         print('Analyzing Steps...')

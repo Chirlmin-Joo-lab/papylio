@@ -19,5 +19,6 @@ dependencies:
 - openpyxl=3.0.1
 - sphinx=2.3.1
 - sphinx_rtd_theme=0.4.3
+- git=2.23.0
 - pip:
     - tifffile==2019.7.26

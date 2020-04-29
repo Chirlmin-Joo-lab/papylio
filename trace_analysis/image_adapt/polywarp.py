@@ -82,7 +82,7 @@ def polywarp(xy_out,xy_in,degree=3):
 
 def polywarp_apply(P,Q,pts1):
      deg=len(P)-1
-     dst=np.zeros(np.shape(pts1))
+     dst=np.ones(np.shape(pts1))
      dst[:,0]=[np.sum([P[ii,jj]*pts1[kk,0]**ii * pts1[kk,1]**jj for ii in range(deg+1) for jj in range(deg+1)]) for kk in range(len(pts1))]
      dst[:,1]=[np.sum([Q[ii,jj]*pts1[kk,0]**ii * pts1[kk,1]**jj for ii in range(deg+1) for jj in range(deg+1)]) for kk in range(len(pts1))]
      return(dst)
