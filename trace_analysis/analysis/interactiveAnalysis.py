@@ -45,7 +45,7 @@ class InteractivePlot(object):
 
         sns.set(style="dark")
         sns.set_color_codes()
-        plt.style.use('dark_background')
+        # plt.style.use('dark_background')
         if self.canvas is None:
             self.fig, self.axes = plt.subplots(2, 1, sharex=True, figsize=(10,5))
         else:

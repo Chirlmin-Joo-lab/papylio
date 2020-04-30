@@ -77,7 +77,8 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1,
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto', scale='log',
          style='dots', color='from_trace', fit_result=None):
-
+    plt.style.use('seaborn-dark')
+    plt.style.use('seaborn-colorblind')
     if fit_result is not None:
         if fit_result.Ncut[0] > 0:
             Tcut = dwells.max() - 5  # 5 sec is kind of arbitrary here

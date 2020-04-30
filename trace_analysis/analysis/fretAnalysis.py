@@ -18,7 +18,7 @@ from trace_analysis import Experiment
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def plot_fret_histogram(molecules, Emin=0.05, Emax=0.8, Irmin=40, Iroff=0,
+def plot_fret_histogram(molecules, Emin=0.05, Emax=1.0, Irmin=40, Iroff=0,
                         Igoff=0, **hist_kwargs):
     plt.style.use('seaborn-dark')
     plt.style.use('seaborn-colorblind')
@@ -26,6 +26,8 @@ def plot_fret_histogram(molecules, Emin=0.05, Emax=0.8, Irmin=40, Iroff=0,
     data = data[data>Emin]
     data = data[data<Emax]
     centers, bins, _ = plt.hist(data, **hist_kwargs)
+    plt.ylabel('counts')
+    plt.xlabel('FRET')
 
 
 def get_fret_for_offtimes(molecules, trace_type='red', Emin=0.05, Emax=1,
@@ -83,14 +85,17 @@ def find_nearest(array, value):
 
 if __name__ == '__main__':
 
-    mainPath = r'C:/Users/iason/Desktop/traceanalysis/trace_analysis/traces/test_data/DNA08'
+    mainPath = r'G:/SM-data/analyzed movies/Day2/#5.10_streptavidin_100pM_DNA20-Cy5_10nM_WTcas9-Cy3_G_movie_coloc'
 
     exp = Experiment(mainPath)
-    file = exp.files[0]
-    filename = mainPath + '/hel21_dwells_data.xlsx'
+    file = exp.files[1]
+    filename = mainPath + '/hel31_dwells_data.xlsx'
     dwell_data =  pd.read_excel(filename, index_col=[0, 1], dtype={'kon' :np.str})
-    # fret_hist = plot_fret_histogram(file.molecules, bins=100)
+    # fret_hist = plot_fret_histogram(file.molecules, bins=50)
     mol = file.molecules[0]
     fret = get_fret_for_offtimes(file.molecules)
+    plt.figure()
     plt.hist(fret, bins=50)
+    plt.ylabel('counts')
+    plt.xlabel('FRET')
 

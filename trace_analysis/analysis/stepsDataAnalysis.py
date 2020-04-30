@@ -73,7 +73,7 @@ def find_mol_dwells(mol, trace='red'):
                 avg_fret.append(a_fret)
             else:
                 avg_fret.append(0)
-                print(f'FRET corrupted for molecule:{i+1}')
+                # print(f'FRET corrupted for molecule:{i+1}')
         # else:
         #     avg_fret.append(None)
 

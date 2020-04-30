@@ -48,7 +48,7 @@ def P3expcut(dwells, params, Tcut, Ncut):
     return Pi, Pcut
 
 def BIC(dwells, k, LogLike):
-    bic = np.log(dwells.size)*k - 2*LogLike
+    bic = np.log(dwells.size)*k + 2*LogLike
     return bic
 
 
