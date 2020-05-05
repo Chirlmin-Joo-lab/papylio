@@ -5,6 +5,7 @@ Created on Fri Dec  6 18:59:11 2019
 @author: pimam
 """
 if __name__ == '__main__':
+    from trace_analysis.analysis import common_PDF
     import os
     import sys
     from pathlib import Path, PureWindowsPath
@@ -32,6 +33,15 @@ def ML1expcut(dwells, Tcut, Ncut, tcut):
     pcut = np.exp(-tcut/MLtau)
     P = 1/MLtau*np.exp(-timearray/MLtau) / pcut
     return P, MLtau
+
+
+def P1expcut(dwells, params, Tcut, Ncut, tcut):
+    #Only used to calculate LogLikelihood
+    tau = params
+    Pi = 1/tau*np.exp(-dwells/tau)
+    Pcut = np.exp(-Tcut/tau)
+    pcut = np.exp(-tcut/tau)
+    return Pi, Pcut, pcut
 
 
 def P2expcut(dwells, params, Tcut, Ncut, tcut):
@@ -97,8 +107,8 @@ def Param4exp(params):
     return P1, P2, P3, tau1, tau2, tau3, tau4
 
 
-def BIC(dwells, k, LogLike):
-    bic = np.log(dwells.size)*k + 2*LogLike
+def BIC(dwells, k, LLike):
+    bic = np.log(dwells.size)*k + 2*LLike
     return bic
 
 
@@ -121,7 +131,7 @@ def update_temp(T, alpha):
 
 
 def simulated_annealing(data, objective_function, model, x_initial, lwrbnd,
-                        uprbnd, Tcut, Ncut, tcut, Tstart=150.,
+                        uprbnd, Tcut, Ncut, tcut, Tstart=100.,
 #                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.90):
                         Tfinal=0.001, delta1=1, delta2=2.5, alpha=0.99):
     i = 0
@@ -206,6 +216,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, tcut=0,
 
     if mdl == '1Exp':
         #  The 1exp fit is given by analytic solution, just the average dwelltime
+        model = P1expcut
         fit, bestvalue = ML1expcut(dwells, Tmax, Ncut, tcut)
         error = 0
         boot_params = np.empty(boot_repeats)
@@ -219,11 +230,15 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, tcut=0,
 
             error = np.std(boot_params)
 
+        # Calculate the BIC
+        LogLike = LogLikelihood(dwells, bestvalue, model, Tmax, Ncut, tcut)
+        bic = BIC(dwells, 1, LogLike)
+
         result = pd.DataFrame({'param': ['tau'], 'value': [bestvalue],
                                'error': [error], 'Tmax': [Tmax],
                                'Ncut': [Ncut], 'tcut': [tcut],
                                'BootRepeats': [boot_repeats*bootstrap],
-                               'steps': ['N/A']})
+                               'steps': ['N/A'], 'BIC': bic})
 
         fit_result = pd.concat([fit_result, result], axis=1)
 
@@ -234,8 +249,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, tcut=0,
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
-        x_initial = np.log([1, avg_dwells, avg_dwells])
-        lwrbnd = [0, 0, 0]
+        x_initial = np.log([1, avg_dwells, 2*avg_dwells])
+        lwrbnd = [-10**5, -10**5, -10**5]
         uprbnd = np.log([10**5, 3*Tmax, 3*Tmax])
 
         # Perform N fits on data using simmulated annealing and select best
@@ -311,10 +326,10 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, tcut=0,
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
-        x_initial = np.log([1, 1, 0.5*avg_dwells, 0.5*avg_dwells, 2*avg_dwells])
+        x_initial = np.log([1, 1, 1, 20, 100])
         print('x_initial ', x_initial)
-        lwrbnd = [0, 0, 0, 0, 0]
-        uprbnd = np.log([10**5, 10**5, 3*Tmax, 3*Tmax, 3*Tmax])
+        lwrbnd = [-10, -10, np.log(0.3), np.log(1.5), np.log(30)]
+        uprbnd = [10**5, 10**5, np.log(1.5), np.log(30), np.log(3*Tmax)]
 
         # Perform N fits on data using simmulated annealing and select best
         bestvaluesZ, bestNsteps = Best_of_Nfits_sim_anneal(
@@ -486,24 +501,65 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, tcut=0,
     return fit_result, boot_params
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
+    
+    bsize=0.08
+    plt.figure()
+    bin_edges = 10**(np.arange(np.log10(min(dataout)), np.log10(max(dataout)) + bsize, bsize))
+    values, bins = np.histogram(dataout, bins=bin_edges, density=True)
+    centers = (bins[1:] * bins[:-1])**0.5 
+    plt.plot(centers, values, '.',color='r')
+    p1=0.71
+    p2=0.000001
+    tau1=2.4
+    tau2=10
+    tau3=50
+    Z1 = np.log(p1/(1-p1-p2))
+    Z2= np.log(p2/(1-p1-p2))
+    T1 = np.log(tau1)
+    T2 = np.log(tau2)
+    T3 = np.log(tau3)
+    model = P3expcut
+    LL = LogLikelihood(dataout, [Z1, Z2, T1, T2, T3], model, 0, 0, tcut=0.9)
+    bic = BIC(dataout, 5, LL)
+    print(f'LL: {LL} BIC: {bic}')
+    time, fit = common_PDF.Exp3(p1, p2, tau1, tau2, tau3, tcut=0.9, Tmax=300)
+    plt.loglog(time, fit, label= 'fit1')
+    
+    p1=0.71
+    p2=0.15
+    tau1=0.65
+    tau2=3
+    tau3=60
+    Z1 = np.log(p1/(1-p1-p2))
+    Z2= np.log(p2/(1-p1-p2))
+    T1 = np.log(tau1)
+    T2 = np.log(tau2)
+    T3 = np.log(tau3)
+    model = P3expcut
+    LL = LogLikelihood(dataout, [Z1, Z2, T1, T2, T3], model, 0, 0, tcut=0.8)
+    bic = BIC(dataout, 5, LL)
+    print(f'LL: {LL} BIC: {bic}')
+    time, fit = common_PDF.Exp3(p1, p2, tau1, tau2, tau3, tcut=0.8, Tmax=300)
+    plt.loglog(time, fit, label='fit2')
+    plt.legend()
 
-    # Import data and prepare for fitting
-    path = 'C:/Users/iason/Desktop/traceanalysis/trace_analysis/traces/'
-    filename = 'hel0_dwells_data.xlsx'
-    dwells_all = pd.read_excel(path+filename).offtime.dropna().values
-
-    # Start fitting
-    mdl = '2Exp'
-
-    include_over_Tmax = False
-    Nfits = 1
-    bootstrap = True
-    boot_repeats = 10
-    result, boot = fit(dwells_all, mdl, 'test', Nfits, include_over_Tmax,
-                  bootstrap, boot_repeats)
-    print(result)
-    plt.hist(boot)
+#    # Import data and prepare for fitting
+#    path = 'C:/Users/iason/Desktop/traceanalysis/trace_analysis/traces/'
+#    filename = 'hel0_dwells_data.xlsx'
+#    dwells_all = pd.read_excel(path+filename).offtime.dropna().values
+#
+#    # Start fitting
+#    mdl = '2Exp'
+#
+#    include_over_Tmax = False
+#    Nfits = 1
+#    bootstrap = True
+#    boot_repeats = 10
+#    result, boot = fit(dwells_all, mdl, 'test', Nfits, include_over_Tmax,
+#                  bootstrap, boot_repeats)
+#    print(result)
+#    plt.hist(boot)
     # if bootstrap is True:
     #     fitdata.to_csv(f'{mdl}_inclTmax_{include_over_Tmax}_bootstrap{boot_repeats}.csv', index=False)
     # else:

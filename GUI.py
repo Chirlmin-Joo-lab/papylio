@@ -28,7 +28,7 @@ from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as NavigationToolbar
 from trace_analysis.analysis import interactiveAnalysis, distributionsPanel
 
-from trace_analysis.analysis.stepsDataAnalysis import analyze_steps
+from trace_analysis.analysis.stepsDataAnalysis_mod import analyze_steps
 from trace_analysis.analysis import dwelltimeAnalysis
 
 class MainFrame(wx.Frame):
