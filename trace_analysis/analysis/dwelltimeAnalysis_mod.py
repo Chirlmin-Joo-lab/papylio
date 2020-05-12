@@ -28,7 +28,6 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
     conf = configuration
     # find the Tmax until which data is selected    
     d = apply_config_to_data(dwells_data, dist, conf)
-    print('d', d)
     figures = []
     fit_data = []
     keys_with_data = []  # keys refer to 'red', 'green', 'total', 'FRET'
@@ -39,11 +38,11 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
             continue
         keys_with_data.append(key)
         dwells = np.concatenate((dwells, d[key].loc[:, dist].values))
-#    dwells = dwells[dwells < 50]
+#    dwells = dwells[dwells < 10]
     print(np.size(dwells), 'dwells selected')
     if conf['FitBool']:
         if conf['tcutBool']:
-            tcut = 0.9
+            tcut = 0.8
             dwells = Short_time_cutoff(dwells, tcut)
             print('tcut:', tcut)
         else:
@@ -59,9 +58,6 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
     else:
         fit_res = None
     print(f'plotting {keys_with_data} {dist}')
-#    traces = ''
-#    for key in keys_with_data:
-#        traces = traces + '/' + str(key)
     figure = plot(dwells, dataset_name, dist, trace=key,
                   binsize=conf['binsize'], tcut=tcut,
                   scale=conf['scale'], style=conf['PlotType'],
@@ -96,7 +92,6 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, tcut=0,
     fit_result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
                                       tcut, include_over_Tmax,
                                       bootstrap, boot_repeats)
-    # print(fit_result)
     return fit_result
 
 
@@ -258,6 +253,10 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
 
 
 def apply_config_to_data(dwells_data, dist, config):
+    t_total = dwells_data['time'][dwells_data['trace'] == 'total']
+    t_red = dwells_data['time'][dwells_data['trace'] == 'red']
+    print('len t_total', len(t_total))
+    print('len t_red', len(t_red))
     d_total = dwells_data[dist][dwells_data['trace'] == 'total']
     d_total = d_total[~np.isnan(d_total)]
     d_red = dwells_data[dist][dwells_data['trace'] == 'red']

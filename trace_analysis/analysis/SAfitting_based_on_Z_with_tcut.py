@@ -36,7 +36,7 @@ def ML1expcut(dwells, Tcut, Ncut, tcut):
 
 
 def P1expcut(dwells, params, Tcut, Ncut, tcut):
-    #Only used to calculate LogLikelihood
+    #  Only used to calculate LogLikelihood
     tau = params
     Pi = 1/tau*np.exp(-dwells/tau)
     Pcut = np.exp(-Tcut/tau)
@@ -115,7 +115,7 @@ def BIC(dwells, k, LLike):
 def LogLikelihood(dwells, params, model, Tcut, Ncut, tcut):
     Pi, Pcut, pcut = model(dwells, params, Tcut, Ncut, tcut)
     LLikecut = -Ncut * np.log(Pcut)
-    LLike = -np.sum(np.log(Pi)) + LLikecut + np.log(pcut)
+    LLike = -np.sum(np.log(Pi)) + LLikecut + np.log(pcut-Pcut)
     return LLike
 
 
@@ -133,7 +133,7 @@ def update_temp(T, alpha):
 def simulated_annealing(data, objective_function, model, x_initial, lwrbnd,
                         uprbnd, Tcut, Ncut, tcut, Tstart=100.,
 #                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.90):
-                        Tfinal=0.001, delta1=1, delta2=2.5, alpha=0.99):
+                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.995):
     i = 0
     T = Tstart
     step = 0
@@ -250,7 +250,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, tcut=0,
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
         x_initial = np.log([1, avg_dwells, 2*avg_dwells])
-        lwrbnd = [-10**5, -10**5, -10**5]
+        lwrbnd = [-10**5, -1, -1]
         uprbnd = np.log([10**5, 3*Tmax, 3*Tmax])
 
         # Perform N fits on data using simmulated annealing and select best
@@ -328,8 +328,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, tcut=0,
         avg_dwells = np.average(dwells)
         x_initial = np.log([1, 1, 1, 20, 100])
         print('x_initial ', x_initial)
-        lwrbnd = [-10, -10, np.log(0.3), np.log(1.5), np.log(30)]
-        uprbnd = [10**5, 10**5, np.log(1.5), np.log(30), np.log(3*Tmax)]
+        lwrbnd = [0, 0, np.log(0.1), np.log(1), np.log(10)]
+        uprbnd = [10**5, 10**5, np.log(1), np.log(10), np.log(3*Tmax)]
 
         # Perform N fits on data using simmulated annealing and select best
         bestvaluesZ, bestNsteps = Best_of_Nfits_sim_anneal(
