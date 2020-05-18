@@ -204,11 +204,14 @@ def Bootstrap_data(dwells, Ncut):
 
 
 def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
-        include_over_Tmax=True, bootstrap=False, boot_repeats=0):
+        Tmax='max', include_over_Tmax=True, bootstrap=False, boot_repeats=0):
+    if Tmax == 'max':
+        Tmax = dwells_all.max()
+    else:
+        Tmax = float(Tmax)
     # Calculate Ncut if selected
-    Tmax = dwells_all.max()
     if include_over_Tmax:
-        Tmax = Tmax - 2
+        Tmax = Tmax - 2 # 2 sec is arbitrary
         dwells = dwells_all[dwells_all < Tmax]
         Ncut = dwells_all[dwells_all >= Tmax].size
         print(f'Ncut: {Ncut}')
@@ -233,7 +236,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
     if mdl == '1Exp':
         #  The 1exp fit is given by analytic solution, just the average dwelltime
         model = P1expcut
-        constraints = [0, 0, 0, 0, 0, 0]
+        constraints = []
         fit, bestvalue = ML1expcut(dwells, Tmax, Ncut, tcut)
         error = 0
         boot_params = np.empty(boot_repeats)
@@ -424,6 +427,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
+        print('avgDwells', avg_dwells)
         x_initial = np.log([1, 1, 1, 0.5*avg_dwells, avg_dwells,
                             2*avg_dwells, 2*avg_dwells])
         print('x_initial ', x_initial)

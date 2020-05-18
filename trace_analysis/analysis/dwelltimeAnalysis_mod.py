@@ -50,6 +50,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
                       Nfits=int(conf['Nfits']),
                       binsize=bsize,
                       tcut=float(conf['min']),
+                      Tmax=conf['max'],
                       include_over_Tmax=conf['TmaxBool'],
                       bootstrap=conf['BootBool'],
                       boot_repeats=int(conf['BootRepeats']))
@@ -58,7 +59,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
         fit_res = None
     print(f'plotting {keys_with_data} {dist}')
     figure = plot(dwells, dataset_name, dist, trace=key,
-                  binsize=float(conf['binsize']), tcut=float(conf['min']),
+                  binsize=float(conf['binsize']),
                   scale=conf['scale'], style=conf['PlotType'],
                   fit_result=fit_res)
     figures.append(figure)
@@ -69,33 +70,35 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
 
 
 def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, binsize=0, tcut=0,
-        include_over_Tmax=True, bootstrap=True, boot_repeats=100):
+        Tmax=0, include_over_Tmax=True, bootstrap=True, boot_repeats=100):
 
     if model == '1Exp+2Exp':
         fit_result = []
         for model in ['1Exp', '2Exp']:
             result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
-                                          binsize, tcut, include_over_Tmax,
+                                          binsize, tcut, Tmax, include_over_Tmax,
                                           bootstrap, boot_repeats)
             fit_result.append(result)
         fit_result = pd.concat(fit_result, axis=1, ignore_index=True)
         return fit_result
 
     fit_result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
-                                      binsize, tcut, include_over_Tmax,
+                                      binsize, tcut, Tmax, include_over_Tmax,
                                       bootstrap, boot_repeats)
     return fit_result
 
 
-def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
+def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
          scale='log', style='dots', color='from_trace', fit_result=None):
-#    if tcut > 0:
-#        dwells = Short_time_cutoff(dwells, tcut)
 
     if fit_result is not None:
-        if fit_result.Ncut[0] > 0:
-            Tcut = dwells.max() - 5  # 5 sec is kind of arbitrary here
-            dwells = dwells[dwells < Tcut]
+        tcut = fit_result.tcut[0]
+        Tmax = fit_result.Tmax[0]
+        Ncut = fit_result.Ncut[0]
+        dwells = dwells[dwells <= Tmax]
+    else:
+        Tmax = dwells.max()
+        tcut = dwells.min()
 
     try:
         bsize = float(binsize)
@@ -163,8 +166,11 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
                     'darkviolet'*(trace == ' FRET') + 'saddlebrown'*(trace == 'total')
 
     label = f'{dist} pdf, N={dwells.size}'
-    if tcut:
+    if tcut > 0:
         label = label + f', tcut={tcut:.2f}'
+    if Ncut > 0:
+        label = label + f', Ncut={int(Ncut)}'
+
     if style == 'dots':
         plt.plot(centers, values, '.', color=color, label=label)
     if style == 'bars':
@@ -174,13 +180,11 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
         plt.plot(centers, values, '-', lw=2, color=color, label=label)
 
     if fit_result is not None:
+        print(fit_result)
         if fit_result.model[0] == '1Exp':
-            tau = fit_result.value[0]
-            error = fit_result.error[0]
-            Ncut = fit_result.Ncut[0]
-            print(f'plotting 1Exp fit')
-            time, fit = common_PDF.Exp1(tau, tcut=tcut,
-                                        Tmax=centers[-1])
+            tau, error = fit_result.value[0], fit_result.error[0]
+            time, fit = common_PDF.Exp1(tau,
+                                        tcut=tcut, Tmax=Tmax)
             label = f'\n tau={tau:.1f}'
             if error != 0:
                 label += f'$\pm$ {error:.1f}'
@@ -189,11 +193,9 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
             p1, errp1 = fit_result.value[0], fit_result.error[0]
             tau1, err1 = fit_result.value[1], fit_result.error[1]
             tau2, err2 = fit_result.value[2], fit_result.error[2]
-            Ncut = fit_result.Ncut[0]
-            print(fit_result)
             print(f'errors: ', errp1, err1, err2)
-            time, fit = common_PDF.Exp2(p1, tau1, tau2, tcut=tcut,
-                                        Tmax=centers[-1], log=True)
+            time, fit = common_PDF.Exp2(p1, tau1, tau2,
+                                        tcut=tcut, Tmax=Tmax)
             label = f'\n p1={p1:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}'
 
         elif fit_result.model[0] == '3Exp':
@@ -202,11 +204,9 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
             tau1, err1 = fit_result.value[2], fit_result.error[2]
             tau2, err2 = fit_result.value[3], fit_result.error[3]
             tau3, err3 = fit_result.value[4], fit_result.error[4]
-            Ncut = fit_result.Ncut[0]
-            print(fit_result)
             print(f'errors: ', errp1, errp2, err1, err2, err3)
             time, fit = common_PDF.Exp3(p1, p2, tau1, tau2, tau3,
-                                        tcut=tcut, Tmax=centers[-1])
+                                        tcut=tcut, Tmax=Tmax)
             label = f'\n p1={p1:.2f}, p2={p2:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}'
 
         elif fit_result.model[0] == '4Exp':
@@ -217,15 +217,10 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
             tau2, err2 = fit_result.value[4], fit_result.error[4]
             tau3, err3 = fit_result.value[5], fit_result.error[5]
             tau4, err4 = fit_result.value[6], fit_result.error[6]
-            Ncut = fit_result.Ncut[0]
-            print(fit_result)
             print(f'errors: ', errp1, errp2, errp3, err1, err2, err3, err4)
             time, fit = common_PDF.Exp4(p1, p2, p3, tau1, tau2, tau3, tau4,
-                                        tcut=tcut, Tmax=centers[-1])
+                                        tcut=tcut, Tmax=Tmax)
             label = f'\n p1={p1:.2f}, p2={p2:.2f}, p3={p3:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}, tau4={int(tau4)}'
-
-        if fit_result.Ncut[0] > 0:
-            label = f', Ncut={int(Ncut)}' + label
 
         plt.plot(time, fit, color='k', label=f'{fit_result.model[0]}fit{label}')
 
@@ -238,7 +233,6 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
     plt.legend()
     plt.ylabel('Probability')
     plt.xlabel(f'{dist} (s)')
-    # plt.locator_params(axis='y', nbins=3)
     plt.tight_layout()
     plt.show()
     return fig
@@ -249,8 +243,8 @@ def apply_config_to_data(dwells_data, dist, config):
     
     t_total = d['time'][d['trace'] == 'total']
     t_red = d['time'][d['trace'] == 'red']
-    print('len t_total', len(t_total))
-    print('len t_red', len(t_red))
+    print('length total times', len(t_total))
+    print('length red times', len(t_red))
 
     if config['trace']['total'] and config['trace']['red'] and dist == 'offtime':
         print('red dwells overlapping total being removed')
