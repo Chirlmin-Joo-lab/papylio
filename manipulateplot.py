@@ -4,18 +4,16 @@ Created on Sun May  3 17:33:17 2020
 
 @author: pimam
 """
-from trace_analysis.analysis import SAfitting_based_on_Z_with_tcut as SA
-from trace_analysis.analysis import common_PDF
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, RadioButtons
 
 
 def PDFExp3(p1, p2, tau1, tau2, tau3, tcut=0, Tmax=1000, log=False, bsize=0.001):
-    if log is True:
-        time = 10**(np.arange(np.log10(tcut), np.log10(Tmax) + bsize, bsize))
-    else:
-        time = np.linspace(tcut, Tmax, 1000)
+#    if log is True:
+#        time = 10**(np.arange(np.log10(tcut), np.log10(Tmax) + bsize, bsize))
+#    else:
+    time = np.linspace(tcut, Tmax, 1000)
     exp = p1/tau1*np.exp(-time/tau1) + p2/tau2*np.exp(-time/tau2) + \
         + (1-p1-p2)/tau3*np.exp(-time/tau3)
     pcut = p1*np.exp(-tcut/tau1) + p2*np.exp(-tcut/tau2) + \
@@ -23,7 +21,6 @@ def PDFExp3(p1, p2, tau1, tau2, tau3, tcut=0, Tmax=1000, log=False, bsize=0.001)
     Pcut = p1*np.exp(-Tmax/tau1) + p2*np.exp(-Tmax/tau2) + \
         (1 - p1 - p2)*np.exp(-Tmax/tau3)
     exp = exp/(pcut-Pcut)
-
     return time, exp
 
 
@@ -45,26 +42,6 @@ def P3expcut(dwells, params, Tcut, Ncut, tcut):
         (1 - P1 - P2)*np.exp(-tcut/tau3)
 #    print('Pcut ', Pcut)
     return Pi, Pcut, pcut
-
-def P3expcutbin(dwells, params, Tcut, Ncut, tcut, bsize):
-    P1, P2, tau1, tau2, tau3 = params
-    bin_edges = 10**(np.arange(np.log10(min(dwells)), np.log10(max(dwells)) + bsize, bsize))
-    Hb, bins = np.histogram(dwells, bins=bin_edges, density=False)
-    centers = (bins[1:] * bins[:-1])
-    pi = P1/tau1*np.exp(-centers/tau1)+P2/tau2*np.exp(-centers/tau2) + \
-        (1 - P1 - P2)/tau3*np.exp(-centers/tau3)
-    hi = P1*(np.exp(-bins[:-1]/tau1)-np.exp(-bins[1:]/tau1)) + \
-        P2*(np.exp(-bins[:-1]/tau2)-np.exp(-bins[1:]/tau2)) + \
-        (1 - P1 - P2)*(np.exp(-bins[:-1]/tau3)-np.exp(-bins[1:]/tau3))
-    Pi = np.power(hi, Hb)
-    print('Pi ', Pi)
-    print('sum hi', np.sum(hi))
-    Pcut = P1*np.exp(-Tcut/tau1)+P2*np.exp(-Tcut/tau2) + \
-        (1 - P1 - P2)*np.exp(-Tcut/tau3)
-    pcut = P1*np.exp(-tcut/tau1)+P2*np.exp(-tcut/tau2) + \
-        (1 - P1 - P2)*np.exp(-tcut/tau3)
-#    print('Pcut ', Pcut)
-    return Pi, Pcut, pcut
     
 
 def BIC(dwells, k, LLike):
@@ -72,18 +49,25 @@ def BIC(dwells, k, LLike):
     return bic
 
 
-def LogLikelihood(dwells, params, model, Tcut, Ncut, tcut):#, bsize):
-    Pi, Pcut, pcut = model(dwells, params, Tcut, Ncut, tcut)#, bsize)
+def LogLikelihood(tbin, Nmole, params, model, Tcut, Ncut, tcut):
+    Pi, Pcut, pcut = model(tbin, params, Tcut, Ncut, tcut)
     LLikecut = -Ncut * np.log(Pcut)
-    print('LLikecut ', LLikecut)
-    LLike = -np.sum(np.log(Pi)) + LLikecut +  np.log(pcut-Pcut)
+    LLike = -np.sum(Nmole*np.log(Pi/(pcut-Pcut))) + LLikecut
     return LLike
 
+#def LogLikelihood(dwells, params, model, Tcut, Ncut, tcut):
+#    Pi, Pcut, pcut = model(dwells, params, Tcut, Ncut, tcut)
+#    LLikecut = -Ncut * np.log(Pcut)
+#    LLike = -np.sum(np.log(Pi)) + LLikecut +  np.log(pcut-Pcut)
+#    return LLike
 
 fig, ax = plt.subplots()
 plt.subplots_adjust(left=0.25, bottom=0.25)
 
-bsize =0.04
+Tcut = dataout.max()
+tcut = 1
+model = P3expcut
+bsize = 0.1
 bin_edges = 10**(np.arange(np.log10(min(dataout)), np.log10(max(dataout)) + bsize, bsize))
 bins = bin_edges
 #Calculate bin values (same as np.histogram)
@@ -93,31 +77,39 @@ bins = bin_edges
 #    val2 = dataout < bin_edges[i+1]
 #    if i == len(bin_edges)-1:
 #        val2 = dataout <= bin_edges[i+1]
-#    values[i] = len(np.where(val1*val2)[0])/len(dataout)/(bin_edges[i+1] - bin_edges[i])   
+#    values[i] = len(np.where(val1*val2)[0])/len(dataout)/(bin_edges[i+1] - bin_edges[i])  
+# Bin the data if coarsed-grained fitting
+#bsize = 0
+if bsize > 0:
+    bin_edges = 10**(np.arange(np.log10(min(dataout)),
+                               np.log10(max(dataout)) + bsize, bsize))
+    Nmole, bins = np.histogram(dataout, bins=bin_edges, density=False)
+    tbin = (bins[1:] * bins[:-1])**0.5  # geometric average of bin edges
+    print('Nbins', len(tbin))
+else:
+    tbin = dataout
+    Nmole = 1 
 values, bins = np.histogram(dataout, bins=bin_edges, density=True)
 centers = (bins[1:] * bins[:-1])**0.5
 plt.plot(centers, values, '.', color='r')
-#p1=0.52
-#p2=0.00
-#tau1=2.2
-#tau2=20
-#tau3=81
-p1=0.67
-p2=0
-tau1=1.9
-tau2=3
-tau3=55
-delta_p = 0.01
-delta_t = 0.05
 
+p1=0.83483
+p2=0.0429917
+tau1=0.455571
+tau2=4.47609
+tau3=81.0023
+delta_p = 0.01
+delta_t = 0.01
+LL = LogLikelihood(tbin, Nmole, [p1, p2, tau1, tau2, tau3], model, Tcut, 0, tcut=1)
+bic = BIC(dataout, 5, LL)
+print(f'LL: {LL} BIC: {bic}')
 #Z1 = np.log(p1/(1-p1-p2))
 #Z2= np.log(p2/(1-p1-p2))
 #T1 = np.log(tau1)
 #T2 = np.log(tau2)
 #T3 = np.log(tau3)
-Tcut = dataout.max()
-model = P3expcut
-time, fit = PDFExp3(p1, p2, tau1, tau2, tau3, tcut=0.9, Tmax=Tcut, log=True)#, bsize=bsize)
+
+time, fit = PDFExp3(p1, p2, tau1, tau2, tau3, tcut, Tcut, log=True)
 l, = plt.loglog(time, fit, label='fit1')
 
 ax.margins(x=0)
@@ -140,10 +132,10 @@ def update(val):
     Tau1 = sTau1.val
 #    Tau2 = stau2.val
 #    Tau3 = stau3.val
-    LL = LogLikelihood(dataout, [P1, P2, Tau1, tau2, tau3], model, Tcut, 0, tcut=0.9)#, bsize=bsize)
+    LL = LogLikelihood(tbin, Nmole, [P1, P2, Tau1, tau2, tau3], model, Tcut, 0, tcut)
     bic = BIC(dataout, 5, LL)
     print(f'LL: {LL} BIC: {bic}')
-    time, fit = PDFExp3(P1, P2, Tau1, tau2, tau3, tcut=0.9, Tmax=Tcut, log=True)#, bsize=bsize)
+    time, fit = PDFExp3(P1, P2, Tau1, tau2, tau3, tcut, Tcut, log=True)
     l.set_ydata(fit)
     fig.canvas.draw_idle()
 

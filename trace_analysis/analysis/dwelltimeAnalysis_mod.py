@@ -16,7 +16,7 @@ if __name__ == '__main__':
     import SAfitting
     import common_PDF
 else:
-    from trace_analysis.analysis import SAfitting_based_on_Z_with_tcut as SAfitting
+    from trace_analysis.analysis import SAfitting_based_on_Zconstraint_with_tcut as SAfitting
     from trace_analysis.analysis import common_PDF
 # import SAfitting
 sns.set(style="ticks")
@@ -38,19 +38,18 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
             continue
         keys_with_data.append(key)
         dwells = np.concatenate((dwells, d[key].loc[:, dist].values))
-#    dwells = dwells[dwells < 10]
     print(np.size(dwells), 'dwells selected')
     if conf['FitBool']:
-        if conf['tcutBool']:
-            tcut = 0.8
-            dwells = Short_time_cutoff(dwells, tcut)
-            print('tcut:', tcut)
+        if conf['CoarseBool']:
+            bsize = float(conf['binsize'])
+            print( 'bsize', bsize)
         else:
-            tcut = 0
+            bsize = 0
         fit_res = fit(dwells, model=conf['model'],
                       dataset_name=dataset_name,
                       Nfits=int(conf['Nfits']),
-                      tcut=tcut,
+                      binsize=bsize,
+                      tcut=float(conf['min']),
                       include_over_Tmax=conf['TmaxBool'],
                       bootstrap=conf['BootBool'],
                       boot_repeats=int(conf['BootRepeats']))
@@ -59,7 +58,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
         fit_res = None
     print(f'plotting {keys_with_data} {dist}')
     figure = plot(dwells, dataset_name, dist, trace=key,
-                  binsize=conf['binsize'], tcut=tcut,
+                  binsize=float(conf['binsize']), tcut=float(conf['min']),
                   scale=conf['scale'], style=conf['PlotType'],
                   fit_result=fit_res)
     figures.append(figure)
@@ -69,36 +68,29 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
     return dwells, figures, fit_data
 
 
-def Short_time_cutoff(dwells, tcut):
-    short_dwells = np.where(dwells < tcut)[0]
-    print('Short dwells cut for plot:', len(short_dwells))
-    dwells_cut = dwells[dwells >= tcut]
-    return dwells_cut
-
-
-def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, tcut=0,
+def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, binsize=0, tcut=0,
         include_over_Tmax=True, bootstrap=True, boot_repeats=100):
 
     if model == '1Exp+2Exp':
         fit_result = []
         for model in ['1Exp', '2Exp']:
             result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
-                                          tcut, include_over_Tmax,
+                                          binsize, tcut, include_over_Tmax,
                                           bootstrap, boot_repeats)
             fit_result.append(result)
         fit_result = pd.concat(fit_result, axis=1, ignore_index=True)
         return fit_result
 
     fit_result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
-                                      tcut, include_over_Tmax,
+                                      binsize, tcut, include_over_Tmax,
                                       bootstrap, boot_repeats)
     return fit_result
 
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
          scale='log', style='dots', color='from_trace', fit_result=None):
-    if tcut > 0:
-        dwells = Short_time_cutoff(dwells, tcut)
+#    if tcut > 0:
+#        dwells = Short_time_cutoff(dwells, tcut)
 
     if fit_result is not None:
         if fit_result.Ncut[0] > 0:
@@ -253,21 +245,14 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto', tcut=0,
 
 
 def apply_config_to_data(dwells_data, dist, config):
-    t_total = dwells_data['time'][dwells_data['trace'] == 'total']
-    t_red = dwells_data['time'][dwells_data['trace'] == 'red']
+    d = dwells_data
+    
+    t_total = d['time'][d['trace'] == 'total']
+    t_red = d['time'][d['trace'] == 'red']
     print('len t_total', len(t_total))
     print('len t_red', len(t_red))
-    d_total = dwells_data[dist][dwells_data['trace'] == 'total']
-    d_total = d_total[~np.isnan(d_total)]
-    d_red = dwells_data[dist][dwells_data['trace'] == 'red']
-    d_red = d_red[~np.isnan(d_red)]
-    print('#total', len(d_total))
-    print('#red', len(d_red))
+
     if config['trace']['total'] and config['trace']['red'] and dist == 'offtime':
-        t_red = dwells_data['time'][dwells_data['trace'] == 'red']
-        t_total = dwells_data['time'][dwells_data['trace'] == 'total']
-        print('#t_total', len(t_total))
-        print('#t_red', len(t_red))
         print('red dwells overlapping total being removed')
         scan_total = np.arange(0, len(t_total), 2)
         mol_check = np.zeros(len(t_red), dtype=bool)
@@ -279,25 +264,20 @@ def apply_config_to_data(dwells_data, dist, config):
             overlap1 = t_total[i] < redtimes
             overlap2 = redtimes < t_total[i+1]
             idrop = 2*np.unique(np.floor(np.where(overlap1*overlap2)[0]/2))
-            data_selected = dwells_data[dist][mol]
+            data_selected = d[dist][mol]
             for dd in idrop:
                 data_selected[dd] = np.NaN
-            dwells_data[dist][mol] = data_selected
-#            print('mole ', mol)
-#            print('redtimes ', redtimes)
-#            totaltimes = [t_total[i], t_total[i+1]]
-#            print('totaltimes', totaltimes)
-#            print(dwells_data[dist][mol])
-    d_red = dwells_data[dist][dwells_data['trace'] == 'red']
-    d_total = dwells_data[dist][dwells_data['trace'] == 'total']
+            d[dist][mol] = data_selected
+
+    d_red = d[dist][d['trace'] == 'red']
+    d_total = d[dist][d['trace'] == 'total']
     d_red = d_red[~np.isnan(d_red)]
     d_total = d_total[~np.isnan(d_total)]
-    print('#total2', len(d_total))
-    print('#red2', len(d_red))
-
-    d = dwells_data
+    print('#total', len(d_total))
+    print('#red', len(d_red))
 
     # Select the requested sides
+    tot_dwells = np.size(d[dist][~np.isnan(d[dist])])
     side_list = ['l'*bool(config['side']['left']),
                  'm'*bool(config['side']['middle']),
                  'r'*bool(config['side']['right'])]
@@ -306,12 +286,23 @@ def apply_config_to_data(dwells_data, dist, config):
         d = d[d.side.isin(side_list)]
     if dist == 'ontime':
         d = d[d.onside.isin(side_list)]
+    print('Dwells removed based on side:', tot_dwells - np.size(d[dist][~np.isnan(d[dist])]))
+
     # apply min, max conditions
+    tot_dwells = np.size(d[dist][~np.isnan(d[dist])])
     if config['max'] in ['Max', 'max']:
         d = d[d[dist] > float(config['min'])]
     else:
         d = d[d[dist] > float(config['min'])]
         d = d[d[dist] < float(config['max'])]
+    print('Dwells outside time window:', tot_dwells - np.size(d[dist][~np.isnan(d[dist])]))
+    
+    d_red = d[dist][d['trace'] == 'red']
+    d_total = d[dist][d['trace'] == 'total']
+    d_red = d_red[~np.isnan(d_red)]
+    d_total = d_total[~np.isnan(d_total)]
+    print('#total', len(d_total))
+    print('#red', len(d_red))
 
     data = {}
 
@@ -321,19 +312,6 @@ def apply_config_to_data(dwells_data, dist, config):
             data[key] = d[d['trace'] == key]
         else:
             pass
-
-    d_total = d[dist][d['trace'] == 'total']
-    d_red = d[dist][d['trace'] == 'red']
-    d_total = d_total[~np.isnan(d_total)]
-    d_red = d_red[~np.isnan(d_red)]
-    print('#red3', len(d_red))
-    print('#total3', len(d_total))
-#    d_total = data['total'][dist]
-    d_red = data['red'][dist]
-#    d_total = d_total[~np.isnan(d_total)]
-    d_red = d_red[~np.isnan(d_red)]
-    print('#red4', len(d_red))
-#    print('#total4', len(d_total))
 
     return data
 

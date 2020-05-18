@@ -12,7 +12,7 @@ import pandas as pd
 
 
 def find_mol_dwells(mol, trace='red'):
-    max_time = mol.file.time[-1]
+    max_time = 340.4 #mol.file.time[-1]
     exp_time = mol.file.exposure_time
 
     times = mol.steps.time.values[mol.steps.trace == trace]
