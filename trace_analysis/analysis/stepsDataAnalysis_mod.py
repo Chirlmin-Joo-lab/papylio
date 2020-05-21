@@ -11,9 +11,12 @@ import numpy as np
 import pandas as pd
 
 
-def find_mol_dwells(mol, trace='red'):
-    max_time = 340.4 #mol.file.time[-1]
+def find_mol_dwells(mol, trace='red', max_time=0):
+    if  max_time == 0:
+        max_time = mol.file.time[-1]
+
     exp_time = mol.file.exposure_time
+    time_arr = mol.file.time
 
     times = mol.steps.time.values[mol.steps.trace == trace]
     
@@ -29,7 +32,7 @@ def find_mol_dwells(mol, trace='red'):
     for i in range(0, times.size, 2):
         offtimes[i] = times[i+1] - times[i]
         lab = 'm'
-        if max_time - times[i+1] < 0.5: # and i == times.size:  # last loop
+        if max_time - times[i+1] < 1: # and i == times.size:  # last loop
             lab = 'r'
         if times[0] < 0.5 and i == 0:  # first loop
             lab = 'l'
@@ -67,8 +70,8 @@ def find_mol_dwells(mol, trace='red'):
     fret = mol.E(Imin=mol.steps.Imin[0], Iroff=mol.steps.Iroff[0], Igoff=mol.steps.Igoff[0])
     avg_fret = np.NaN*np.ones(times.size)
     for ii in range(0, times.size, 2):
-        istart = int(round(times[ii]/exp_time))
-        iend = int(round(times[ii+1]/exp_time))
+        istart = find_nearest(time_arr, times[ii])
+        iend = find_nearest(time_arr, times[ii+1])
         a_fret = round(np.mean(fret[istart:iend]), 2)
         if (a_fret <= 1 and a_fret >= 0):
             avg_fret[ii] = a_fret
@@ -82,12 +85,17 @@ def find_mol_dwells(mol, trace='red'):
     return datFrame
 
 
-def process_molecule(mol):
+def find_nearest(array, value):
+    idx = (np.abs(array - value)).argmin()
+    return int(idx)
+
+
+def process_molecule(mol, maxtime):
     traces_unique = pd.unique(mol.steps.trace.values)
     results = []
     for trace in traces_unique:
 
-        results.append(find_mol_dwells(mol, trace=trace))
+        results.append(find_mol_dwells(mol, trace=trace, max_time=maxtime))
 
     result = pd.concat(results, axis=0, ignore_index=True)
     mol.steps = pd.concat([mol.steps, result], axis=1)
@@ -96,8 +104,13 @@ def process_molecule(mol):
 def analyze_steps(file, save=True):
     file.time
     molecules_with_data = [mol for mol in file.molecules if mol.steps is not None]
+    maxtime = 0
+    for i in range(len(molecules_with_data)):
+        maxtime = np.max([maxtime, molecules_with_data[i].steps.time.values.max()])
+    maxtime = np.round(maxtime, 1)
+    print('maxtime', maxtime)
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = [executor.submit(process_molecule, mol)
+        results = [executor.submit(process_molecule(mol, maxtime))
                    for mol in molecules_with_data]
     # if the results need to be manipulated uncomment the following lines:
     # for f in concurrent.futures.as_completed(results):

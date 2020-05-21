@@ -29,8 +29,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
     # find the Tmax until which data is selected    
     d = apply_config_to_data(dwells_data, dist, conf)
     figures = []
-    fit_data = []
-    keys_with_data = []  # keys refer to 'red', 'green', 'total', 'FRET'
+    keys_with_data = []
     dwells = []
     for key in d.keys():
         if d[key].empty:  # check if the dataframe is empty
@@ -45,7 +44,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
             print( 'bsize', bsize)
         else:
             bsize = 0
-        fit_res = fit(dwells, model=conf['model'],
+        fit_res, boot_res = fit(dwells, model=conf['model'],
                       dataset_name=dataset_name,
                       Nfits=int(conf['Nfits']),
                       binsize=bsize,
@@ -54,7 +53,6 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
                       include_over_Tmax=conf['TmaxBool'],
                       bootstrap=conf['BootBool'],
                       boot_repeats=int(conf['BootRepeats']))
-        fit_data.append(fit_res)
     else:
         fit_res = None
     print(f'plotting {keys_with_data} {dist}')
@@ -64,9 +62,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
                   fit_result=fit_res)
     figures.append(figure)
 
-    if fit_data != []:
-        fit_data = pd.concat(fit_data, axis=1, keys=keys_with_data)
-    return dwells, figures, fit_data
+    return dwells, figures, fit_res, boot_res
 
 
 def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, binsize=0, tcut=0,
@@ -85,7 +81,7 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, binsize=0, tcut=0,
     fit_result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
                                       binsize, tcut, Tmax, include_over_Tmax,
                                       bootstrap, boot_repeats)
-    return fit_result
+    return fit_result, boots
 
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
@@ -95,10 +91,12 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
         tcut = fit_result.tcut[0]
         Tmax = fit_result.Tmax[0]
         Ncut = fit_result.Ncut[0]
-        dwells = dwells[dwells <= Tmax]
+        if Ncut > 0:
+            dwells = dwells[dwells <= Tmax]
     else:
-        Tmax = dwells.max()
         tcut = dwells.min()
+        Tmax = dwells.max()
+        Ncut = 0
 
     try:
         bsize = float(binsize)

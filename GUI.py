@@ -29,7 +29,7 @@ from matplotlib.backends.backend_wxagg import NavigationToolbar2WxAgg as Navigat
 from trace_analysis.analysis import interactiveAnalysis, distributionsPanel
 
 from trace_analysis.analysis.stepsDataAnalysis_mod import analyze_steps
-from trace_analysis.analysis import dwelltimeAnalysis
+from trace_analysis.analysis import dwelltimeAnalysis_mod
 
 class MainFrame(wx.Frame):
     def __init__(self, parent, title):

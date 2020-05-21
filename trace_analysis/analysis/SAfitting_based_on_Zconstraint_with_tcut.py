@@ -117,8 +117,10 @@ def BIC(dwells, k, LLike):
 
 def LogLikelihood(tbin, Nmole, params, constraints, model, Tcut, Ncut, tcut):
     Pi, Pcut, pcut = model(tbin, params, constraints, Tcut, Ncut, tcut)
-    LLikecut = -Ncut * np.log(Pcut)
-    LLike = -np.sum(Nmole*np.log(Pi/(pcut-Pcut))) + LLikecut
+    LLike = -np.sum(Nmole*np.log(Pi/(pcut-Pcut)))
+    if Ncut > 0:
+        LLikecut = -Ncut * np.log(Pcut)
+        LLike += LLikecut
     return LLike
 
 
@@ -135,7 +137,7 @@ def update_temp(T, alpha):
 
 def simulated_annealing(tbin, Nmole, objective_function, model, x_initial,
                         constraints, Tcut, Ncut, tcut, Tstart=100.,
-                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.995):
+                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.95):
     i = 0
     T = Tstart
     step = 0
@@ -146,8 +148,6 @@ def simulated_annealing(tbin, Nmole, objective_function, model, x_initial,
         if (step % 100 == 0):
             T = update_temp(T, alpha)
         x_trial = np.zeros(len(x))
-#        x_trial[0] = np.random.uniform(np.max([x[0] - delta1, lwrbnd[0]]),
-#                                       np.min([x[0] + delta1, uprbnd[0]]))
         for i in range(0, len(x)):
 #            x_trial[i] = np.random.uniform(np.max([x[i] - delta1, lwrbnd[i]]),
 #                                           np.min([x[i] + delta1, uprbnd[i]]))
@@ -221,6 +221,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 
     # Bin the data if coarsed-grained fitting is used
     if bsize > 0:
+        print('Data coarse-grained for fitting')
         bin_edges = 10**(np.arange(np.log10(min(dwells)),
                                    np.log10(max(dwells)) + bsize, bsize))
         Nmole, bins = np.histogram(dwells, bins=bin_edges, density=False)
@@ -282,24 +283,41 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                                                            Tcut=Tmax,
                                                            Ncut=Ncut,
                                                            tcut=tcut)
-
         bestvalues = Param2exp(bestvaluesZ, constraints)
+        # Check whether a parameter has run into its constraints
+        check1 = np.divide(bestvalues, lwrbnd) < 1.02 
+        check2 = np.divide(uprbnd, bestvalues) < 1.02
+        if np.sum(check1) > 0 or np.sum(check2) > 0:
+            print('Param run into boundary')
+            print('fit params ', bestvalues)
 
         # make sure the fit parameters are ordered from low to high dwelltimes
         if bestvalues[1] > bestvalues[2]:
             bestvalues = [1-bestvalues[0]] + [bestvalues[2], bestvalues[1]]
 
         errors = [0, 0, 0]
-        boot_params = np.empty((boot_repeats, 3))
+        boot_params = np.full((boot_repeats, 3), np.nan)
         # Check if bootstrapping is used
         if bootstrap:
             LLike = np.empty(boot_repeats)
-            Ncutarray = np.empty(boot_repeats)
+            Ncutarray = np.full((boot_repeats, 1), np.nan)
             Nstepsarray = np.empty(boot_repeats)
             print('bootrepeats: ', boot_repeats)
             for i in range(0, boot_repeats):
                 boot_dwells, boot_Ncut = Bootstrap_data(dwells, Ncut)
-                paramsZ, Nsteps = simulated_annealing(boot_dwells,
+                # Bin the data if coarsed-grained fitting is used
+                if bsize > 0:
+                    print('Data coarse-grained for fitting')
+                    bin_edges = 10**(np.arange(np.log10(min(boot_dwells)),
+                                     np.log10(max(boot_dwells)) + bsize, bsize))
+                    Nmole, bins = np.histogram(boot_dwells, bins=bin_edges, density=False)
+                    tbin = (bins[1:] * bins[:-1])**0.5  # geometric average of bin edges
+                    print('N fitbins', len(tbin))
+                else:
+                    tbin = boot_dwells
+                    Nmole = 1
+
+                paramsZ, Nsteps = simulated_annealing(tbin, Nmole,
                                                       LogLikelihood,
                                                       model, x_initial,
                                                       constraints,
@@ -307,7 +325,14 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                                                       Ncut=boot_Ncut,
                                                       tcut=tcut)
                 print(f'boot: {i+1}, steps: {Nsteps}')
-                params = Param2exp(paramsZ)
+                params = Param2exp(paramsZ, constraints)
+
+                # Check whether a parameter has run into its constraints
+                check1 = np.divide(params, lwrbnd) < 1.02 
+                check2 = np.divide(uprbnd, params) < 1.02
+                if np.sum(check1) > 0 or np.sum(check2) > 0:
+                    print('Param run into boundary')
+                    print('fit params ', params)
                 # make sure the fit parameters are ordered from
                 # low to high dwelltimes
                 if params[1] > params[2]:
@@ -320,8 +345,9 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                                          model, Tmax, Ncut, tcut)
             errors = np.std(boot_params, axis=0)
 
-        # Put fit result into dataframe
+        boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
 
+        # Put fit result into dataframe
         result = pd.DataFrame({'param': ['p', 'tau1', 'tau2'],
                               'value': bestvalues, 'error': errors})
 
@@ -344,9 +370,9 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
-        x_initial = np.log([0.83, 0.04, 0.5, 4.5, 80])
+        x_initial = np.log([0.8, 0.04, 0.5, 4.5, 80])
         lwrbnd = [0.001, 0.001, 0.1, 0.8, 10]
-        uprbnd = [1, np.nan, 1, 20, 2*Tmax]
+        uprbnd = [1, 1, 1.2, 40, 2*Tmax]
         constraints = np.concatenate((lwrbnd, uprbnd))
 
         # Perform N fits on data using simmulated annealing and select best
@@ -355,6 +381,13 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                                                            constraints,
                                                            Tmax, Ncut, tcut)
         bestvalues = Param3exp(bestvaluesZ, constraints)
+        # Check whether a parameter has run into its constraints
+        check1 = np.divide(bestvalues, lwrbnd) < 1.02 
+        check2 = np.divide(uprbnd, bestvalues) < 1.02
+        if np.sum(check1) > 0 or np.sum(check2) > 0:
+            print('Param run into boundary')
+            print('fit params ', bestvalues)
+
         # make sure the fit parameters are ordered from low to high dwelltimes
         imax = np.argmax(bestvalues[2:])
         imin = np.argmin(bestvalues[2:])
@@ -368,24 +401,48 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                       bestvalues[imax+2])
 
         errors = [0, 0, 0, 0, 0]
-        boot_params = np.empty((boot_repeats, 5))
+        boot_params = np.full((boot_repeats, 5), np.nan)
         # Check if bootstrapping is used
         if bootstrap:
-            LLike = np.empty(boot_repeats)
-            Ncutarray = np.empty(boot_repeats)
-            Nstepsarray = np.empty(boot_repeats)
+            lwrbnd = [0.001, 0.001, 0.1, 0.1, 0.1]
+            uprbnd = [1, 1, 40, 2*Tmax, 2*Tmax]
+            constraints = np.concatenate((lwrbnd, uprbnd))
+
+            LLike = np.zeros(boot_repeats)
+            Ncutarray = np.full((boot_repeats, 1), np.nan)
+            Nstepsarray = np.zeros(boot_repeats)
             print('bootrepeats: ', boot_repeats)
-            for i in range(0, boot_repeats):
+            print('bootparam ', boot_params)
+            for j in range(0, boot_repeats):
                 boot_dwells, boot_Ncut = Bootstrap_data(dwells, Ncut)
-                paramsZ, Nsteps = simulated_annealing(boot_dwells,
+                # Bin the data if coarsed-grained fitting is used
+                if bsize > 0:
+                    print('Data coarse-grained for fitting')
+                    bin_edges = 10**(np.arange(np.log10(min(boot_dwells)),
+                                     np.log10(max(boot_dwells)) + bsize, bsize))
+                    Nmole, bins = np.histogram(boot_dwells, bins=bin_edges, density=False)
+                    tbin = (bins[1:] * bins[:-1])**0.5  # geometric average of bin edges
+                    print('N fitbins', len(tbin))
+                else:
+                    tbin = boot_dwells
+                    Nmole = 1
+                paramsZ, Nsteps = simulated_annealing(tbin, Nmole,
                                                       LogLikelihood,
                                                       model, x_initial,
                                                       constraints,
                                                       Tcut=Tmax,
                                                       Ncut=boot_Ncut,
                                                       tcut=tcut)
-                print(f'boot: {i+1}, steps: {Nsteps}')
+                print(f'boot: {j+1}, steps: {Nsteps}')
                 params = Param3exp(paramsZ, constraints)
+
+                # Check whether a parameter has run into its constraints
+                check1 = np.divide(params, lwrbnd) < 1.02 
+                check2 = np.divide(uprbnd, params) < 1.02
+                if np.sum(check1) > 0 or np.sum(check2) > 0:
+                    print('Param run into boundary')
+                    print('boot params ', params)
+
                 # make sure the fit parameters are ordered from low to high dwelltimes
                 imax = np.argmax(params[2:])
                 imin = np.argmin(params[2:])
@@ -393,22 +450,24 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                 for i in range(0, 3):
                     if i != imin and i != imax:
                         imid = i
-                params = (Parray[imin], Parray[imid],
+                params = [Parray[imin], Parray[imid],
                           params[imin+2], params[imid+2],
-                          params[imax+2])
+                          params[imax+2]]
 
-                Ncutarray[i] = boot_Ncut
-                Nstepsarray[i] = Nsteps
-                boot_params[i] = params
-                LLike[i] = LogLikelihood(tbin, Nmole, paramsZ, constraints,
-                                         model, Tmax, Ncut, tcut)
+                Ncutarray[j] = boot_Ncut
+                Nstepsarray[j] = Nsteps
+                boot_params[j] = params
+                LLike[j] = LogLikelihood(tbin, Nmole, paramsZ, constraints,
+                                         model, Tmax, boot_Ncut, tcut)
             errors = np.std(boot_params, axis=0)
 
-        # Put fit result into dataframe
+        boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
 
+        # Put fit result into dataframe
         result = pd.DataFrame({'param': ['p1', 'p2', 'tau1', 'tau2', 'tau3'],
                               'value': bestvalues, 'error': errors})
-        # Calculate the BIC
+
+        # Calculate the BIC for bestvalues
         LogLike = LogLikelihood(tbin, Nmole, bestvaluesZ, constraints, model,
                                 Tmax, Ncut, tcut)
         bic = BIC(dwells, 5, LogLike)
@@ -442,6 +501,12 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                                                            Tmax, Ncut, tcut)
         bestvalues = Param4exp(bestvaluesZ, constraints)
 
+        # Check whether a parameter has run into its constraints
+        check1 = np.divide(bestvalues, lwrbnd) < 1.02 
+        check2 = np.divide(uprbnd, bestvalues) < 1.02
+        if np.sum(check1) > 0 or np.sum(check2) > 0:
+            print('Param run into boundary')
+            print('fit params ', bestvalues)
         # make sure the fit parameters are ordered from low to high dwelltimes
 #        imax = np.argmax(bestvalues[2:])
 #        imin = np.argmin(bestvalues[2:])
@@ -463,18 +528,33 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
             print('bootrepeats: ', boot_repeats)
             for i in range(0, boot_repeats):
                 boot_dwells, boot_Ncut = Bootstrap_data(dwells, Ncut)
-                paramsZ, Nsteps = simulated_annealing(
-                                                      boot_dwells,
+                # Bin the data if coarsed-grained fitting is used
+                if bsize > 0:
+                    print('Data coarse-grained for fitting')
+                    bin_edges = 10**(np.arange(np.log10(min(boot_dwells)),
+                                     np.log10(max(boot_dwells)) + bsize, bsize))
+                    Nmole, bins = np.histogram(boot_dwells, bins=bin_edges, density=False)
+                    tbin = (bins[1:] * bins[:-1])**0.5  # geometric average of bin edges
+                    print('N fitbins', len(tbin))
+                else:
+                    tbin = boot_dwells
+                    Nmole = 1
+
+                paramsZ, Nsteps = simulated_annealing(tbin, Nmole,
                                                       LogLikelihood,
-                                                      model=model,
-                                                      x_initial=x_initial,
-                                                      lwrbnd=lwrbnd,
-                                                      uprbnd=uprbnd,
+                                                      model,x_initial,
+                                                      constraints,
                                                       Tcut=Tmax,
                                                       Ncut=boot_Ncut,
                                                       tcut=tcut)
                 print(f'boot: {i+1}, steps: {Nsteps}')
                 params = Param4exp(paramsZ, constraints)
+                # Check whether a parameter has run into its constraints
+                check1 = np.divide(params, lwrbnd) < 1.02 
+                check2 = np.divide(uprbnd, params) < 1.02
+                if np.sum(check1) > 0 or np.sum(check2) > 0:
+                    print('Param run into boundary')
+                    print('boot params ', params)
                 # make sure the fit parameters are ordered from low to high dwelltimes
 #                imax = np.argmax(params[2:])
 #                imin = np.argmin(params[2:])
@@ -493,10 +573,12 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                                          model, Tmax, Ncut, tcut)
             errors = np.std(boot_params, axis=0)
 
-        # Put fit result into dataframe
+        boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
 
+        # Put fit result into dataframe
         result = pd.DataFrame({'param': ['p1', 'p2', 'p3', 'tau1', 'tau2', 'tau3', 'tau4'],
                               'value': bestvalues, 'error': errors})
+
         # Calculate the BIC
         LogLike = LogLikelihood(tbin, Nmole, bestvaluesZ, constraints,
                                 model, Tmax, Ncut, tcut)
