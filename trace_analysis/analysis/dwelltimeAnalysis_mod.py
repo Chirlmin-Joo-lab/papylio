@@ -55,6 +55,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
                       boot_repeats=int(conf['BootRepeats']))
     else:
         fit_res = None
+        boot_res = None
     print(f'plotting {keys_with_data} {dist}')
     figure = plot(dwells, dataset_name, dist, trace=key,
                   binsize=float(conf['binsize']),

@@ -117,7 +117,8 @@ def BIC(dwells, k, LLike):
 
 def LogLikelihood(tbin, Nmole, params, constraints, model, Tcut, Ncut, tcut):
     Pi, Pcut, pcut = model(tbin, params, constraints, Tcut, Ncut, tcut)
-    LLike = -np.sum(Nmole*np.log(Pi/(pcut-Pcut)))
+    lognormPi = np.log(Pi/(pcut-Pcut))
+    LLike = -np.sum(Nmole*lognormPi)
     if Ncut > 0:
         LLikecut = -Ncut * np.log(Pcut)
         LLike += LLikecut
@@ -137,7 +138,7 @@ def update_temp(T, alpha):
 
 def simulated_annealing(tbin, Nmole, objective_function, model, x_initial,
                         constraints, Tcut, Ncut, tcut, Tstart=100.,
-                        Tfinal=0.001, delta1=0.1, delta2=2.5, alpha=0.95):
+                        Tfinal=0.001, delta=0.05, alpha=0.99):
     i = 0
     T = Tstart
     step = 0
@@ -151,7 +152,7 @@ def simulated_annealing(tbin, Nmole, objective_function, model, x_initial,
         for i in range(0, len(x)):
 #            x_trial[i] = np.random.uniform(np.max([x[i] - delta1, lwrbnd[i]]),
 #                                           np.min([x[i] + delta1, uprbnd[i]]))
-            x_trial[i] = np.random.uniform(x[i] - delta1, x[i] + delta1)
+            x_trial[i] = np.random.uniform(x[i] - delta, x[i] + delta)
         x, xstep = Metropolis(objective_function, model, x, x_trial,
                               constraints, T, tbin, Nmole,
                               Tcut, Ncut, tcut, xstep)
@@ -164,9 +165,10 @@ def Metropolis(f, model, x, x_trial, constraints, T, tbin, Nmole,
     # Metropolis Algorithm to decide if you accept the trial solution.
     Vnew = f(tbin, Nmole, x_trial, constraints, model, Tcut, Ncut, tcut)
     Vold = f(tbin, Nmole, x, constraints, model, Tcut, Ncut, tcut)
-    if (np.random.uniform() < np.exp(-(Vnew - Vold) / T)):
-        x = x_trial
-        xstep += 1
+    if Vold > 0 and Vnew > 0:
+        if (np.random.uniform() < np.exp(-(Vnew - Vold) / T)):
+            x = x_trial
+            xstep += 1
     return x, xstep
 
 
@@ -296,14 +298,20 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
             bestvalues = [1-bestvalues[0]] + [bestvalues[2], bestvalues[1]]
 
         errors = [0, 0, 0]
-        boot_params = np.full((boot_repeats, 3), np.nan)
+        boot_results = None
         # Check if bootstrapping is used
         if bootstrap:
+            lwrbnd = [0.001, 0.1, 0.1]
+            uprbnd = [1, 1.5*Tmax, 1.5*Tmax]
+            constraints = np.concatenate((lwrbnd, uprbnd))
+
+            boot_params = np.full((boot_repeats, 3), np.nan)
             LLike = np.empty(boot_repeats)
+            boot_BIC = np.zeros(boot_repeats)
             Ncutarray = np.full((boot_repeats, 1), np.nan)
             Nstepsarray = np.empty(boot_repeats)
             print('bootrepeats: ', boot_repeats)
-            for i in range(0, boot_repeats):
+            for j in range(0, boot_repeats):
                 boot_dwells, boot_Ncut = Bootstrap_data(dwells, Ncut)
                 # Bin the data if coarsed-grained fitting is used
                 if bsize > 0:
@@ -338,14 +346,18 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                 if params[1] > params[2]:
                     params = [1-params[0]] + [params[2], params[1]]
 
-                Ncutarray[i] = boot_Ncut
-                Nstepsarray[i] = Nsteps
-                boot_params[i] = params
-                LLike[i] = LogLikelihood(tbin, Nmole, paramsZ, constraints,
+                Ncutarray[j] = boot_Ncut
+                Nstepsarray[j] = Nsteps
+                boot_params[j] = params
+                LLike[j] = LogLikelihood(tbin, Nmole, paramsZ, constraints,
                                          model, Tmax, Ncut, tcut)
+                boot_BIC[j] = BIC(dwells, 3, LLike[j])
             errors = np.std(boot_params, axis=0)
-
-        boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
+            boot_results = pd.DataFrame({'p1': boot_params[:,0],
+                                         'tau1': boot_params[:,2],
+                                         'tau2': boot_params[:,3],
+                                         'Ncut': boot_Ncut,
+                                         'BIC': boot_BIC})
 
         # Put fit result into dataframe
         result = pd.DataFrame({'param': ['p', 'tau1', 'tau2'],
@@ -371,8 +383,10 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
         x_initial = np.log([0.8, 0.04, 0.5, 4.5, 80])
-        lwrbnd = [0.001, 0.001, 0.1, 0.8, 10]
-        uprbnd = [1, 1, 1.2, 40, 2*Tmax]
+#        lwrbnd = [0.001, 0.001, 0.1, 1.2, 40]
+#        uprbnd = [1, 1, 1.2, 40, 1.5*Tmax]
+        lwrbnd = [0.001, 0.001, 0.1, 0.1, 0.1]
+        uprbnd = [1, 1, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
         constraints = np.concatenate((lwrbnd, uprbnd))
 
         # Perform N fits on data using simmulated annealing and select best
@@ -381,6 +395,11 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                                                            constraints,
                                                            Tmax, Ncut, tcut)
         bestvalues = Param3exp(bestvaluesZ, constraints)
+        # Calculate the BIC for bestvalues
+        bestLLike = LogLikelihood(tbin, Nmole, bestvaluesZ, constraints, model,
+                                Tmax, Ncut, tcut)
+        bestbic = BIC(dwells, 5, bestLLike)
+        
         # Check whether a parameter has run into its constraints
         check1 = np.divide(bestvalues, lwrbnd) < 1.02 
         check2 = np.divide(uprbnd, bestvalues) < 1.02
@@ -401,14 +420,16 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                       bestvalues[imax+2])
 
         errors = [0, 0, 0, 0, 0]
-        boot_params = np.full((boot_repeats, 5), np.nan)
+        boot_results = None
         # Check if bootstrapping is used
         if bootstrap:
             lwrbnd = [0.001, 0.001, 0.1, 0.1, 0.1]
-            uprbnd = [1, 1, 40, 2*Tmax, 2*Tmax]
+            uprbnd = [1, 1, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
             constraints = np.concatenate((lwrbnd, uprbnd))
 
+            boot_params = np.full((boot_repeats, 5), np.nan)
             LLike = np.zeros(boot_repeats)
+            boot_BIC = np.zeros(boot_repeats)
             Ncutarray = np.full((boot_repeats, 1), np.nan)
             Nstepsarray = np.zeros(boot_repeats)
             print('bootrepeats: ', boot_repeats)
@@ -459,23 +480,25 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                 boot_params[j] = params
                 LLike[j] = LogLikelihood(tbin, Nmole, paramsZ, constraints,
                                          model, Tmax, boot_Ncut, tcut)
+                boot_BIC[j] = BIC(boot_dwells, 5, LLike[j])
             errors = np.std(boot_params, axis=0)
-
-        boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
+            boot_results = pd.DataFrame({'p1': boot_params[:,0],
+                                         'p2': boot_params[:,1],
+                                         'tau1': boot_params[:,2],
+                                         'tau2': boot_params[:,3],
+                                         'tau3': boot_params[:,4],
+                                         'Ncut': boot_Ncut,
+                                         'BIC': boot_BIC})
+            #np.concatenate((boot_params, Ncutarray), axis=1)
 
         # Put fit result into dataframe
         result = pd.DataFrame({'param': ['p1', 'p2', 'tau1', 'tau2', 'tau3'],
                               'value': bestvalues, 'error': errors})
 
-        # Calculate the BIC for bestvalues
-        LogLike = LogLikelihood(tbin, Nmole, bestvaluesZ, constraints, model,
-                                Tmax, Ncut, tcut)
-        bic = BIC(dwells, 5, LogLike)
-
         result_rest = pd.DataFrame({'Tmax': [Tmax], 'Ncut': [Ncut],
                                     'tcut': [tcut],
                                     'BootRepeats': [boot_repeats*bootstrap],
-                                    'steps': [bestNsteps], 'BIC': bic})
+                                    'steps': [bestNsteps], 'BIC': bestbic})
 
         fit_result = pd.concat([fit_result, result, result_rest], axis=1)
 
@@ -572,8 +595,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                 LLike[i] = LogLikelihood(tbin, Nmole, paramsZ, constraints,
                                          model, Tmax, Ncut, tcut)
             errors = np.std(boot_params, axis=0)
-
-        boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
+            boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
 
         # Put fit result into dataframe
         result = pd.DataFrame({'param': ['p1', 'p2', 'p3', 'tau1', 'tau2', 'tau3', 'tau4'],
@@ -591,7 +613,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 
         fit_result = pd.concat([fit_result, result, result_rest], axis=1)
 
-    return fit_result, boot_params
+    return fit_result, boot_results
 
 
 if __name__ == '__main__':    
