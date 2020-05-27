@@ -202,14 +202,14 @@ def plot_bootstrap(bootresults, bestfit, Nbins, model='N'):
         boot_results =pd.concat([boot_results, boot_stats], axis=1)
 
     if model == '3Exp':
-        lwrbnd = [0.001, 0.001, 0.1, 1, 30]
-        uprbnd = [1, 1, 1.1, 40, 1.5*Tmax]
+        lwrbnd = [0.001, 0.001, 0.1, 1, 1]
+        uprbnd = [1, 1, 1.2, 1.5*Tmax, 1.5*Tmax]
 
         # Remove fits for which a parameter has run into its constraints
         idx = np.arange(Nfits)
         for i in idx:
-            check1 = np.divide(bootresults.iloc[i,:-2], lwrbnd) < 1.1
-            check2 = np.divide(uprbnd, bootresults.iloc[i,:-2]) < 1.1
+            check1 = np.divide(bootresults.iloc[i,:-2], lwrbnd) < 1.03
+            check2 = np.divide(uprbnd, bootresults.iloc[i,:-2]) < 1.03
             if np.sum(check1) > 0 or np.sum(check2) > 0:
                 print(f'Fit {i} : Parameters run into boundary')
                 idx[i] = -30  # -30 instead of NaN as not possible for integer

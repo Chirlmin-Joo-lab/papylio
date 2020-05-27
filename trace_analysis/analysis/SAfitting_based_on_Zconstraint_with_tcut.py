@@ -89,8 +89,8 @@ def Param2exp(params, constraints):
 def Param3exp(params, constraints):
     Z1, Z2, T1, T2, T3 = params
     PK10, PK20, K10, K20, K30, PK11, PK21, K11, K21, K31 = constraints
-    P1 = np.exp(Z1)/(1 + np.exp(Z1))*(PK11 - PK10) + PK10
-    P2 = np.exp(Z2)/(1 + np.exp(Z2))*(1 - P1 - PK20) + PK20
+    P1 = np.exp(Z1)/(1 + np.exp(Z1) + np.exp(Z2))#*(PK11 - PK10) + PK10
+    P2 = np.exp(Z2)/(1 + np.exp(Z1) + np.exp(Z2))#*(1 - P1 - PK20) + PK20
     tau1 = np.exp(T1)/(1 + np.exp(T1))*(K11 - K10) + K10
     tau2 = np.exp(T2)/(1 + np.exp(T2))*(K21 - K20) + K20
     tau3 = np.exp(T3)/(1 + np.exp(T3))*(K31 - K30) + K30
@@ -98,11 +98,14 @@ def Param3exp(params, constraints):
 
 
 def Param4exp(params, constraints):
-    Z1, Z2, Z3, T1, T2, T3, T4 = params
-    PK10, PK20, PK30, K10, K20, K30, K40, PK11, PK21, PK31, K11, K21, K31, K41 = constraints
-    P1 = np.exp(Z1)/(1 + np.exp(Z1))*(PK11 - PK10) + PK10
-    P2 = np.exp(Z2)/(1 + np.exp(Z2))*(1 - P1 - PK20) + PK20
-    P3 = np.exp(Z2)/(1 + np.exp(Z2))*(1 - P1 - P2 - PK30) + PK30
+    z1, z2, z3, T1, T2, T3, T4 = params
+    zK10, zK20, zK30, K10, K20, K30, K40, zK11, zK21, zK31, K11, K21, K31, K41 = constraints
+    Z1 = np.exp(z1)/(1 + np.exp(z1))*(zK11 - zK10) + zK10
+    Z2 = np.exp(z2)/(1 + np.exp(z2))*(zK21 - zK20) + zK20
+    Z3 = np.exp(z3)/(1 + np.exp(z3))*(zK31 - zK30) + zK30
+    P1 = np.exp(Z1)/(1 + np.exp(Z1) + np.exp(Z2) + np.exp(Z3))#*(PK11 - PK10) + PK10
+    P2 = np.exp(Z2)/(1 + np.exp(Z1) + np.exp(Z2) + np.exp(Z3))#*(1 - P1 - PK20) + PK20
+    P3 = np.exp(Z3)/(1 + np.exp(Z1) + np.exp(Z2) + np.exp(Z3))#*(1 - P1 - P2 - PK30) + PK30
     tau1 = np.exp(T1)/(1 + np.exp(T1))*(K11 - K10) + K10
     tau2 = np.exp(T2)/(1 + np.exp(T2))*(K21 - K20) + K20
     tau3 = np.exp(T3)/(1 + np.exp(T3))*(K31 - K30) + K30
@@ -137,7 +140,7 @@ def update_temp(T, alpha):
 
 
 def simulated_annealing(tbin, Nmole, objective_function, model, x_initial,
-                        constraints, Tcut, Ncut, tcut, Tstart=100.,
+                        constraints, Tcut, Ncut, tcut, Tstart=100,
                         Tfinal=0.001, delta=0.05, alpha=0.99):
     i = 0
     T = Tstart
@@ -458,8 +461,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                 params = Param3exp(paramsZ, constraints)
 
                 # Check whether a parameter has run into its constraints
-                check1 = np.divide(params, lwrbnd) < 1.02 
-                check2 = np.divide(uprbnd, params) < 1.02
+                check1 = np.divide(params, lwrbnd) < 1.1 
+                check2 = np.divide(uprbnd, params) < 1.1
                 if np.sum(check1) > 0 or np.sum(check2) > 0:
                     print('Param run into boundary')
                     print('boot params ', params)
@@ -513,8 +516,9 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
         x_initial = np.log([1, 1, 1, 0.5*avg_dwells, avg_dwells,
                             2*avg_dwells, 2*avg_dwells])
         print('x_initial ', x_initial)
-        lwrbnd = [0.001, 0.001, 0.001, 0.1, 1, 1, 10]
-        uprbnd = [1, 1, 1, 2, 30, 80, 2*Tmax]
+        lwrbnd = [-3, -3, -3, 0.1, 1, 1, 10]
+#        uprbnd = [1, 1, 1, 2, 30, 80, 2*Tmax]
+        uprbnd = [3, 3, 3, 2, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
         constraints = np.concatenate((lwrbnd, uprbnd))
 
         # Perform N fits on data using simmulated annealing and select best
@@ -542,12 +546,14 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 #                      bestvalues[imax+2])
 
         errors = [0, 0, 0, 0, 0, 0, 0]
-        boot_params = np.empty((boot_repeats, 7))
+        boot_results = None
         # Check if bootstrapping is used
         if bootstrap:
-            LLike = np.empty(boot_repeats)
-            Ncutarray = np.empty(boot_repeats)
-            Nstepsarray = np.empty(boot_repeats)
+            boot_params = np.full((boot_repeats, 7), np.nan)
+            LLike = np.zeros(boot_repeats)
+            boot_BIC = np.zeros(boot_repeats)
+            Ncutarray = np.full((boot_repeats, 1), np.nan)
+            Nstepsarray = np.zeros(boot_repeats)
             print('bootrepeats: ', boot_repeats)
             for i in range(0, boot_repeats):
                 boot_dwells, boot_Ncut = Bootstrap_data(dwells, Ncut)
@@ -594,8 +600,18 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                 boot_params[i] = params
                 LLike[i] = LogLikelihood(tbin, Nmole, paramsZ, constraints,
                                          model, Tmax, Ncut, tcut)
+                boot_BIC[j] = BIC(boot_dwells, 7, LLike[j])
             errors = np.std(boot_params, axis=0)
-            boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
+            boot_results = pd.DataFrame({'p1': boot_params[:,0],
+                                         'p2': boot_params[:,1],
+                                         'p3': boot_params[:,2],
+                                         'tau1': boot_params[:,3],
+                                         'tau2': boot_params[:,4],
+                                         'tau3': boot_params[:,5],
+                                         'tau4': boot_params[:,6],
+                                         'Ncut': boot_Ncut,
+                                         'BIC': boot_BIC})
+#            boot_params = np.concatenate((boot_params, Ncutarray), axis=1)
 
         # Put fit result into dataframe
         result = pd.DataFrame({'param': ['p1', 'p2', 'p3', 'tau1', 'tau2', 'tau3', 'tau4'],

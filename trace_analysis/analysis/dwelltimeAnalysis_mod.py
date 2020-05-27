@@ -16,7 +16,8 @@ if __name__ == '__main__':
     import SAfitting
     import common_PDF
 else:
-    from trace_analysis.analysis import SAfitting_based_on_Zconstraint_with_tcut as SAfitting
+#    from trace_analysis.analysis import SAfitting_based_on_Zconstraint_with_tcut as SAfitting
+    from trace_analysis.analysis import SAfitting_3exp as SAfitting
     from trace_analysis.analysis import common_PDF
 # import SAfitting
 sns.set(style="ticks")
@@ -44,7 +45,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
             print( 'bsize', bsize)
         else:
             bsize = 0
-        fit_res, boot_res = fit(dwells, model=conf['model'],
+        fit_res, boot_res, Nfits_res = fit(dwells, model=conf['model'],
                       dataset_name=dataset_name,
                       Nfits=int(conf['Nfits']),
                       binsize=bsize,
@@ -56,6 +57,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
     else:
         fit_res = None
         boot_res = None
+        Nfits_res = None
     print(f'plotting {keys_with_data} {dist}')
     figure = plot(dwells, dataset_name, dist, trace=key,
                   binsize=float(conf['binsize']),
@@ -63,7 +65,7 @@ def analyze_combined(dwells_data, dataset_name, dist, configuration):
                   fit_result=fit_res)
     figures.append(figure)
 
-    return dwells, figures, fit_res, boot_res
+    return dwells, figures, fit_res, boot_res, Nfits_res
 
 
 def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, binsize=0, tcut=0,
@@ -79,10 +81,10 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, binsize=0, tcut=0,
         fit_result = pd.concat(fit_result, axis=1, ignore_index=True)
         return fit_result
 
-    fit_result, boots = SAfitting.fit(dwells, model, dataset_name, Nfits,
+    fit_result, boots, Nfits_result = SAfitting.fit(dwells, model, dataset_name, Nfits,
                                       binsize, tcut, Tmax, include_over_Tmax,
                                       bootstrap, boot_repeats)
-    return fit_result, boots
+    return fit_result, boots, Nfits_result
 
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto',

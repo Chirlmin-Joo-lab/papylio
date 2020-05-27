@@ -195,7 +195,8 @@ class File:
                             '.traces': self.import_traces_file,
                             '.log' : self.import_log_file,
                             '_steps_data.xlsx': self.import_excel_file,
-                            '_selected_molecules.txt': self.import_selected
+                            '_selected_molecules.txt': self.import_selected,
+                            '.dat': self.import_dat_file
                             }
 
         importFunctions.get(extension, self.noneFunction)()
@@ -420,6 +421,14 @@ class File:
         self.traces = np.reshape(rawData.ravel(), (self.number_of_colours, self.number_of_molecules, self.number_of_frames), order='F')  # 3d array of traces
         #self.traces = np.reshape(rawData.ravel(), (self.number_of_colours * self.number_of_molecules, self.number_of_frames), order='F') # 2d array of traces
 
+#    def import_dat_file(self):
+#        trace_filepath = self.absoluteFilePath.with_suffix('.dat')
+#        with trace_filepath.open('r') as trace_file:
+#            self.number_of_frames = np.fromfile(trace_file, dtype=np.int32, count=1).item()
+#            number_of_traces = 1
+#            self.number_of_molecules = 1
+#            rawData = np.fromfile(trace_file, dtype=np.int16, count=self.number_of_frames * number_of_traces)
+#        self.traces = np.reshape(rawData.ravel(), (2, self.number_of_molecules, self.number_of_frames), order='F')  # 3d array of traces
 
     def import_excel_file(self, filename=None):
         if filename is None:
