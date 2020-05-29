@@ -87,8 +87,10 @@ def Param2exp(params, constraints):
 
 
 def Param3exp(params, constraints):
-    Z1, Z2, T1, T2, T3 = params
-    PK10, PK20, K10, K20, K30, PK11, PK21, K11, K21, K31 = constraints
+    z1, z2, T1, T2, T3 = params
+    zK10, zK20, K10, K20, K30, zK11, zK21, K11, K21, K31 = constraints
+    Z1 = np.exp(z1)/(1 + np.exp(z1))*(zK11 - zK10) + zK10
+    Z2 = np.exp(z2)/(1 + np.exp(z2))*(zK21 - zK20) + zK20
     P1 = np.exp(Z1)/(1 + np.exp(Z1) + np.exp(Z2))#*(PK11 - PK10) + PK10
     P2 = np.exp(Z2)/(1 + np.exp(Z1) + np.exp(Z2))#*(1 - P1 - PK20) + PK20
     tau1 = np.exp(T1)/(1 + np.exp(T1))*(K11 - K10) + K10
@@ -388,8 +390,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
         x_initial = np.log([0.8, 0.04, 0.5, 4.5, 80])
 #        lwrbnd = [0.001, 0.001, 0.1, 1.2, 40]
 #        uprbnd = [1, 1, 1.2, 40, 1.5*Tmax]
-        lwrbnd = [0.001, 0.001, 0.1, 0.1, 0.1]
-        uprbnd = [1, 1, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
+        lwrbnd = [-4, -4, 0.1, 0.1, 0.1]
+        uprbnd = [4, 4, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
         constraints = np.concatenate((lwrbnd, uprbnd))
 
         # Perform N fits on data using simmulated annealing and select best
@@ -404,8 +406,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
         bestbic = BIC(dwells, 5, bestLLike)
         
         # Check whether a parameter has run into its constraints
-        check1 = np.divide(bestvalues, lwrbnd) < 1.02 
-        check2 = np.divide(uprbnd, bestvalues) < 1.02
+        check1 = np.divide(bestvalues, lwrbnd) < 1.1
+        check2 = np.divide(uprbnd, bestvalues) < 1.1
         if np.sum(check1) > 0 or np.sum(check2) > 0:
             print('Param run into boundary')
             print('fit params ', bestvalues)

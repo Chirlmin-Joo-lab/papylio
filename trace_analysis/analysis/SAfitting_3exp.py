@@ -15,9 +15,6 @@ def P3expcut(dwells, params, constraints, Tcut, Ncut, tcut):
         (1 - P1 - P2)*np.exp(-Tcut/tau3)
     pcut = P1*np.exp(-tcut/tau1)+P2*np.exp(-tcut/tau2) + \
         (1 - P1 - P2)*np.exp(-tcut/tau3)
-#    else:
-#        print('check')
-#        return 0, 0, 0
     return Pi, Pcut, pcut
 
 

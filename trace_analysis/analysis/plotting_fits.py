@@ -208,8 +208,8 @@ def plot_bootstrap(bootresults, bestfit, Nbins, model='N'):
         # Remove fits for which a parameter has run into its constraints
         idx = np.arange(Nfits)
         for i in idx:
-            check1 = np.divide(bootresults.iloc[i,:-2], lwrbnd) < 1.03
-            check2 = np.divide(uprbnd, bootresults.iloc[i,:-2]) < 1.03
+            check1 = np.divide(bootresults.iloc[i,:-2], lwrbnd) < 1.1
+            check2 = np.divide(uprbnd, bootresults.iloc[i,:-2]) < 1.01
             if np.sum(check1) > 0 or np.sum(check2) > 0:
                 print(f'Fit {i} : Parameters run into boundary')
                 idx[i] = -30  # -30 instead of NaN as not possible for integer
@@ -243,11 +243,11 @@ def plot_bootstrap(bootresults, bestfit, Nbins, model='N'):
                     np.std(boottau1), np.std(boottau2),
                     np.std(boottau3), 0]
         
-        # Remove outlier fits based on p1 and p2 t-test
-        Zp12test = np.abs(bootP1 - bootP2 - (avg_array[0] - avg_array[1])) / \
-                   np.sqrt((std_array[0]**2+std_array[1]**2)/Nfits)
-        print('Z test ', Zp12test)
-#        Zidx = i_nonan[Zp12test < 15]
+#        # Remove outlier fits based on p1 and p2 t-test
+#        Zp12test = np.abs(boottau2 - boottau3 - (avg_array[0] - avg_array[1])) / \
+#                   np.sqrt((std_array[0]**2+std_array[1]**2)/Nfits)
+#        print('Z test ', Zp12test)
+#        Zidx = i_nonan[Zp12test < 20]
 #        Nfits = len(Zidx)
 #        print('Nfits', Nfits)
 #        bootP1 = bootresults.p1.loc[Zidx].values
@@ -257,13 +257,13 @@ def plot_bootstrap(bootresults, bestfit, Nbins, model='N'):
 #        boottau3 = bootresults.tau3.loc[Zidx].values
 #        bootNcut = bootresults.Ncut.loc[Zidx].values
 #        bootBIC = bootresults.BIC.loc[Zidx].values
-#
-#        avg_array = [np.average(bootP1), np.average(bootP2), 0,
-#                    np.average(boottau1), np.average(boottau2),
-#                    np.average(boottau3), 0]
-#        std_array = [np.std(bootP1), np.std(bootP2), 0,
-#                    np.std(boottau1), np.std(boottau2),
-#                    np.std(boottau3), 0]
+
+        avg_array = [np.average(bootP1), np.average(bootP2), 0,
+                    np.average(boottau1), np.average(boottau2),
+                    np.average(boottau3), 0]
+        std_array = [np.std(bootP1), np.std(bootP2), 0,
+                    np.std(boottau1), np.std(boottau2),
+                    np.std(boottau3), 0]
 
         boot_results = pd.DataFrame({'p1': bootP1, 'p2': bootP2,
                                      'tau1': boottau1, 
@@ -333,7 +333,7 @@ def correlation_plot(params, model, datasetname):
     if model == '4Exp':
         param = ['p1', 'p2', 'p3', 'tau1', 'tau2', 'tau3', 'tau4']
 
-    dim = np.size(params, 1) - 1
+    dim = np.size(params, 1)
     corr = np.zeros(dim)
     print( 'dim params', dim)
     for d1 in range(dim-1):

@@ -16,8 +16,8 @@ if __name__ == '__main__':
     import SAfitting
     import common_PDF
 else:
-#    from trace_analysis.analysis import SAfitting_based_on_Zconstraint_with_tcut as SAfitting
-    from trace_analysis.analysis import SAfitting_3exp as SAfitting
+    from trace_analysis.analysis import SAfitting_based_on_Zconstraint_with_tcut as SAfitting
+#    from trace_analysis.analysis import SAfitting_3exp as SAfitting
     from trace_analysis.analysis import common_PDF
 # import SAfitting
 sns.set(style="ticks")
@@ -246,6 +246,7 @@ def apply_config_to_data(dwells_data, dist, config):
     t_red = d['time'][d['trace'] == 'red']
     print('length total times', len(t_total))
     print('length red times', len(t_red))
+    print('t_total ', t_total.index)
 
     if config['trace']['total'] and config['trace']['red'] and dist == 'offtime':
         print('red dwells overlapping total being removed')

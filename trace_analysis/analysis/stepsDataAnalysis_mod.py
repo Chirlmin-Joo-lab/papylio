@@ -32,7 +32,7 @@ def find_mol_dwells(mol, trace='red', max_time=0):
     for i in range(0, times.size, 2):
         offtimes[i] = times[i+1] - times[i]
         lab = 'm'
-        if max_time - times[i+1] < 1: # and i == times.size:  # last loop
+        if max_time - times[i+1] < 1.5: # and i == times.size:  # last loop
             lab = 'r'
         if times[0] < 0.5 and i == 0:  # first loop
             lab = 'l'
