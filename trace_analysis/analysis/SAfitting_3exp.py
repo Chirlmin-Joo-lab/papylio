@@ -187,8 +187,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 #        x_initial = np.log([0.8, 0.04, 0.5, 4.5, 80])
 #        lwrbnd = [0.001, 0.001, 0.1, 1.2, 40]
 #        uprbnd = [1, 1, 1.2, 50, 1.5*Tmax]
-        lwrbnd = [-4, -4, 0.1, 0.1, 0.1]
-        uprbnd = [4, 4, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
+        lwrbnd = [-3.5, -3.5, 0.1, 0.1, 0.1]
+        uprbnd = [3.5, 3.5, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
         constraints = np.concatenate((lwrbnd, uprbnd))
 
         # Perform N fits on data using simmulated annealing and select best
@@ -243,8 +243,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
         bestbic = BIC(dwells, 5, bestLLike)
 
         # Check whether a parameter has run into its constraints
-        check1 = np.divide(bestvalues, lwrbnd) < 1.1 
-        check2 = np.divide(uprbnd, bestvalues) < 1.1
+        check1 = np.divide(bestvalues, lwrbnd) < 1.02 
+        check2 = np.divide(uprbnd, bestvalues) < 1.02
         if np.sum(check1) > 0 or np.sum(check2) > 0:
             print('Best param run into boundary')
             print('Best param ', bestvalues)

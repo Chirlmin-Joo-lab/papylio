@@ -87,10 +87,10 @@ def Param2exp(params, constraints):
 
 
 def Param3exp(params, constraints):
-    Z1, Z2, T1, T2, T3 = params
+    z1, z2, T1, T2, T3 = params
     zK10, zK20, K10, K20, K30, zK11, zK21, K11, K21, K31 = constraints
-#    Z1 = np.exp(z1)/(1 + np.exp(z1))*(zK11 - zK10) + zK10
-#    Z2 = np.exp(z2)/(1 + np.exp(z2))*(zK21 - zK20) + zK20
+    Z1 = np.exp(z1)/(1 + np.exp(z1))*(zK11 - zK10) + zK10
+    Z2 = np.exp(z2)/(1 + np.exp(z2))*(zK21 - zK20) + zK20
     P1 = np.exp(Z1)/(1 + np.exp(Z1) + np.exp(Z2))#*(PK11 - PK10) + PK10
     P2 = np.exp(Z2)/(1 + np.exp(Z1) + np.exp(Z2))#*(1 - P1 - PK20) + PK20
     tau1 = np.exp(T1)/(1 + np.exp(T1))*(K11 - K10) + K10
@@ -100,11 +100,11 @@ def Param3exp(params, constraints):
 
 
 def Param4exp(params, constraints):
-    Z1, Z2, Z3, T1, T2, T3, T4 = params
+    z1, z2, z3, T1, T2, T3, T4 = params
     zK10, zK20, zK30, K10, K20, K30, K40, zK11, zK21, zK31, K11, K21, K31, K41 = constraints
-#    Z1 = np.exp(z1)/(1 + np.exp(z1))*(zK11 - zK10) + zK10
-#    Z2 = np.exp(z2)/(1 + np.exp(z2))*(zK21 - zK20) + zK20
-#    Z3 = np.exp(z3)/(1 + np.exp(z3))*(zK31 - zK30) + zK30
+    Z1 = np.exp(z1)/(1 + np.exp(z1))*(zK11 - zK10) + zK10
+    Z2 = np.exp(z2)/(1 + np.exp(z2))*(zK21 - zK20) + zK20
+    Z3 = np.exp(z3)/(1 + np.exp(z3))*(zK31 - zK30) + zK30
     P1 = np.exp(Z1)/(1 + np.exp(Z1) + np.exp(Z2) + np.exp(Z3))#*(PK11 - PK10) + PK10
     P2 = np.exp(Z2)/(1 + np.exp(Z1) + np.exp(Z2) + np.exp(Z3))#*(1 - P1 - PK20) + PK20
     P3 = np.exp(Z3)/(1 + np.exp(Z1) + np.exp(Z2) + np.exp(Z3))#*(1 - P1 - P2 - PK30) + PK30
@@ -278,9 +278,9 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
-        x_initial = np.log([0.85, 0.15, 20])
+        x_initial = np.log([1, 1, 20])
         lwrbnd = [0.001, 0.1, 1]
-        uprbnd = [1, 1.5*Tmax, 1.5*Tmax]
+        uprbnd = [1, 20, 2*Tmax]
         constraints = np.concatenate((lwrbnd, uprbnd))
 
         # Perform N fits on data using simmulated annealing and select best
@@ -387,7 +387,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
-        x_initial = [2, 0.1, np.log(0.5), np.log(4.5), np.log(80)]
+        x_initial = np.log([0.8, 0.04, 0.5, 4.5, 80])
 #        lwrbnd = [0.001, 0.001, 0.1, 1.2, 40]
 #        uprbnd = [1, 1, 1.2, 40, 1.5*Tmax]
         lwrbnd = [-4, -4, 0.1, 0.1, 0.1]
@@ -515,9 +515,11 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
         # Set parameters for simmulated annealing
         avg_dwells = np.average(dwells)
         print('avgDwells', avg_dwells)
-        x_initial = np.log([0.8, 0.1, 0.1, 0.5, 3, 4.5, 80])
+        x_initial = np.log([1, 1, 1, 0.5*avg_dwells, avg_dwells,
+                            2*avg_dwells, 2*avg_dwells])
         print('x_initial ', x_initial)
-        lwrbnd = [-3, -3, -3, 0.1, 0.1, 0.1, 10]
+        lwrbnd = [-3, -3, -3, 0.1, 1, 1, 10]
+#        uprbnd = [1, 1, 1, 2, 30, 80, 2*Tmax]
         uprbnd = [3, 3, 3, 2, 1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
         constraints = np.concatenate((lwrbnd, uprbnd))
 
@@ -529,8 +531,8 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
         bestvalues = Param4exp(bestvaluesZ, constraints)
 
         # Check whether a parameter has run into its constraints
-        check1 = np.divide(bestvalues, lwrbnd) < 1.1 
-        check2 = np.divide(uprbnd, bestvalues) < 1.1
+        check1 = np.divide(bestvalues, lwrbnd) < 1.02 
+        check2 = np.divide(uprbnd, bestvalues) < 1.02
         if np.sum(check1) > 0 or np.sum(check2) > 0:
             print('Param run into boundary')
             print('fit params ', bestvalues)
@@ -629,8 +631,7 @@ def fit(dwells_all, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
 
         fit_result = pd.concat([fit_result, result, result_rest], axis=1)
 
-    Nfits_results = np.zeros(2)
-    return fit_result, boot_results, Nfits_results
+    return fit_result, boot_results
 
 
 if __name__ == '__main__':    

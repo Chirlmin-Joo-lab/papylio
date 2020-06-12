@@ -208,7 +208,7 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
             print(f'errors: ', errp1, errp2, err1, err2, err3)
             time, fit = common_PDF.Exp3(p1, p2, tau1, tau2, tau3,
                                         tcut=tcut, Tmax=Tmax)
-            label = f'\n p1={p1:.2f}, p2={p2:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}'
+            label = f'\n p1={p1:.2f}, p2={p2:.2f}, tau1={tau1:.1f}, tau2={tau2:.1f}, tau3={tau3:.1f}'
 
         elif fit_result.model[0] == '4Exp':
             p1, errp1 = fit_result.value[0], fit_result.error[0]

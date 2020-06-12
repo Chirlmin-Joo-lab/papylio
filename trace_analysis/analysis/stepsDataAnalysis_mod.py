@@ -32,13 +32,13 @@ def find_mol_dwells(mol, trace='red', max_time=0):
     for i in range(0, times.size, 2):
         offtimes[i] = times[i+1] - times[i]
         lab = 'm'
-        if max_time - times[i+1] < 1.5: # and i == times.size:  # last loop
+        if max_time - times[i+1] < 1: # and i == times.size:  # last loop
             lab = 'r'
         if times[0] < 0.5 and i == 0:  # first loop
             lab = 'l'
         offlabels[i] = lab
 
-    datFrame = pd.DataFrame({'offtime': offtimes, 'side': offlabels})
+    datFrame = pd.DataFrame({'times2':times, 'offtime': offtimes, 'side': offlabels})
 
     # Calculate the on times and assign labels
     ontimes = np.NaN*np.ones(times.size)
