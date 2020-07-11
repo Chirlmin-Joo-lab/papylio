@@ -112,7 +112,7 @@ def comparative_plot(dwells, name, dist='offtime', trace='red', binsize='auto',
                 print(f'errors: ', errp1, errp2, err1, err2, err3)
                 time, fit = common_PDF.Exp3(p1, p2, tau1, tau2, tau3,
                                             tcut, Tmax)
-                label = f'\n p1={p1:.2f}, p2={p2:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}'
+                label = f'\n p1={p1:.2f}, p2={p2:.2f}, tau1={tau1:.1f}, tau2={tau2:.1f}, tau3={tau3:.1f}'
 
             if fit_result.model[i] == '4Exp':
                 BICs[2] = fit_result.BIC[i]
@@ -126,7 +126,7 @@ def comparative_plot(dwells, name, dist='offtime', trace='red', binsize='auto',
                 print(f'errors: ', errp1, errp2, errp3, err1, err2, err3, err4)
                 time, fit = common_PDF.Exp4(p1, p2, p3, tau1, tau2, tau3, tau4,
                                             tcut=tcut, Tmax=Tmax)
-                label = f'\n p1={p1:.2f}, p2={p2:.2f}, p3={p3:.2f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}, tau4={int(tau4)}'
+                label = f'\n p1={p1:.2f}, p2={p2:.2f}, p3={p3:.3f}, tau1={tau1:.1f}, tau2={int(tau2)}, tau3={int(tau3)}, tau4={int(tau4)}'
 
             plt.plot(time, fit, label=f'{fit_result.model[i]}fit{label}')
 
@@ -163,16 +163,9 @@ def select_bootstrap(bootresults, bestfit, Nbins=10, model='None', datasetname='
      # (up to 4expfit implemented)
 
     Nfits = np.size(bootresults, 0)
-    Tmax = bestfit.Tmax[0]
+    Tcut = bestfit.Tcut[0]
     print('Nfits', Nfits)
-    bootP1 = None
-    bootP2 = None
-    bootP3 = None
-    boottau1 = None
-    boottau2 = None
-    boottau3 = None
-    boottau4 = None
-    
+
     #Plot correlation plots params to show selection of fits
     if model == '2Exp':
         param_nm = ['p1', r'$\tau$1', r'$\tau$2']
@@ -190,33 +183,10 @@ def select_bootstrap(bootresults, bestfit, Nbins=10, model='None', datasetname='
     dim = len(param)
     print( '# of params', dim)
 
-    if model == '2Exp':
-        lwrbnd = [0.001, 0.1, 0.1]
-        uprbnd = [1, 2*Tmax, 2*Tmax]
-        # Remove fits for which a parameter has run into its constraints
-        idx = np.arange(Nfits)
-        for i in idx:
-            check1 = np.divide(bootresults[i,:-1], lwrbnd) < 1.01 
-            check2 = np.divide(uprbnd, bootresults[i,:-1]) < 1.01
-            if np.sum(check1) > 0 or np.sum(check2) > 0:
-                print(f'Fit {i} : Parameters run into boundary')
-                idx[i] = -30  # -30 instead of NaN as not possible for integer
-
-        i_nobnd = idx[idx != -30]
-        bootP1 = bootresults.p1.loc[i_nobnd].values
-        boottau1 = bootresults.tau1.loc[i_nobnd].values
-        boottau2 = bootresults.tau2.loc[i_nobnd].values
-        bootNcut = bootresults.Ncut.loc[i_nobnd].values
-
-        avg_array = [np.average(bootP1), 0, 0,
-                     np.average(boottau1), np.average(boottau2), 0, 0]
-        std_array = [np.std(bootP1), 0,0,
-                     np.std(boottau1), np.std(boottau2), 0, 0]
-
     if model == '3Exp':
         #Constraints on tau's
         lwrbnd = [0.1, 0.1, 0.1]
-        uprbnd = [1.5*Tmax, 1.5*Tmax, 1.5*Tmax]
+        uprbnd = [1.5*Tcut, 1.5*Tcut, 1.5*Tcut]
 
         # Remove fits for which a parameter has run into its constraints
         idx = np.arange(Nfits)
@@ -232,19 +202,11 @@ def select_bootstrap(bootresults, bestfit, Nbins=10, model='None', datasetname='
         Nfits_bnd = len(i_nobnd)
         print('Nfits within boundaries', Nfits_bnd)
 
-#        bootP1 = bootresults.p1.loc[i_nobnd].values
-#        bootP2 = bootresults.p2.loc[i_nobnd].values
-#        boottau1 = bootresults.tau1.loc[i_nobnd].values
-#        boottau2 = bootresults.tau2.loc[i_nobnd].values
-#        boottau3 = bootresults.tau3.loc[i_nobnd].values
-#        bootNcut = bootresults.Ncut.loc[i_nobnd].values
-#        bootBIC = bootresults.BIC.loc[i_nobnd].values
         bnd_only = np.zeros((Nfits_bnd, dim+2))
         bnd_only[:,0] = bootresults.iloc[i_nobnd, 0].values
         bnd_only[:,1] = bootresults.iloc[i_nobnd, 1].values
         bnd_only[:,2] = 1 - bnd_only[:,0] - bnd_only[:,1]
         bnd_only[:,3:] = bootresults.iloc[i_nobnd, 2:].values
-        
 
         # Remove outlier fits based on tau2 and tau3 t-test
 #        Ztest2 = np.abs(boottau2 - avg_array[4]) / std_array[4]* np.sqrt(Nfits)
@@ -255,46 +217,54 @@ def select_bootstrap(bootresults, bestfit, Nbins=10, model='None', datasetname='
 #        print('combined Z test', Ztest23)
 #        idx2 = i_nobnd[Ztest23 < 6.3] # first order t-test for confidence 90% two-sided
 #        Nfits = len(idx2)
+        
+        # Remove outlier fits based on BIC
+        if method == 'BIC':
+            fraction = percent/100
+            numfits = int(Nfits_bnd*fraction)
+            plt.figure()
+            Nbins = 40
+            plt.hist(bootresults.BIC, bins=Nbins, label='within boundaries')
+            i_sort = np.argsort(bootresults.BIC[i_nobnd])
+            idx2 = i_nobnd[i_sort[:numfits]]
+#            plt.hist(bootresults.BIC[idx2], bins=10, label='selected')
+            plt.title('histogram of BIC values for bootstrap fits')
 
-        boottau2 = bootresults.iloc[i_nobnd, 3].values
-        boottau3 = bootresults.iloc[i_nobnd, 4].values
-        fraction = 1 - percent/100
-        num_out = int(Nfits_bnd*fraction)
-        dist1 = (boottau2 - np.median(boottau2)) / np.median(boottau2)
-        dist2 = (boottau3 - np.median(boottau3)) / np.median(boottau3)
-        dist = np.sqrt(dist1**2 + dist2**2)
-        i_sort = np.argsort(dist)
-        idx2 = i_nobnd[i_sort[:-num_out]]
+        # Remove outlier fits based on relative distance to median tau2 and tau3 values
+        if method == 'median_t2_v_t3':
+            boottau2 = bootresults.iloc[i_nobnd, 3].values
+            boottau3 = bootresults.iloc[i_nobnd, 4].values
+            fraction = 1 - percent/100
+            num_out = int(Nfits_bnd*fraction)
+            if num_out > 0:
+                dist1 = (boottau2 - np.median(boottau2)) / np.median(boottau2)
+                dist2 = (boottau3 - np.median(boottau3)) / np.median(boottau3)
+                dist = np.sqrt(dist1**2 + dist2**2)
+                i_sort = np.argsort(dist)
+                idx2 = i_nobnd[i_sort[:-num_out]]
+            else:
+                idx2 = i_nobnd
+        
         Nfits_selected = len(idx2)
+        print('Nfits selected', Nfits_selected)
         selected = np.zeros((Nfits_selected, dim+2))
         print('Nfits selected', Nfits_selected)
         selected[:,0] = bootresults.iloc[idx2, 0].values
         selected[:,1] = bootresults.iloc[idx2, 1].values
         selected[:,2] = 1 - selected[:,0] - selected[:,1]
         selected[:,3:] = bootresults.iloc[idx2, 2:].values
-#        bootP1 = bootresults.p1.loc[idx2].values
-#        bootP2 = bootresults.p2.loc[idx2].values
-#        bootP3 = 1 - bootP1 - bootP2
-#        boottau1 = bootresults.tau1.loc[idx2].values
-#        boottau2 = bootresults.tau2.loc[idx2].values
-#        boottau3 = bootresults.tau3.loc[idx2].values
-#        bootNcut = bootresults.Ncut.loc[idx2].values
-#        bootBIC = bootresults.BIC.loc[idx2].values
+
         avg_array = np.average(selected[:,:-2], axis=0)
         std_array = np.std(selected[:,:-2], axis=0)
 
-#        avg_array = [np.average(bootP1), np.average(bootP2), np.average(bootP3),
-#                     np.average(boottau1), np.average(boottau2),
-#                     np.average(boottau3)]
-#        std_array = [np.std(bootP1), np.std(bootP2), np.std(bootP3),
-#                     np.std(boottau1), np.std(boottau2), np.std(boottau3)]
-
-        boot_results = pd.DataFrame({'p1': selected[:,0], 'p2': selected[:,1],
+        boot_results = pd.DataFrame({'p1': selected[:,0],
+                                     'p2': selected[:,1],
                                      'p3': selected[:,2],
                                      'tau1': selected[:,3], 
-                                     'tau2': selected[:,4], 'tau3': selected[:,5],
-                                     'Ncut': selected[:,6],
-                                     'BIC': selected[:,7]})
+                                     'tau2': selected[:,4],
+                                     'tau3': selected[:,5],
+                                     'Ncut': selected[:,6]})
+#                                     'BIC': selected[:,7]})
 
         boot_stats = pd.DataFrame({'avg': avg_array, 'std': std_array,
                                    'param': param})
@@ -419,137 +389,92 @@ def fits_with_errorbar(results, sets, DNAarray, model, datasetname='data'):
 
     Nparam = len(param)
     print( '# of params', Nparam)
+          
+    bestarray3 = np.zeros((len(sets), len(DNAarray), len(param)))
+    avgarray3 = np.zeros((len(sets), len(DNAarray), len(param)))
+    stdarray3 = np.zeros((len(sets), len(DNAarray), len(param)))
 
     for pp in range(len(param)):
-        bestarray = np.zeros((len(sets), len(DNAarray)))
-        avgarray = np.zeros((len(sets), len(DNAarray)))
-        stdarray = np.zeros((len(sets), len(DNAarray)))
         for i in range(len(DNAarray)):
             for j in range(len(sets)):
-                bestarray[j][i] = results[f'best_{sets[j]}'][DNAarray[i]][param[pp]]
-                avgarray[j][i] = results[f'avg_{sets[j]}'][DNAarray[i]][param[pp]]
-                stdarray[j][i] = results[f'std_{sets[j]}'][DNAarray[i]][param[pp]]
+                bestarray3[j][i][pp] = results[f'best_{sets[j]}'][DNAarray[i]][param[pp]]
+                avgarray3[j][i][pp] = results[f'avg_{sets[j]}'][DNAarray[i]][param[pp]]
+                stdarray3[j][i][pp] = results[f'std_{sets[j]}'][DNAarray[i]][param[pp]]
 
         plt.figure()
         plt.title(f'Values for {param_nm[pp]} with errors {datasetname}')
-        plt.plot(DNAarray,bestarray[0], 'ob')
-        plt.errorbar(DNAarray,avgarray[0], yerr=stdarray[0], color='b', label=f'{sets[0]}')
-        plt.plot(DNAarray,bestarray[1], 'or')
-        plt.errorbar(DNAarray,avgarray[1], yerr=stdarray[1], color='r', label=f'{sets[1]}')
-        plt.plot(DNAarray,bestarray[2], 'o', color='sandybrown')
-        plt.errorbar(DNAarray,avgarray[2], yerr=stdarray[2], color='sandybrown', label=f'{sets[2]}')
+        plt.plot(DNAarray,bestarray3[0][:,pp], 'ob')
+        plt.errorbar(DNAarray,avgarray3[0][:,pp], yerr=stdarray3[0][:,pp], color='b', label=f'Individual')#'{sets[0]}')
+        plt.plot(DNAarray,bestarray3[1][:,pp], 'or')
+        plt.errorbar(DNAarray,avgarray3[1][:,pp], yerr=stdarray3[1][:,pp], color='r', label=r'Global $\tau$3')#f'{sets[1]}')
+        plt.plot(DNAarray,bestarray3[2][:,pp], 'o', color='sandybrown')
+        plt.errorbar(DNAarray,avgarray3[2][:,pp], yerr=stdarray3[2][:,pp], color='sandybrown', label=r'Global all $\tau$s')#f'{sets[2]}')
         plt.legend()
-        plt.savefig(f'{datasetname} {model} {param[pp]} values with errors')
+        plt.savefig(f'{datasetname} {model} {param[pp]} values with errors globalcompared')
         plt.close()
-'''
-    p1best = np.zeros((len(sets), len(DNAarray)))
-    p1avg = np.zeros((len(sets), len(DNAarray)))
-    p1std = np.zeros((len(sets), len(DNAarray)))
 
-    p2best = np.zeros((len(sets), len(DNAarray)))
-    p2avg = np.zeros((len(sets), len(DNAarray)))
-    p2std = np.zeros((len(sets), len(DNAarray)))
-
-    p3best = np.zeros((len(sets), len(DNAarray)))
-    p3avg = np.zeros((len(sets), len(DNAarray)))
-    p3std = np.zeros((len(sets), len(DNAarray)))
-
-    tau1best = np.zeros((len(sets), len(DNAarray)))
-    tau1avg = np.zeros((len(sets), len(DNAarray)))
-    tau1std = np.zeros((len(sets), len(DNAarray)))
-
-    tau2best = np.zeros((len(sets), len(DNAarray)))
-    tau2avg = np.zeros((len(sets), len(DNAarray)))
-    tau2std = np.zeros((len(sets), len(DNAarray)))
-
-    tau3best = np.zeros((len(sets), len(DNAarray)))
-    tau3avg = np.zeros((len(sets), len(DNAarray)))
-    tau3std = np.zeros((len(sets), len(DNAarray)))
-
-    for i in range(len(DNAarray)):
-        for j in range(len(sets)):
-            p1best[j][i] = results[f'best_{sets[j]}'][DNAarray[i]]['p1']
-            p1avg[j][i] = results[f'avg_{sets[j]}'][DNAarray[i]]['p1']
-            p1std[j][i] = results[f'std_{sets[j]}'][DNAarray[i]]['p1']
-
-            p2best[j][i] = results[f'best_{sets[j]}'][DNAarray[i]]['p2']
-            p2avg[j][i] = results[f'avg_{sets[j]}'][DNAarray[i]]['p2']
-            p2std[j][i] = results[f'std_{sets[j]}'][DNAarray[i]]['p2']
-
-            p3best[j][i] = 1 - p1best[j][i] - p2best[j][i]
-            p3avg[j][i] = 1 - p1avg[j][i] - p2avg[j][i]
-            p3std[j][i] = np.sqrt((p1std[j][i])**2 + (p2std[j][i])**2)
-
-            tau1best[j][i] = results[f'best_{sets[j]}'][DNAarray[i]]['tau1']
-            tau1avg[j][i] = results[f'avg_{sets[j]}'][DNAarray[i]]['tau1']
-            tau1std[j][i] = results[f'std_{sets[j]}'][DNAarray[i]]['tau1']
-
-            tau2best[j][i] = results[f'best_{sets[j]}'][DNAarray[i]]['tau2']
-            tau2avg[j][i] = results[f'avg_{sets[j]}'][DNAarray[i]]['tau2']
-            tau2std[j][i] = results[f'std_{sets[j]}'][DNAarray[i]]['tau2']
-
-            tau3best[j][i] = results[f'best_{sets[j]}'][DNAarray[i]]['tau3']
-            tau3avg[j][i] = results[f'avg_{sets[j]}'][DNAarray[i]]['tau3']
-            tau3std[j][i] = results[f'std_{sets[j]}'][DNAarray[i]]['tau3']
-
+    kuk12best = np.zeros((len(sets), len(DNAarray)))
+    k21k23best = np.zeros((len(sets), len(DNAarray)))
+    k12k21best = np.zeros((len(sets), len(DNAarray)))
+    kuk12avg = np.zeros((len(sets), len(DNAarray)))
+    k21k23avg = np.zeros((len(sets), len(DNAarray)))
+    k12k21avg = np.zeros((len(sets), len(DNAarray)))
+    ku123best = np.zeros((len(sets), len(DNAarray)))
+    ku123avg = np.zeros((len(sets), len(DNAarray)))
+    for j in range(len(sets)):
+        kuk12best[j] = bestarray3[j][:,0] + bestarray3[j][:,2]
+        kuk12avg[j] = avgarray3[j][:,0] + avgarray3[j][:,2]
+        k12k21best[j] = bestarray3[j][:,2] + bestarray3[j][:,3]
+        k12k21avg[j] = avgarray3[j][:,2] + avgarray3[j][:,3]
+        k21k23best[j] = bestarray3[j][:,3] + bestarray3[j][:,4]
+        k21k23avg[j] = avgarray3[j][:,3] + avgarray3[j][:,4]
+        ku123best[j] = kuk12best[j] + k21k23best[j]
+        ku123avg[j] = kuk12avg[j] + k21k23avg[j]
 
     plt.figure()
-    plt.title('Fits for p1 with errors from bootstrap')
-    plt.plot(DNAarray,p1best[0], 'ob')#, label= f'flow best')
-    plt.errorbar(DNAarray,p1avg[0], yerr=p1std[0], color='b', label=f'flow')
-    plt.plot(DNAarray,p1best[1], 'or')#, label= f'flow best')
-    plt.errorbar(DNAarray,p1avg[1], yerr=p1std[1], color='r', label=f'10 min')
-    plt.plot(DNAarray,p1best[2], 'o', color='sandybrown')#, label= f'flow best')
-    plt.errorbar(DNAarray,p1avg[2], yerr=p1std[2], color='sandybrown', label=f'combined')
+    plt.title(f'Values for {param_nm[0]}+{param_nm[2]} with errors {datasetname}')
+    plt.plot(DNAarray, kuk12best[0], 'ob')
+    plt.errorbar(DNAarray, kuk12avg[0], yerr=0, color='b', label=f'Individual')#'{sets[0]}')
+    plt.plot(DNAarray, kuk12best[1], 'or')
+    plt.errorbar(DNAarray, kuk12avg[1], yerr=0, color='r', label=r'Global $\tau$3')#f'{sets[1]}')
+    plt.plot(DNAarray, kuk12best[2], 'o', color='sandybrown')
+    plt.errorbar(DNAarray, kuk12avg[2], yerr=0, color='sandybrown', label=r'Global all $\tau$s')#f'{sets[2]}')
     plt.legend()
+    plt.savefig(f'{datasetname} {model} {param_nm[0]}+{param_nm[2]} values with errors globalcompared')
+    plt.close()
+    
+    plt.figure()
+    plt.title(f'Values for {param_nm[2]}+{param_nm[3]} with errors {datasetname}')
+    plt.plot(DNAarray, k12k21best[0], 'ob')
+    plt.errorbar(DNAarray, k12k21avg[0], yerr=0, color='b', label=f'Individual')#f'{sets[0]}')
+    plt.plot(DNAarray, k12k21best[1], 'or')
+    plt.errorbar(DNAarray, k12k21avg[1], yerr=0, color='r', label=r'Global $\tau$3')#f'{sets[1]}')
+    plt.plot(DNAarray, k12k21best[2], 'o', color='sandybrown')
+    plt.errorbar(DNAarray, k12k21avg[2], yerr=0, color='sandybrown', label=r'Global all $\tau$s')#f'{sets[2]}')
+    plt.legend()
+    plt.savefig(f'{datasetname} {model} {param_nm[2]}+{param_nm[3]} values with errors globalcompared')
+    plt.close()
 
     plt.figure()
-    plt.title('Fits for p2 with errors from bootstrap')
-    plt.plot(DNAarray,p2best[0], 'ob')
-    plt.errorbar(DNAarray,p2avg[0], yerr=p2std[0], color='b', label=f'flow')
-    plt.plot(DNAarray,p2best[1], 'or')
-    plt.errorbar(DNAarray,p2avg[1], yerr=p2std[1], color='r', label=f'10 min')
-    plt.plot(DNAarray,p2best[2], 'o', color='sandybrown')
-    plt.errorbar(DNAarray,p2avg[2], yerr=p2std[2], color='sandybrown', label=f'combined')
+    plt.title(f'Values for {param_nm[3]}+{param_nm[4]} with errors {datasetname}')
+    plt.plot(DNAarray, k21k23best[0], 'ob')
+    plt.errorbar(DNAarray, k21k23avg[0], yerr=0, color='b', label=f'Individual')#f'{sets[0]}')
+    plt.plot(DNAarray, k21k23best[1], 'or')
+    plt.errorbar(DNAarray, k21k23avg[1], yerr=0, color='r', label=r'Global $\tau$3')#f'{sets[1]}')
+    plt.plot(DNAarray, k21k23best[2], 'o', color='sandybrown')
+    plt.errorbar(DNAarray, k21k23avg[2], yerr=0, color='sandybrown', label=r'Global all $\tau$s')#f'{sets[2]}')
     plt.legend()
+    plt.savefig(f'{datasetname} {model} {param_nm[3]}+{param_nm[4]} values with errors globalcompared')
+    plt.close()
 
     plt.figure()
-    plt.title('Fits for p3 with errors from bootstrap')
-    plt.plot(DNAarray,p3best[0], 'ob')
-    plt.errorbar(DNAarray,p3avg[0], yerr=p3std[0], color='b', label=f'flow')
-    plt.plot(DNAarray,p3best[1], 'or')
-    plt.errorbar(DNAarray,p3avg[1], yerr=p3std[1], color='r', label=f'10 min')
-    plt.plot(DNAarray,p3best[2], 'o', color='sandybrown')
-    plt.errorbar(DNAarray,p3avg[2], yerr=p3std[2], color='sandybrown', label=f'combined')
+    plt.title(f'Values for {param_nm[0]}+{param_nm[2]}+{param_nm[3]}+{param_nm[4]} with errors {datasetname}')
+    plt.plot(DNAarray, ku123best[0], 'ob')
+    plt.errorbar(DNAarray, ku123avg[0], yerr=0, color='b', label=f'Individual')#'{sets[0]}')
+    plt.plot(DNAarray, ku123best[1], 'or')
+    plt.errorbar(DNAarray, ku123avg[1], yerr=0, color='r', label=r'Global $\tau$3')#'{sets[1]}')
+    plt.plot(DNAarray, ku123best[2], 'o', color='sandybrown')
+    plt.errorbar(DNAarray, ku123avg[2], yerr=0, color='sandybrown', label=r'Global all $\tau$s')#f'{sets[2]}')
     plt.legend()
-
-    plt.figure()
-    plt.title(r'Fits for $\tau$1 with errors from bootstrap')
-    plt.plot(DNAarray,tau1best[0], 'ob')
-    plt.errorbar(DNAarray,tau1avg[0],yerr=tau1std[0], color='b', label=f'flow')
-    plt.plot(DNAarray,tau1best[1], 'or')
-    plt.errorbar(DNAarray,tau1avg[1],yerr=tau1std[1], color='r', label=f'10 min')
-    plt.plot(DNAarray,tau1best[2], 'o', color='sandybrown')
-    plt.errorbar(DNAarray,tau1avg[2],yerr=tau1std[2], color='sandybrown', label=f'combined')
-    plt.legend()
-
-    plt.figure()
-    plt.title(r'Fits for $\tau$2 with errors from bootstrap')
-    plt.plot(DNAarray,tau2best[0], 'ob')
-    plt.errorbar(DNAarray,tau2avg[0],yerr=tau2std[0], color='b', label=f'flow')
-    plt.plot(DNAarray,tau2best[1], 'or')
-    plt.errorbar(DNAarray,tau2avg[1],yerr=tau2std[1], color='r', label=f'10 min')
-    plt.plot(DNAarray,tau2best[2], 'o', color='sandybrown')
-    plt.errorbar(DNAarray,tau2avg[2],yerr=tau2std[2], color='sandybrown', label=f'combined')
-    plt.legend()
-
-    plt.figure()
-    plt.title(r'Fits for $\tau$3 with errors from bootstrap')
-    plt.plot(DNAarray,tau3best[0], 'ob')
-    plt.errorbar(DNAarray,tau3avg[0],yerr=tau3std[0], color='b', label=f'flow')
-    plt.plot(DNAarray,tau3best[1], 'or')
-    plt.errorbar(DNAarray,tau3avg[1],yerr=tau3std[1], color='r', label=f'10 min')
-    plt.plot(DNAarray,tau3best[2], 'o', color='sandybrown')
-    plt.errorbar(DNAarray,tau3avg[2],yerr=tau3std[2], color='sandybrown', label=f'combined')
-    plt.legend()
-'''
+    plt.savefig(f'{datasetname} {model} {param_nm[0]}+{param_nm[2]}+{param_nm[3]}+{param_nm[4]} values with errors globalcompared')
+    plt.close()

@@ -31,23 +31,6 @@ def Param3exp(params, constraints):
     return P1, P2, tau1, tau2, tau3
 
 
-#def Param3exp(params, constraints):
-#    Z1, Z2, T1, T2, T3 = params
-#    ZK10, ZK20, K10, K20, K30, ZK11, ZK21, K11, K21, K31 = constraints
-#    print(f'Z1 {Z1}  Z2 {Z2}')
-#    checkZ1 = np.sum(ZK10 < Z1)*np.sum(Z1 < ZK11)
-#    checkZ2 = np.sum(ZK20 < Z2)*np.sum(Z2 < ZK21)
-#    if checkZ1*checkZ2 > 0:
-#        P1 = np.exp(Z1)/(1 + np.exp(Z1) + np.exp(Z2))
-#        P2 = np.exp(Z2)/(1 + np.exp(Z1) + np.exp(Z2))
-#        tau1 = np.exp(T1)/(1 + np.exp(T1))*(K11 - K10) + K10
-#        tau2 = np.exp(T2)/(1 + np.exp(T2))*(K21 - K20) + K20
-#        tau3 = np.exp(T3)/(1 + np.exp(T3))*(K31 - K30) + K30
-#    else:
-#        return np.nan, np.nan, np.nan, np.nan, np.nan
-#    return P1, P2, tau1, tau2, tau3
-
-
 def BIC(dwells, k, LLike):
     bic = np.log(dwells.size)*k + 2*LLike
     return bic

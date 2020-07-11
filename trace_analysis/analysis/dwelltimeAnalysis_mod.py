@@ -19,7 +19,6 @@ else:
     from trace_analysis.analysis import SAfitting_based_on_Zconstraint_with_tcut as SAfitting
 #    from trace_analysis.analysis import SAfitting_3exp as SAfitting
     from trace_analysis.analysis import common_PDF
-# import SAfitting
 sns.set(style="ticks")
 sns.set_color_codes()
 
@@ -27,7 +26,7 @@ sns.set_color_codes()
 def analyze_combined(dwells_data, dataset_name, dist, configuration):
     # For plotting and fitting of red combined with total dwells
     conf = configuration
-    # find the Tmax until which data is selected    
+    # find the Tmax until which data is selected
     d = apply_config_to_data(dwells_data, dist, conf)
     figures = []
     keys_with_data = []
@@ -88,7 +87,7 @@ def fit(dwells, model='1Exp', dataset_name='Dwells', Nfits=1, binsize=0, tcut=0,
 
 
 def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
-         scale='log', style='dots', color='from_trace', fit_result=None):
+         scale='Log', style='dots', color='from_trace', fit_result=None):
 
     if fit_result is not None:
         tcut = fit_result.tcut[0]
@@ -149,11 +148,7 @@ def plot(dwells, name, dist='offtime', trace='red', binsize='auto',
             i = j
             j += 1
             while j < len(izeros) and izeros[j] - izeros[j-1] == 1:
-                j += 1
-            # print('jstart ', izeros[i])
-            # print('jend ', izeros[i]+(j-i))
-            # print('values ', values[izeros[i]:(izeros[i]+j-i+1)])
-            # print('mean value', np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1))
+                j += 1 
             values[izeros[i]:(izeros[i]+j-i+1)] = np.sum(values[izeros[i]:(izeros[i]+j-i+1)])/(j-i+1)
 
     fig = plt.figure(f'Histogram {trace} {dist}s {name}', figsize=(4, 3), dpi=200)
@@ -246,7 +241,6 @@ def apply_config_to_data(dwells_data, dist, config):
     t_red = d['time'][d['trace'] == 'red']
     print('length total times', len(t_total))
     print('length red times', len(t_red))
-    print('t_total ', t_total.index)
 
     if config['trace']['total'] and config['trace']['red'] and dist == 'offtime':
         print('red dwells overlapping total being removed')

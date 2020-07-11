@@ -144,7 +144,7 @@ def update_temp(T, alpha):
 #    return x, xstep
     
 
-##  SA for tau3 constant
+#  SA for tau3 constant
 def simulated_annealing(tbin_ar, Nmole_ar, objective_function, model, x_initial,
                         constraints, Tcut, Ncut, tcut, Tstart=100,
                         Tfinal=0.001, delta=0.05, alpha=0.99):
@@ -186,32 +186,6 @@ def simulated_annealing(tbin_ar, Nmole_ar, objective_function, model, x_initial,
 #            for j in range(0, np.size(x_initial, 1)):
 #                x_trial[i][j] = np.random.uniform(x[i][j] - delta, x[i][j] + delta)
 #            x_trial[i][-3] = xtau1
-#        x, xstep = Metropolis(objective_function, model, x, x_trial,
-#                              constraints, T, tbin_ar, Nmole_ar,
-#                              Tcut, Ncut, tcut, xstep)
-#    return x, xstep
-
-
-# SA for tau1 and tau2 constant
-#def simulated_annealing(tbin_ar, Nmole_ar, objective_function, model, x_initial,
-#                        constraints, Tcut, Ncut, tcut, Tstart=100,
-#                        Tfinal=0.001, delta=0.05, alpha=0.99):
-#    T = Tstart
-#    step = 0
-#    xstep = 0
-#    x = x_initial
-#    while T > Tfinal:
-#        step += 1
-#        if (step % 100 == 0):
-#            T = update_temp(T, alpha)
-#        x_trial = np.zeros((np.size(x_initial, 0), np.size(x_initial, 1)))
-#        xtau1 = np.random.uniform(x[0][-3] - delta, x[0][-3] + delta)
-#        xtau2 = np.random.uniform(x[0][-2] - delta, x[0][-2] + delta)
-#        for i in range(0, np.size(x_initial, 0)):
-#            for j in range(0, np.size(x_initial, 1)-3):
-#                x_trial[i][j] = np.random.uniform(x[i][j] - delta, x[i][j] + delta)
-#            x_trial[i][-3] = xtau1
-#            x_trial[i][-2] = xtau2
 #        x, xstep = Metropolis(objective_function, model, x, x_trial,
 #                              constraints, T, tbin_ar, Nmole_ar,
 #                              Tcut, Ncut, tcut, xstep)
@@ -430,13 +404,12 @@ def globfit(datasets, mdl, dataset_name='Dwells', Nfits=1, bsize=0, tcut=0,
                     tbin_ar[:np.size(tbin),ii] = tbin
                     Nmole_ar[:np.size(tbin),ii] = Nmole
                     boot_dwellscombined = np.concatenate((boot_dwellscombined, boot_dwells), axis=0)
-                paramsZ, Nsteps = simulated_annealing(tbin_ar, Nmole_ar,
-                                                      LogLikelihood,
-                                                      model, x_initial,
-                                                      constraints,
-                                                      Tcut=Tcut,
-                                                      Ncut=boot_Ncut,
-                                                      tcut=tcut)
+                paramsZ, Nsteps, Ztrials, LLtrials = Best_of_Nfits_sim_anneal(
+                                                           tbin_ar, Nmole_ar,
+                                                           Nfits,
+                                                           model, x_initial,
+                                                           constraints,
+                                                           Tcut, boot_Ncut, tcut)
                 print(f'boot: {j+1}, steps: {Nsteps}')
 
                 for ii in range(len(sets_names)):
