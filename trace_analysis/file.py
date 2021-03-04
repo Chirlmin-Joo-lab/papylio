@@ -759,9 +759,25 @@ class File:
 
         if ('initial_translation' in configuration) and (configuration['initial_translation'] == 'width/2'):
             initial_transformation = {'translation': [image.shape[0] // 2, 0]}
+            
         else:
             initial_transformation = {'translation': configuration['initial_translation']}
-
+            if not(type(initial_transformation)=='list'):
+                # if there is a larger translation, it is good to initially estimate it, like in BN-TIRF
+                img1= self.movie.get_channel(image=self.average_image, channel='d');
+                img1=img1-np.median(img1);    img1[img1<0]=0
+                img2 = self.movie.get_channel(image=self.average_image, channel='a')
+                img2=img2-np.median(img1);    img2[img2<0]=0
+                img2=img2*(np.max(img1)/np.max(img2))
+                from skimage import feature
+                shifts=feature.register_translation(img2,img1)
+                #verify with img2a=transform.warp(img2, tform2); plt.imshow(img1+img2a)
+                trsl=[image.shape[0] // 2+shifts[0][1],shifts[0][0]]
+                initial_transformation = {'translation': trsl}
+                # need to write it at config file, from which the values are retrieved in mapping. initial_transformation
+                self.experiment.configuration['mapping']['initial_translation'] =str(trsl) 
+                self.experiment.export_config_file()
+                             
         # Obtain specific mapping parameters from configuration file
         additional_mapping_parameters = {key: configuration[key]
                                          for key in (configuration.keys() and {'distance_threshold'})}
