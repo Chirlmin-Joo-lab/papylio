@@ -17,6 +17,39 @@ def coordinates_within_margin(coordinates,  image = None, bounds = None, margin=
 
     return coordinates[criteria.all(axis=0)]
 
+def coordinatesDA_within_margin(coordinatesDA,  image = None, bounds = None, margin=10):
+    if coordinatesDA.size == 0: return np.array([])
+
+    if image is not None:
+        bounds = np.array([[0,image.shape[1]], [0,image.shape[0]]])
+        
+    #split into D&A
+    coordinatesD=coordinatesDA[0:len(coordinatesDA)+1:2]
+    coordinatesA=coordinatesDA[1:len(coordinatesDA)+1:2]   
+    #set bounds D&A
+    boundsD=np.array([[0,image.shape[0]//2], [0, image.shape[1]]])
+    boundsA=np.array([[image.shape[0]//2, image.shape[0]], [0, image.shape[1]]])
+    #find which donor coordinates are outlyers
+    coordinates=coordinatesD
+    bounds=boundsD
+    criteriaD = np.array([(coordinates[:, 0] > (bounds[0,0] + margin)),
+                         (coordinates[:, 0] < (bounds[0,1] - margin)),
+                         (coordinates[:, 1] > (bounds[1,0] + margin)),
+                         (coordinates[:, 1] < (bounds[1,1] - margin))
+                         ])
+    #find which acceptor coordinates are outlyers
+    coordinates=coordinatesA
+    bounds=boundsA
+    criteriaA = np.array([(coordinates[:, 0] > (bounds[0,0] + margin)),
+                         (coordinates[:, 0] < (bounds[0,1] - margin)),
+                         (coordinates[:, 1] > (bounds[1,0] + margin)),
+                         (coordinates[:, 1] < (bounds[1,1] - margin))
+                         ])
+    # add the two two criteria and remove both donor&acceptor coordinates
+    criteria=np.logical_and(criteriaD.all(axis=0) , criteriaA.all(axis=0))
+    coordinates = np.hstack([coordinatesD[criteria],coordinatesA[criteria]]).reshape((-1,2))
+    return coordinates
+
 def circle(r):
     d = 2*r + 1
     rx, ry = d/2, d/2

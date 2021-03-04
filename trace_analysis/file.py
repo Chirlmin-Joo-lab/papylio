@@ -20,6 +20,7 @@ from trace_analysis.plotting import histogram
 from trace_analysis.mapping.mapping import Mapping2
 from trace_analysis.peak_finding import find_peaks
 from trace_analysis.coordinate_optimization import  coordinates_within_margin, \
+                                                    coordinatesDA_within_margin, \
                                                     coordinates_after_gaussian_fit, \
                                                     coordinates_without_intensity_at_radius, \
                                                     merge_nearby_coordinates, \
@@ -530,6 +531,7 @@ class File:
 
         # TODO: make this usable for more than two channels
         coordinates_in_main_channel = coordinates
+        print(coordinates)
         coordinates_list = [coordinates]
         for i in range(self.number_of_channels)[1:]:
             if self.number_of_channels > 2:
@@ -537,7 +539,7 @@ class File:
             coordinates_in_other_channel = self.mapping.transform_coordinates(coordinates_in_main_channel, direction='Donor2Acceptor')
             coordinates_list.append(coordinates_in_other_channel)
         coordinates = np.hstack(coordinates_list).reshape((-1, 2))
-
+        coordinates=coordinatesDA_within_margin(coordinates, image=image, bounds=None, margin= configuration['coordinate_optimization']['coordinates_within_margin']['margin'] )
         # --- finally, we set the coordinates of the molecules ---
         self.molecules = [] # Should we put this here?
         self.coordinates = coordinates
@@ -714,7 +716,7 @@ class File:
         acceptor_image = self.movie.get_channel(image=image, channel='a')
         donor_coordinates = find_peaks(image=donor_image,
                                        **configuration['peak_finding']['donor'])
-        if donor_coordinates.size == 0: #should throw a error message to warm no acceptor molecules found
+        if donor_coordinates.size == 0: #should throw a error message to warn no donor molecules found
             print('No donor molecules found')
         acceptor_coordinates = find_peaks(image=acceptor_image,
                                           **configuration['peak_finding']['acceptor'])

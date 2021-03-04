@@ -41,7 +41,7 @@ def autoconfig_AND_perform_mapping(mapping_file_index, mainPath):
         logger.error('Failed to do something 1: ' + str(e))
         autoconfig(exp, mapping_file, opt='mapping')
         try : 
-            #mapping_file.restartreset # doe snot work, full reset of exp works. There should be a simpler way !!!!!
+            #mapping_file.restartreset # does not work, full reset of exp works. There should be a simpler way !!!!!
             del exp
             exp = Experiment(mainPath)
             mapping_file = exp.files[mapping_file_index]
@@ -53,9 +53,9 @@ def autoconfig_AND_perform_mapping(mapping_file_index, mainPath):
      #still not enough points: lower the minimum difference, and raise the factor for mapping
             while True:
                 exp.configuration['mapping']['peak_finding']['donor']['minimum_intensity_difference']= \
-                  0.9*exp.configuration['mapping']['peak_finding']['donor']['minimum_intensity_difference']
+                  0.82*exp.configuration['mapping']['peak_finding']['donor']['minimum_intensity_difference']
                 exp.configuration['mapping']['peak_finding']['acceptor']['minimum_intensity_difference']= \
-                  0.9*exp.configuration['mapping']['peak_finding']['acceptor']['minimum_intensity_difference']
+                  0.87*exp.configuration['mapping']['peak_finding']['acceptor']['minimum_intensity_difference']
                 exp.configuration['mapping']['coordinate_optimization']['coordinates_without_intensity_at_radius']['fraction_of_peak_max']=\
                   1.05*exp.configuration['mapping']['coordinate_optimization']['coordinates_without_intensity_at_radius']['fraction_of_peak_max']
                 exp.export_config_file()
