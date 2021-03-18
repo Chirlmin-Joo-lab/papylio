@@ -24,6 +24,7 @@ Example_MD*
 *.pma
 *.traces
 
+ftplog.llog
 
 # STANDARD python gitignore
 

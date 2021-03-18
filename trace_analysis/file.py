@@ -450,15 +450,13 @@ class File:
             # --- allowed to apply sliding window to either the max projection OR the averages ----
             image = self.movie.make_projection_image(type=projection_image_type, start_frame=window_start_frame,
                                                      number_of_frames=window_size)
-
             # Do we need a separate image?
             # # --- we output the "sum of these images" ----
             # find_coords_img += image
-
             if method == 'by_channel':
                 # coordinates_per_channel = dict([(channel, set()) for channel in channels])
                 channel_images = [self.movie.get_channel(image=image, channel=channel) for channel in channels]
-
+               
             elif method == 'overlay_channels':
                 # Possibly we can move making the overlayed image to the Movie class.
                 # TODO: make this usable for any number of channels
@@ -474,7 +472,6 @@ class File:
                 # MD: problem: this is a linear transform, while yo u might have found a nonlinear transform; is nonlinear transform of image available?
                 channel_images = [(donor_image + acceptor_image_transformed) / 2]
                 channels = ['d']
-
                 # TODO: Make this a separate plotting function, possibly in Movie
                 # plt.imshow(np.stack([donor_image.astype('uint8'),
                 #                      acceptor_image_transformed.astype('uint8'),
@@ -759,7 +756,6 @@ class File:
 
         if ('initial_translation' in configuration) and (configuration['initial_translation'] == 'width/2'):
             initial_transformation = {'translation': [image.shape[0] // 2, 0]}
-            
         else:
             cit=configuration['initial_translation']
             if type(cit)==str:
@@ -782,7 +778,7 @@ class File:
                     # need to write it at config file, from which the values are retrieved in mapping. initial_transformation
                     self.experiment.configuration['mapping']['initial_translation'] =np.array2string(np.array(trsl))
                     self.experiment.export_config_file()
-                             
+        print(configuration['initial_translation'], initial_transformation)                    
         # Obtain specific mapping parameters from configuration file
         additional_mapping_parameters = {key: configuration[key]
                                          for key in (configuration.keys() and {'distance_threshold'})}
