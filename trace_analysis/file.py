@@ -761,17 +761,17 @@ class File:
             if type(cit)==str:
                 # expected value either BN-TIRF, or [256 0]
                 try: 
-                    tmp=np.fromstring(cit[1:-1], dtype=float, sep=' ') 
-                    initial_transformation = {'translation': [tmp[0],tmp[1]]}
-                    print(initial_transformation,'??????????????', tmp)
+                    read_init_translate=np.fromstring(cit[1:-1], dtype=float, sep=' ') 
+                    initial_transformation = {'translation': [read_init_translate[0],read_init_translate[1]]}
+                   # print(initial_transformation, read_init_translate)
                 except:
-                    img1= self.movie.get_channel(image=self.average_image, channel='d');
-                    img1=img1-np.median(img1);    img1[img1<0]=0
-                    img2 = self.movie.get_channel(image=self.average_image, channel='a')
-                    img2=img2-np.median(img1);    img2[img2<0]=0
-                    img2=img2*(np.max(img1)/np.max(img2))
+                    donor_image= self.movie.get_channel(image=self.average_image, channel='d');
+                    donor_image=donor_image-np.median(donor_image);    donor_image[donor_image<0]=0
+                    acceptor_image = self.movie.get_channel(image=self.average_image, channel='a')
+                    acceptor_image=acceptor_image-np.median(acceptor_image);    acceptor_image[acceptor_image<0]=0
+                    acceptor_image_scaled=acceptor_image*(np.max(donor_image)/np.max(acceptor_image))
                     from skimage import feature
-                    shifts=feature.register_translation(img2,img1)
+                    shifts=feature.register_translation(acceptor_image_scaled,donor_image)
                     #verify with img2a=transform.warp(img2, tform2); plt.imshow(img1+img2a)
                     trsl=[image.shape[0] // 2+shifts[0][1],shifts[0][0]]
                     initial_transformation = {'translation': trsl}
