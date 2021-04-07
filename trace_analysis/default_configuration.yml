@@ -6,8 +6,8 @@ show_movie:
 find_coordinates:
     channels:
         - donor
-    projection_image_type: average # average or maximum
-    method: by_channel # by_channel or overlay
+    projection_image_type: average # Choose average or maximum
+    method: by_channel # Choose by_channel, average_channels or sum_channels
     window_size: 20
     use_sliding_window: False
     minimal_point_separation: 2
@@ -27,7 +27,7 @@ find_coordinates:
 mapping:
     method: icp # Choose icp and nn
     distance_threshold: 3 # Only relevant for nn or icp
-    transformation_type: nonlinear # Choose linear or nonlinear
+    transformation_type: nonlinear # Choose linear, nonlinear or polynomial
     initial_translation: 'width/2' # Or e.g. [1024,0]
     peak_finding:
         donor:
