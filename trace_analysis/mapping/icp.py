@@ -7,7 +7,6 @@ from skimage.transform import AffineTransform, PolynomialTransform
 from trace_analysis.plotting import scatter_coordinates, show_point_connections
 from trace_analysis.mapping.polywarp import PolywarpTransform
 
-
 def best_fit_transform(A, B):
     '''
     Calculates the least-squares best-fit transform that maps corresponding points A to B in m spatial dimensions

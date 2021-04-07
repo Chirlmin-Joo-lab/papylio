@@ -14,6 +14,7 @@ from skimage.transform import AffineTransform, PolynomialTransform
 
 from trace_analysis.mapping.icp import icp, nearest_neighbor_pair, nearest_neighbour_match, direct_match
 from trace_analysis.mapping.polywarp import PolywarpTransform
+from trace_analysis.mapping.polynomial import PolynomialTransform
 
 class Mapping2:
     """Mapping class to find, improve, store and use the mapping between a source point set and a destination point set
@@ -90,7 +91,7 @@ class Mapping2:
 
         if load:
             filepath = Path(load)
-            if filepath.suffix in ['.yml','.yaml']:
+            if filepath.suffix in ['.yml','.yaml','.mapping']:
                 with filepath.open('r') as yml_file:
                     attributes = yaml.load(yml_file, Loader=yaml.SafeLoader)
                     for key, value in attributes.items():
@@ -102,7 +103,7 @@ class Mapping2:
 
     # Function to make attributes from transformation available from the Mapping2 class
     def __getattr__(self, item):
-        if hasattr(self.transformation, item):
+        if ('transformation' in self.__dict__) and hasattr(self.transformation, item):
             return getattr(self.transformation, item)
         else:
             super().__getattribute__(item)
@@ -449,7 +450,7 @@ class Mapping2:
                 else:
                     attributes.pop(key)
 
-            with filepath.with_suffix('.yml').open('w') as yml_file:
+            with filepath.with_suffix('.mapping').open('w') as yml_file:
                 yaml.dump(attributes, yml_file, sort_keys=False)
 
 
@@ -474,7 +475,7 @@ if __name__ == "__main__":
                                                           maximum_error_source, maximum_error_destination, shuffle)
 
     # Make a mapping object, perform the mapping and show the transformation
-    mapping = Mapping2(source, destination, transformation_type='linear')
+    mapping = Mapping2(source, destination, transformation_type='polynomial')
     mapping.method = 'icp'
     mapping.perform_mapping()
     mapping.show_mapping_transformation(show_source=True)

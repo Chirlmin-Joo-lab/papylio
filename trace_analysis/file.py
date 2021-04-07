@@ -90,6 +90,7 @@ class File:
                                 '_max.tif': self.import_maximum_projection_tif_file,
                                 '.coeff': self.import_coeff_file,
                                 '.map': self.import_map_file,
+                                '.mapping': self.import_mapping_file,
                                 '.pks': self.import_pks_file,
                                 '.traces': self.import_traces_file,
                                 '.log': self.import_log_file,
@@ -359,6 +360,9 @@ class File:
         warnings.warn('The export_map_file method will be depricated, use export_mapping instead')
         self.export_mapping(filetype='classic')
 
+    def import_mapping_file(self):
+        self.mapping = Mapping2(load=self.absoluteFilePath.with_suffix('.mapping'))
+
     def import_pks_file(self):
         # Background value stored in pks file is not imported yet
         coordinates = np.genfromtxt(str(self.relativeFilePath) + '.pks')
@@ -436,7 +440,7 @@ class File:
         # coordinates = set()
         if method == 'by_channel':
             coordinate_sets = [set() for channel in channels]
-        elif method == 'overlay_channels':
+        elif method in ('average_channels', 'sum_channels'):
             if len(channels) < 2:
                 raise ValueError('No channels to overlay')
             coordinate_sets = [set()]
@@ -456,21 +460,19 @@ class File:
             if method == 'by_channel':
                 # coordinates_per_channel = dict([(channel, set()) for channel in channels])
                 channel_images = [self.movie.get_channel(image=image, channel=channel) for channel in channels]
-               
-            elif method == 'overlay_channels':
+
+            elif method in ('average_channels', 'sum_channels'):
                 # Possibly we can move making the overlayed image to the Movie class.
                 # TODO: make this usable for any number of channels
                 donor_image = self.movie.get_channel(image=image, channel='d')
-                acceptor_image = self.movie.get_channel(image=image, channel='a')
+                # acceptor_image = self.movie.get_channel(image=image, channel='a')
+                image_transformed = self.mapping.transform_image(image, direction='Acceptor2Donor')
+                acceptor_image_transformed = self.movie.get_channel(image=image_transformed, channel='d')
 
-                if self.mapping.transformation_type is not 'linear':
-                    raise NotImplementedError('Method overlay_channels is not implemented yet for mapping transformation types other than linear')
-                # TODO: Make this work for nonlinear mapping
-                image_transformation = translate([-self.movie.width / 2, 0]) @ self.mapping.transformation
-                acceptor_image_transformed = ski.transform.warp(acceptor_image, image_transformation,
-                                                                preserve_range=True) # Transform can be a PolynomialTransform
-                # MD: problem: this is a linear transform, while yo u might have found a nonlinear transform; is nonlinear transform of image available?
-                channel_images = [(donor_image + acceptor_image_transformed) / 2]
+                if method == 'average_channels':
+                    channel_images = [(donor_image + acceptor_image_transformed) / 2]
+                elif method == 'sum_channels':
+                    channel_images = [(donor_image + acceptor_image_transformed)]
                 channels = ['d']
                 # TODO: Make this a separate plotting function, possibly in Movie
                 # plt.imshow(np.stack([donor_image.astype('uint8'),
@@ -478,6 +480,8 @@ class File:
                 #                      np.zeros((self.movie.height,
                 #                                self.movie.width // 2)).astype('uint8')],
                 #                     axis=-1))
+            else:
+                raise ValueError(f'"{method}" is not a valid method.')
 
             for i, channel_image in enumerate(channel_images):
                 channel_coordinates = find_peaks(image=channel_image, **peak_finding_configuration)  # .astype(int)))
@@ -510,8 +514,8 @@ class File:
             # Map coordinates to main channel in movie
             # TODO: make this usable for any number of channels
             coordinate_sets[i] = coordinate_sets[i]+self.movie.channel_boundaries(channels[i])[0]
-            if channels[i] in ['a', 'acceptor']:
-            # if i > 0: #i.e. if channel is not main channel
+            # if channels[i] in ['a', 'acceptor']:
+            if i > 0: #i.e. if channel is not main channel
                 coordinate_sets[i] = self.mapping.transform_coordinates(coordinate_sets[i],
                                                                         direction='Acceptor2Donor')
 
@@ -794,7 +798,8 @@ class File:
         self.mapping.file = self
         self.is_mapping_file = True
 
-        self.export_mapping(filetype='classic')
+        # self.export_mapping(filetype='classic')
+        self.export_mapping()
 
     def copy_coordinates_to_selected_files(self):
         for file in self.experiment.selectedFiles:
