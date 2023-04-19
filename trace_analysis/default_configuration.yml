@@ -16,7 +16,7 @@ projection_image:
 find_coordinates:
   channels:
       - donor
-  illumination: 0
+  illumination: 0 # Single value or list, if a list then it makes combinations with the list of channels.
   projection_type: average
   method: by_channel # Choose by_channel, average_channels or sum_channels
   projection_image:

@@ -194,6 +194,35 @@ class File:
         else:
             return self.movie.make_projection_image(**configuration, write=True, flatten_channels=True)
 
+    def get_projections_images_for_channel_and_illumination(self, channels, illuminations,
+                                                            transform_to_main_channel=False, **kwargs):
+        channel_indices = self.movie.get_channel_indices_from_names(channels)
+        illumination_indices = self.movie.get_illumination_indices_from_names(illuminations)
+
+        if len(channel_indices) == len(illumination_indices):
+            pass
+        elif len(channel_indices) == 1 and len(illumination_indices) > 1:
+            channel_indices *= len(illumination_indices)
+        elif len(channel_indices) > 1 and len(illumination_indices) == 1:
+            illumination_indices *= len(channel_indices)
+        else:
+            raise ValueError('Lengths of channels and illuminations do not correspond')
+
+        projection_images = []
+        for channel_index, illumination_index in zip(channel_indices, illumination_indices):
+            image = self.get_projection_image(illumination=illumination_index, **kwargs)
+
+            if transform_to_main_channel:
+                if channel_index == 1:
+                    image = self.mapping.transform_image(image, direction='Acceptor2Donor')
+                elif channel_index > 1:
+                    raise NotImplementedError('Not implemented for more than two channels')
+                channel_image = self.movie.get_channel(image=image, channel=0)
+            else:
+                channel_image = self.movie.get_channel(image=image, channel=channel_index)
+            projection_images.append(channel_image)
+        return projection_images
+
     # @property
     # def coordinates(self):
     #     with xr.open_dataset(self.absoluteFilePath.with_suffix('.nc'), engine='h5netcdf') as dataset:
@@ -541,32 +570,59 @@ class File:
         for frame_range in frame_ranges:
 
             # --- allowed to apply sliding window to either the max projection OR the averages ----
-            image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range,
-                                              illumination=illumination)
-
-            # image = self.average_image()
-            self.movie.read_header()
-
-            # Do we need a separate image?
-            # # --- we output the "sum of these images" ----
-            # find_coords_img += image
+            # image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range,
+            #                                   illumination=illumination)
 
             if method == 'by_channel':
-                # coordinates_per_channel = dict([(channel, set()) for channel in channels])
-                channel_images = [self.movie.get_channel(image=image, channel=channel) for channel in channels]
-
+                transform_to_main_channel = False
             elif method in ('average_channels', 'sum_channels'):
+                transform_to_main_channel = True
+            else:
+                raise ValueError(f'"{method}" is not a valid method.')
+
+            channel_images = self.get_projections_images_for_channel_and_illumination(channels=channels,
+                                                                                      illuminations=illumination,
+                                                                                      transform_to_main_channel=transform_to_main_channel,
+                                                                                      projection_type=projection_type,
+                                                                                      frame_range=frame_range
+                                                                                      )
+
+            self.movie.read_header()
+
+            # if method == 'by_channel':
+            #     # coordinates_per_channel = dict([(channel, set()) for channel in channels])
+            #     channel_images = [self.movie.get_channel(image=image, channel=channel) for channel in channels]
+            #
+            # elif method in ('average_channels', 'sum_channels'):
+            #     # Possibly we can move making the overlayed image to the Movie class.
+            #     # TODO: make this usable for any number of channels
+            #     donor_image = self.movie.get_channel(image=image, channel='d')
+            #     # acceptor_image = self.movie.get_channel(image=image, channel='a')
+            #     image_transformed = self.mapping.transform_image(image, direction='Acceptor2Donor')
+            #     acceptor_image_transformed = self.movie.get_channel(image=image_transformed, channel='d')
+            #
+            #     if method == 'average_channels':
+            #         channel_images = [(donor_image + acceptor_image_transformed) / 2]
+            #     elif method == 'sum_channels':
+            #         channel_images = [(donor_image + acceptor_image_transformed)]
+            #     channels = ['d'] # When number of channels can be > 2 this should probably be the channel with the lowest number
+            #
+            #     # TODO: Make this a separate plotting function, possibly in Movie
+            #     # plt.imshow(np.stack([donor_image.astype('uint8'),
+            #     #                      acceptor_image_transformed.astype('uint8'),
+            #     #                      np.zeros((self.movie.height,
+            #     #                                self.movie.width // 2)).astype('uint8')],
+            #     #                     axis=-1))
+            # else:
+            #     raise ValueError(f'"{method}" is not a valid method.')
+
+            if method in ('average_channels', 'sum_channels'):
                 # Possibly we can move making the overlayed image to the Movie class.
-                # TODO: make this usable for any number of channels
-                donor_image = self.movie.get_channel(image=image, channel='d')
-                # acceptor_image = self.movie.get_channel(image=image, channel='a')
-                image_transformed = self.mapping.transform_image(image, direction='Acceptor2Donor')
-                acceptor_image_transformed = self.movie.get_channel(image=image_transformed, channel='d')
 
                 if method == 'average_channels':
-                    channel_images = [(donor_image + acceptor_image_transformed) / 2]
+                    channel_images = [np.mean(channel_images, axis=0)]
                 elif method == 'sum_channels':
-                    channel_images = [(donor_image + acceptor_image_transformed)]
+                    channel_images = [np.sum(channel_images, axis=0)]
                 channels = ['d'] # When number of channels can be > 2 this should probably be the channel with the lowest number
 
                 # TODO: Make this a separate plotting function, possibly in Movie
@@ -575,8 +631,6 @@ class File:
                 #                      np.zeros((self.movie.height,
                 #                                self.movie.width // 2)).astype('uint8')],
                 #                     axis=-1))
-            else:
-                raise ValueError(f'"{method}" is not a valid method.')
 
             print(f' Finding molecules in {self}')
             for i, channel_image in enumerate(channel_images):
