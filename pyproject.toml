@@ -4,6 +4,9 @@
 requires      = ["setuptools>=61.0.0", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.package-data]
+papylio = ["logo.png"]
+
 [tool.setuptools_scm]
 version_file = "papylio/_version.py"
 version_scheme = "post-release"
