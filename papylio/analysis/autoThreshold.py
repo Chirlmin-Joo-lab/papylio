@@ -1,17 +1,9 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Dec 13 19:25:17 2016
-
-@author: ikatechis
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 from os import listdir
 import os
 
 
-#@timer
 def stepfinder(trace, threshold=100, max_steps=20):
 
     start_frames = []

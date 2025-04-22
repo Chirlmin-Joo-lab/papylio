@@ -51,8 +51,8 @@ class FileCollection(ObjectList):
     def cycle_time(self):
         return self[0].cycle_time
 
-    def analyze_dwells_combined(self, *args, name='', **kwargs):
-        return File.analyze_dwells(self.serial, *args, name=name, **kwargs)
+    # def analyze_dwells_combined(self, *args, **kwargs):
+    #     return File.analyze_dwells(self.serial, *args, **kwargs)
 
     def print(self):
         for i, file in enumerate(self):

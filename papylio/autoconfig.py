@@ -24,7 +24,6 @@ FTPADDR = "some ftp address"
 
 # steps in GUI:
 from papylio.experiment import Experiment
-from papylio.analysis.interactiveAnalysis import InteractivePlot
 from papylio.movie.movie import Movie
 from papylio.movie.background_correction import get_threshold
 from skimage import measure

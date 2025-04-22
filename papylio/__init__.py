@@ -6,7 +6,6 @@ from papylio.experiment import Experiment
 from papylio.file import File
 # from papylio.molecule import Molecule
 from papylio.movie.movie import Movie
-from papylio.analysis.interactiveAnalysis import InteractivePlot
 
 # import papylio.sequencing.sequencing
 #

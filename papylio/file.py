@@ -37,7 +37,8 @@ from papylio.analysis.hidden_markov_modelling import hmm_traces, hidden_markov_m
 # from papylio.plugin_manager import PluginMetaClass
 from papylio.plugin_manager import plugins
 # from papylio.trace_plot import TraceAnalysisFrame
-from papylio.analysis.dwelltime_analysis import dwell_times_from_classification, analyze_dwells
+from papylio.analysis.dwell_time_extraction import dwell_times_from_classification
+from papylio.analysis.dwell_time_analysis import analyze_dwells, plot_dwell_time_histogram, plot_dwell_analysis
 from papylio.decorators import return_none_when_executed_by_pycharm
 
 @plugins
@@ -1427,6 +1428,11 @@ class File:
 
     @property
     @return_none_when_executed_by_pycharm
+    def sampling_interval(self):
+        return self.time.diff('frame').mean().item()
+
+    @property
+    @return_none_when_executed_by_pycharm
     def frame_rate(self):
         return 1 / self.cycle_time
 
@@ -1470,39 +1476,63 @@ class File:
     def dwells(self):
         return xr.load_dataset(self.absoluteFilePath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4')
 
-    def analyze_dwells(self, plot=False, axes=None, name=None, state_names={0: 'Low FRET state', 1: 'High FRET state'},
-                       logy=False, sharey=True):
+    def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
+                       truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
+                       fit_dwell_times_kwargs={}, plot_dwell_analysis_kwargs={}, save_file_path=None):
+
         dwells = self.dwells
 
         # At the moment single-state states are already set at -128 so they don't need to be separated.
         # For >2 states we will need to do this.
         # for n in np.arange(dwells.number_of_states.max().item())+1:
         #     dwells['state'][dict(dwell=(dwells['number_of_states'] == n) & dwells['state'] >= 0)] += n-1
+
+        #TODO: Add sampling interval to File and refer to it here?
+        dwell_analysis = analyze_dwells(dwells, method=method, number_of_exponentials=number_of_exponentials,
+                                        state_names=state_names, P_bounds=P_bounds, k_bounds=k_bounds,
+                                        sampling_interval=None, truncation=truncation, fit_dwell_times_kwargs=fit_dwell_times_kwargs)
+
+        if save_file_path is None:
+            self.dwell_analysis = dwell_analysis
+            if plot:
+                self.plot_dwell_analysis(**plot_dwell_analysis_kwargs)
+        else:
+            dwell_analysis.to_netcdf(self.absoluteFilePath.with_name(save_file_path).with_suffix('.nc'),
+                                     engine='netcdf4', mode='w')
+            if plot:
+                plot_dwell_analysis(dwell_analysis, dwells, **plot_dwell_analysis_kwargs)
+
+        return dwell_analysis
+
+    def plot_dwell_analysis(self, name=None, plot_type='pdf', plot_range=None, axes=None, bins='auto_discrete',
+                            log=False, sharey=False, save_path=None):
+        dwell_analysis = self.dwell_analysis
+        dwells = self.dwells
+
         if name is None:
             name = self.name
 
-        fit_values, axes = analyze_dwells(dwells, cycle_time=self.cycle_time, plot=plot, axes=axes,
-                                          state_names=state_names, logy=logy, sharey=sharey)
-        if axes is not None:
-            axes[0].set_title(name)
-            save_path = self.experiment.analysis_path / 'Dwell time histograms and fits'
-            save_path.mkdir(exist_ok=True)
-            if logy:
-                axes[0].figure.savefig(save_path / (name + '_dwelltime_analysis_logy.png'))
-            else:
-                axes[0].figure.savefig(save_path / (name + '_dwelltime_analysis.png'))
-        self.dwell_analysis = fit_values
-        return fit_values
+        # axes[0].set_title(name)
+        if save_path is None:
+            save_path = self.experiment.analysis_path / 'Dwell time analysis'
+
+        fig, axes = plot_dwell_analysis(dwell_analysis, dwells, plot_type=plot_type, plot_range=plot_range, axes=axes,
+                                        bins=bins, log=log, sharey=sharey, name=name, save_path=save_path)
+
+        return axes[0].figure, axes
 
     @property
     @return_none_when_executed_by_pycharm
     def dwell_analysis(self):
+        # return pd.read_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
         return xr.load_dataset(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'), engine='netcdf4')
 
     @dwell_analysis.setter
-    def dwell_analysis(self, dataset):
-        dataset.to_netcdf(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'),
-                          engine='netcdf4', mode='w')
+    def dwell_analysis(self, dwell_analysis):
+        # dwell_analysis.to_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
+        # dataset = xr.DataArray(dataset, dims=('exponential', ' variable'))
+        dwell_analysis.to_netcdf(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'),
+                                 engine='netcdf4', mode='w')
 
     def state_count(self, selected=True, states=None):
         # if hasattr(self, 'number_of_states'):
@@ -1767,6 +1797,7 @@ class File:
             plt.show()
 
     def show_coordinates_in_image(self, figure=None, **kwargs):
+        #TODO: change figure to axis
         if not figure:
             figure = plt.figure()
 

@@ -13,6 +13,15 @@ def file(experiment):
     return experiment.files[1]
 
 @pytest.fixture
+def experiment_hj(shared_datadir):
+    from papylio import Experiment
+    return Experiment(shared_datadir / 'Papylio example dataset - analyzed')
+
+@pytest.fixture
+def file_hj(experiment_hj):
+    return experiment_hj.files.select('HJ')[0]
+
+@pytest.fixture
 def experiment_output(shared_datadir):
     from papylio import Experiment
     return Experiment(shared_datadir / 'BN_TIRF_output_test_file')
@@ -98,3 +107,14 @@ def test_classify_hmm(file_output):
 
 def test_use_for_darkfield_correction(file):
     file.use_for_darkfield_correction()
+
+def test_analyze_dwells(file_hj):
+    file_hj.analyze_dwells(method='maximum_likelihood_estimation', number_of_exponentials=[1, 2, 3],
+                           state_names={0: 'Low FRET',  1:'High FRET'},
+                           plot=False)
+
+def test_plot_dwell_analysis(file_hj):
+    file_hj.analyze_dwells(method='maximum_likelihood_estimation', number_of_exponentials=[2],
+                           state_names={0: 'Low FRET',  1:'High FRET'},
+                           plot=False, fit_dwell_times_kwargs=dict())
+    file_hj.plot_dwell_analysis(plot_type='pdf', log=False, plot_range=(0,3))

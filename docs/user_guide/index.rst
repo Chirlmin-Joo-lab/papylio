@@ -13,4 +13,4 @@ User guide
     trace_selection
     trace_classification
     hidden_markov_modelling
-    dwell_time_analysis
+    dwell_time_analysis/index

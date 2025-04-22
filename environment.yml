@@ -16,7 +16,7 @@ dependencies:
 - pandas=1.4
 - seaborn=0.11
 - openpyxl=3.0
-- sphinx=4.4
+- sphinx=5
 - sphinx-book-theme=1.0
 - nd2reader=3.3
 - shapely=1.8
@@ -36,6 +36,7 @@ dependencies:
 - pomegranate=0.14
 - nbsphinx=0.9
 - notebook=7.3
+- jupyterlab-mathjax2
 - matchpoint=1.0.2
 - objectlist=1.0
 - git
