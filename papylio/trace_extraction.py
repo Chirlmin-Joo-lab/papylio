@@ -7,6 +7,7 @@ import scipy.ndimage
 
 def make_gaussian_mask(size, offsets, sigma=1.291):
     # TODO: Explain calculation in docstring
+    # TODO: Check that offsets have dim "x" and "y" instead of b"x" and b"y"
     # It is to keep the photon number the same after applying the mask.
     # If there is a PSF of N photons, which is nothing but a 2D Gauss function with given sigma and amplitude,
     # the sum of the pixel is N. The idea is that the pixel sum should be the same after applying the mask.

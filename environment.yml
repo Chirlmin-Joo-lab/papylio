@@ -36,7 +36,7 @@ dependencies:
 - pomegranate=0.14
 - nbsphinx=0.9
 - notebook=7.3
-- matchpoint=1.0.2
+- matchpoint=1.0.3
 - objectlist=1.0
 - git
 - perl

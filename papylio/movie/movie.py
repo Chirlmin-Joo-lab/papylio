@@ -836,6 +836,7 @@ class Movie:
 
     # Do we really need this?
     def determine_general_background_correction(self, method='median', frame_range=(0, 20), use_existing=False):
+        #Todo: pass method kwargs
         if use_existing and 'general_background_correction' in self.corrections:
             return
         # self.temporal_background_correction = self.spatial_background_correction = None
@@ -886,6 +887,7 @@ class Movie:
         self.save_corrections(general_background_correction=general_background_correction)
 
     def determine_temporal_background_correction(self, method='median', use_existing=False):
+        #Todo: pass method kwargs
         if use_existing and 'temporal_background_correction' in self.corrections:
             return
 

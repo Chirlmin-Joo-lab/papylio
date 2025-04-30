@@ -51,7 +51,7 @@ dependencies = [
 	"numba >= 0.56, <0.57",
 	"pomegranate == 0.14.8; sys_platform  == 'win32'",
 	"pomegranate == 0.15; sys_platform  != 'win32'",
-	"matchpoint >= 1.0.2, <1.1",
+	"matchpoint >= 1.0.3, <1.1",
 	"objectlist >= 1.0, <1.1",
 ]
 requires-python = ">=3.9, <3.10"
