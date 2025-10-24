@@ -110,7 +110,7 @@ def extract_traces(movie, coordinates, background=None, mask_size=1.291, neighbo
 
 
         # sys.stdout.write(f'\r   Frame {frame_number+1} of {movie.number_of_frames}\n')
-        dataset = intensity.to_dataset()
+        # dataset = intensity.to_dataset()
         # dataset['intensity_raw'] = dataset.intensity.copy()
 
         # if correct_illumination:
@@ -120,7 +120,7 @@ def extract_traces(movie, coordinates, background=None, mask_size=1.291, neighbo
         # dataset['background_correction'] = background_correction
         # dataset['intensity'] -= dataset['background_correction'].sel(frame=0, drop=True)
 
-    return dataset
+    return intensity
 
 # def extract_intensity_from_frame(frame, background, roi_indices, twoD_gaussians):
 #     intensities = frame.sel(x=roi_indices.sel(dimension='x'), y=roi_indices.sel(dimension='y'))

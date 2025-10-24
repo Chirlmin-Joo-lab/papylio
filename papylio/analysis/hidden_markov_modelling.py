@@ -7,9 +7,11 @@ import tqdm
 from objectlist import ObjectList
 from copy import deepcopy
 import scipy.linalg
+from papylio.log_functions import add_configuration_to_dataarray
 
 # file.FRET, file.classification, file.selected
-def hidden_markov_modelling(traces, classification, selection, n_states=2, threshold_state_mean=None, level='molecule'):
+def classify_hmm(traces, classification, selection, n_states=2, threshold_state_mean=None, level='molecule', seed=0):
+    np.random.seed(seed)
     if level == 'molecule':
         models_per_molecule = fit_hmm_to_individual_traces(traces, classification, selection, parallel=False, n_states=n_states, threshold_state_mean=threshold_state_mean)
     elif level == 'file':
@@ -35,7 +37,7 @@ def hidden_markov_modelling(traces, classification, selection, n_states=2, thres
     # ds['state_parameters'], ds['transition_matrix'] = \
     state_parameters, transition_matrices, classification_hmm = \
         sort_states_in_data(state_parameters, transition_matrices, classification_hmm)
-    ds['classification_hmm'] = classification_hmm
+    ds['classification'] = classification_hmm
 
     ds['state_mean'] = state_parameters.sel(parameter=0)
     ds['state_standard_deviation'] = state_parameters.sel(parameter=1)
@@ -43,6 +45,7 @@ def hidden_markov_modelling(traces, classification, selection, n_states=2, thres
     ds['start_probability'] = transition_matrices[:, -2, :n_states]
     ds['end_probability'] = transition_matrices[:, :n_states, -1]
 
+    # TODO: Perhaps we should not add additional selections, just encode the selections as negative values for the whole trace in classifications?
 
     number_of_frames = len(traces.frame)
     frame_rate = 1 / traces.time.diff('frame').mean().item()

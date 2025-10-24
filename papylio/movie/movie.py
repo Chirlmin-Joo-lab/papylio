@@ -19,6 +19,7 @@ from skimage.transform import AffineTransform
 from papylio.movie.background_correction import determine_temporal_background_correction, \
     determine_spatial_background_correction, determine_single_value_background_correction # remove_background, get_threshold
 from papylio.timer import Timer
+from papylio.log_functions import add_configuration_to_dataarray
 
 class Illumination:
     def __init__(self, name, short_name='', other_names=[]):
@@ -881,6 +882,9 @@ class Movie:
 
             general_background_correction[dict(illumination=illumination, channel=channel)] = correction
 
+        add_configuration_to_dataarray(general_background_correction, Movie.determine_general_background_correction,
+                                       locals(), units='a.u.') # TODO: Link to units in movie metadata?
+
         # self.general_background_correction = general_background_correction
         # self.save_corrections(general_background_correction=general_background_correction,
         #                       temporal_background_correction=None, spatial_background_correction=None)
@@ -930,6 +934,9 @@ class Movie:
             #     correction -= corrections.spatial_background_correction[illumination, channel].mean().item()
 
             temporal_background_correction[dict(frame=frame_indices_subset, channel=channel)] = correction
+
+        add_configuration_to_dataarray(temporal_background_correction, Movie.determine_temporal_background_correction,
+                                       locals(), units='a.u.') # TODO: Link to units in movie metadata?
 
         # self.temporal_background_correction = temporal_background_correction
         # self.save_corrections(temporal_background_correction=temporal_background_correction,
@@ -981,6 +988,9 @@ class Movie:
 
             spatial_background_correction[dict(illumination=illumination, channel=channel)] = correction
 
+        add_configuration_to_dataarray(spatial_background_correction, Movie.determine_spatial_background_correction,
+                                       locals(), units='a.u.') # TODO: Link to units in movie metadata?
+
         # self.spatial_background_correction = spatial_background_correction
         # self.save_corrections(spatial_background_correction=spatial_background_correction)
         self.save_corrections(spatial_background_correction=spatial_background_correction)#,
@@ -1007,6 +1017,16 @@ class Movie:
     #         # for key, correction in corrections.data_vars.items():
     #         #     self.__setattr__(key, correction)
     #     return corrections
+
+    @property
+    def configuration(self):
+        configuration = dict(rot90=self.rot90)
+        for name, correction in self.corrections.data_vars.items():
+            if 'configuration' in correction.attrs:
+                configuration[name] = correction.attrs['configuration']
+            else:
+                configuration[name] = None
+        return configuration
 
     @property
     def corrections_filepath(self):
