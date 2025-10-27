@@ -1,21 +1,18 @@
 import numpy as np
 import xarray as xr
 
-
-def trace_classification_threshold(traces, threshold):
-    classification_lower = classification_upper = True
-    if threshold[0] is not None:
-        classification_lower = np.vstack([(trace > threshold[0]) for trace in traces.values])
-    if threshold[1] is not None:
-        classification_upper = np.vstack([(trace < threshold[1]) for trace in traces.values])
-
-    classification = xr.DataArray((classification_upper & classification_lower),
-                                  dims=('molecule', 'frame'), name='classification')
+def classify_threshold(traces, threshold, rolling=None, window_size=1):
+    classification = traces > threshold
+    if rolling is not None:
+        classification = classification.astype(int).rolling(frame=window_size, center=True, min_periods=1)
+        classification = getattr(classification, rolling)(classification).astype(bool)
+    classification = xr.DataArray(classification, dims=('molecule', 'frame'), name='classification')
     return classification
 
+#TODO: Add usage of the functions below to File
 
 def trace_selection_threshold(traces, threshold):
-    classification = trace_classification_threshold(traces, threshold)
+    classification = classify_threshold(traces, threshold, name='')
     return classification.all(dim='frame')
 
 

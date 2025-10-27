@@ -1,8 +1,9 @@
-
 import sys
+import PySide2
+import platform
 from PySide2.QtWidgets import QWidget, QCheckBox,QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
     QPushButton, QTabWidget, QTableWidget, QComboBox, QLineEdit
-from PySide2.QtGui import QStandardItem, QStandardItemModel
+from PySide2.QtGui import QStandardItem, QStandardItemModel, QIcon
 from PySide2.QtCore import Qt
 from matplotlib.backends.backend_qtagg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
@@ -10,6 +11,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from networkx.algorithms.approximation.matching import min_maximal_matching
 
+import papylio as pp
 from papylio import Experiment, File
 #separately defined layouts
 from papylio.trace_plot import TracePlotWindow
@@ -19,7 +21,17 @@ from papylio.gui.selection_widget import SelectionWidget
 class MainWindow(QMainWindow):
     def __init__(self, main_path=None):
         super().__init__()
+
+        system = platform.system()
+        if system == "Windows":
+            extension = 'ico'
+        else:  # macOS or Linux
+            extension = "png"
+        self.setWindowIcon(QIcon("icon."+extension))
+        self.setWindowTitle("Papylio v" + pp.__version__ )
+        
         from papylio import Experiment
+        
         # jk note: here you may just use a fixed path for quick editing
         if 0: #jk's easy-to_find UglySwitch
             # experiment = Experiment(r'C:\Users\myname\personalpaths\Papylio example dataset')
@@ -36,7 +48,7 @@ class MainWindow(QMainWindow):
         self.model.setHorizontalHeaderLabels(['Name', 'Count'])
         self.tree.header().setDefaultSectionSize(180)
         self.tree.setModel(self.model)
-        self.addExperiment(self.experiment)
+
         self.tree.setFocusPolicy(Qt.NoFocus)
         self.tree.setFixedWidth(300)
         self.update = True
@@ -239,9 +251,13 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
-    def on_advanced_checkbox_state_change(self, advanced):
-        advanced_state = advanced
-        #advanced_state_checkbox.clearFocus()
+        self.show()
+
+        # self.experiment = Experiment(
+        #     r'D:\SURFdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
+        self.experiment = pp.Experiment(main_path, main_window=self)
+        self.addExperiment(self.experiment)
+        self.traces.save_path = self.experiment.analysis_path.joinpath('Trace_plots')
 
     def keyPressEvent(self, e):
         self.traces.keyPressEvent(e)

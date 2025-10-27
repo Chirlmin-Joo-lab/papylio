@@ -41,6 +41,8 @@ dependencies:
 - objectlist=1.0
 - git
 - perl
+- setuptools >=61.0.0
+- setuptools-scm >=8
 #- bioconda::logomaker=0.8
 # Logomaker has a matplotlib dependency, which installs PyQt
 # So please install manually if needed using

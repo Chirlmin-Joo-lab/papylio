@@ -1,5 +1,6 @@
 import importlib
 import pkgutil
+from papylio.log_functions import log_all_methods
 
 class PluginManager:
     def __init__(self):
@@ -28,6 +29,9 @@ def plugins(cls):
 
     """
     classes = PluginManager().get_class_plugins(cls.__name__) + (cls,)
+    if cls.__name__ == 'File':
+        classes = tuple(log_all_methods(c) for c in classes)
+
     slots = ()
     try:
         for c in classes:

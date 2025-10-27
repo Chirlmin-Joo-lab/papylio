@@ -750,7 +750,7 @@ class ExponentialDistribution:
 
         coords = dict(component=np.arange(self.number_of_exponentials))
         dwell_analysis = xr.Dataset(data_vars=data_vars, coords=coords)
-        dwell_analysis.attrs['papylio_version'] = papylio.__version__
+        dwell_analysis.attrs['version'] = papylio.__version__
         dwell_analysis.attrs['fit_function'] = 'exponential'
         dwell_analysis.attrs['truncation'] = self.truncation
         dwell_analysis.attrs['P_bounds'] = self.P_bounds

@@ -257,7 +257,7 @@ class SelectionWidget(QWidget):
         # else:
         #     channel = None
 
-        self.file.add_selection(variable, channel, aggregator, operator, threshold)
+        self.file.create_selection(variable, channel, aggregator, operator, threshold)
         self.refresh_selections()
 
 

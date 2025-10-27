@@ -123,7 +123,7 @@ def get_QApplication():
         app = QtWidgets.QApplication([])
     return app
 
-def get_path():
+def get_path(main_window):
     # if not 'app' in globals().keys():
     #     global app
     #     app = wx.App(None)
@@ -136,7 +136,9 @@ def get_path():
 
     app = get_QApplication()
     from PySide2.QtWidgets import QFileDialog, QMainWindow
-    path = QFileDialog.getExistingDirectory(QMainWindow(), 'Choose directory')
+    if main_window is None:
+        main_window = QMainWindow()
+    path = QFileDialog.getExistingDirectory(main_window, 'Choose directory')
     return path
 
 @plugins
@@ -161,7 +163,7 @@ class Experiment:
         If false, then files are detected, but not imported.
     """
     # TODO: Add presets for specific microscopes
-    def __init__(self, main_path=None, channels=['g', 'r'], import_all=True):
+    def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None):
         """Init method for the Experiment class
 
         Loads config file if it locates one in the main directory, otherwise it exports the default config file to the main directory.
@@ -178,7 +180,7 @@ class Experiment:
             If false, then files are detected, but not imported.
         """
         if main_path is None:
-            main_path = get_path()
+            main_path = get_path(main_window)
             if main_path is None:
                 raise ValueError('No folder selected')
 
