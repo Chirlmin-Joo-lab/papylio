@@ -1,4 +1,4 @@
-call conda activate papilio
-python "Start GUI.py"
+call conda activate papylio
+python -m papylio
 call conda deactivate
 pause

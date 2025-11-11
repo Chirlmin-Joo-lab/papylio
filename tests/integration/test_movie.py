@@ -1,7 +1,7 @@
 import pytest
 import tifffile
 import numpy as np
-from papilio.movie.movie import Movie
+from papylio.movie.movie import Movie
 
 
 @pytest.fixture
@@ -13,7 +13,7 @@ def movie(shared_datadir):
 
 @pytest.fixture
 def experiment(shared_datadir):
-    from papilio import Experiment
+    from papylio import Experiment
     return Experiment(shared_datadir / 'BN_TIRF')
 
 

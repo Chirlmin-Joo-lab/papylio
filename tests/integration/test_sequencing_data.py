@@ -1,5 +1,5 @@
 import pytest
-from papilio.plugins.sequencing.sequencing_data import parse_sam, fastq_generator, add_sequence_data_to_dataset, SequencingData
+from papylio.plugins.sequencing.sequencing_data import parse_sam, fastq_generator, add_sequence_data_to_dataset, SequencingData
 
 
 @pytest.fixture

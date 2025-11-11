@@ -16,20 +16,22 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'papilio'
-copyright = '2024 - Chirlmin Joo lab'
-author = 'Sung Hyun Kim, Carolien Bastiaanssen, Iason Katechis, Margreet Docter, Roy Simons, Pim America, Ivo Severins'
+project = 'papylio'
+copyright = '2025 - Chirlmin Joo lab'
+# author = 'Ivo Severins, Sung Hyun Kim, Carolien Bastiaanssen, Iason Katechis, Margreet Docter, Roy Simons, Pim America, '
+html_logo = '_static/logo.png'
 
 # from git import Repo
 from pathlib2 import Path
 # raise ValueError(Path(__file__).parent.parent)
-repo = Repo(Path(__file__).parent.parent)
+# repo = Repo(Path(__file__).parent.parent)
 
-sha = repo.head.object.hexsha
+# sha = repo.head.object.hexsha
 
 # The full version, including alpha/beta/rc tags
-release = f'develop-{sha[0:7]}'
-
+# release = f'develop-{sha[0:7]}'
+import papylio
+release = papylio.__version__
 
 # -- General configuration ---------------------------------------------------
 
@@ -48,7 +50,8 @@ extensions = [
     # "sphinx.ext.todo",
     # "sphinx.ext.autosectionlabel",
     # "sphinx.ext.githubpages",
-    # "nbsphinx",
+    "nbsphinx",
+    # "myst_nb",
     # "IPython.sphinxext.ipython_directive",
     # "IPython.sphinxext.ipython_console_highlighting",
 ]

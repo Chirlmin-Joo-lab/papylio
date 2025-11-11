@@ -1,4 +1,4 @@
-import papilio as pp
+import papylio as pp
 
 # Experiment import
 exp = pp.Experiment()

@@ -8,7 +8,7 @@ __pycache__/*.pyc
 twoColourExampleData/
 Example_data/
 traces/
-papilio/analysis/SAfitting/data/
+papylio/analysis/SAfitting/data/
 Start_analysis.py
 data/
 *.xml

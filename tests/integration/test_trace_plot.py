@@ -8,5 +8,5 @@ def dataset(shared_datadir):
     return xr.open_dataset(shared_datadir / 'BN_TIRF_output_test_file' / 'TIRF 561 0001.nc' )
 
 def test_trace_plot(dataset):
-    from papilio.trace_plot import TracePlotWindow
+    from papylio.trace_plot import TracePlotWindow
     frame = TracePlotWindow(dataset)

@@ -1,4 +1,4 @@
-from papilio.movie.movie import Movie
+from papylio.movie.movie import Movie
 
 
 def test_image_info_from_filename():

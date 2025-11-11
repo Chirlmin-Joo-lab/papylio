@@ -1,6 +1,7 @@
 Plot traces overview
 ====================
 To plot an overview of the traces of several molecules, the following code can be used.
+
 .. code-block:: python
 
     molecule_indices = np.arange(0,50)

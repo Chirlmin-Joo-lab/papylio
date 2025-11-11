@@ -4,43 +4,38 @@
    contain the root `toctree` directive.
 
 
-Papilio documentation
+Papylio documentation
 ===========================
 
-papilio is a package for single-molecule data analysis.
+Papylio is a python package for single-molecule fluorescence data analysis.
 
 Current functionality
 ---------------------
 
-Data extraction from single-molecule fluorescence images:
+- Molecule localization
+- Emission channel alignment
+- Fluorescence intensity and FRET trace extraction
+- Trace selection
+- Trace classification
+- Kinetic parameter extraction
+- SPARXS analysis
 
- - Peak localization
- - Emission channel alignment
- - Fluorescence intensity and FRET trace extraction
- - Trace selection
- - Trace classification
- - Kinetic parameter extraction
-
-Getting started
+Example dataset
 ---------------
+
+An `example dataset`_ is freely available on Zenodo.
+
+.. _example dataset: https://doi.org/10.5281/zenodo.14997235
+
 .. toctree::
-   :maxdepth: 2
+    :maxdepth: 2
+    :hidden:
 
-   Installation
-   Getting started
-   User guide <user_guide/index>
-   Examples <examples/index>
-   Sequencing <sequencing/index>
-   GUI
-   API reference
-   Contributing
-
-
-:class:`papilio.experiment.Experiment`
-
-Indices and tables
-------------------
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+    Installation
+    Getting started
+    User guide <user_guide/index>
+    Examples <examples/index>
+    SPARXS <SPARXS/index>
+    GUI
+    API reference
+    Contributing

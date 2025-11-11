@@ -1,6 +1,6 @@
 import pytest
-from papilio.plugins.sequencing.sequence_generation import generate_sequences
-from papilio.plugins.sequencing.sequence_plotting import plot_sequence_density
+from papylio.plugins.sequencing.sequence_generation import generate_sequences
+from papylio.plugins.sequencing.sequence_plotting import plot_sequence_density
 
 @pytest.fixture
 def sequences():

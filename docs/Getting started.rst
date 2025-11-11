@@ -7,7 +7,7 @@ First import the library and create an :class:`.Experiment`.
 
 .. code-block:: python
 
-    import papilio as pp
+    import papylio as pp
     exp = pp.Experiment()
     exp.files.print()
 

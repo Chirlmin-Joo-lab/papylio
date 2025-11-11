@@ -11,7 +11,7 @@ from pathlib2 import Path
 # print(__file__)
 
 # sys.path.append(Path(__file__).parent.parent.parent)
-from papilio.gui.main import MainWindow
+from papylio.gui.main import MainWindow
 
 def test_GUI(shared_datadir):
     print(shared_datadir)

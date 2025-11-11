@@ -1,4 +1,4 @@
-name: papilio
+name: papylio
 channels:
 - conda-forge
 dependencies:
@@ -16,7 +16,7 @@ dependencies:
 - pandas=1.4
 - seaborn=0.11
 - openpyxl=3.0
-- sphinx=4.4
+- sphinx=5
 - sphinx-book-theme=1.0
 - nd2reader=3.3
 - shapely=1.8
@@ -28,16 +28,20 @@ dependencies:
 - bottleneck=1.3
 - tifffile=2022.10.10
 - tqdm=4.63
-- hmmlearn=0.2.7
 - pyside2=5.13
 - pytest
 - pytest-datadir
 - numba=0.56
 - pomegranate=0.14
-- matchpoint
-- objectlist
+- nbsphinx=0.9
+- notebook=7.3
+- jupyterlab-mathjax2
+- matchpoint=1.0.4
+- objectlist=1.0
 - git
 - perl
+- setuptools >=61.0.0
+- setuptools-scm >=8
 #- bioconda::logomaker=0.8
 # Logomaker has a matplotlib dependency, which installs PyQt
 # So please install manually if needed using
