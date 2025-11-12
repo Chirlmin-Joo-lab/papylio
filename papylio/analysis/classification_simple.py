@@ -3,7 +3,7 @@ import xarray as xr
 
 def classify_threshold(traces, threshold, rolling=None, window_size=1):
     classification = traces > threshold
-    if rolling is not None:
+    if rolling is not None and rolling != '':
         classification = classification.astype(int).rolling(frame=window_size, center=True, min_periods=1)
         classification = getattr(classification, rolling)(classification).astype(bool)
     classification = xr.DataArray(classification, dims=('molecule', 'frame'), name='classification')
