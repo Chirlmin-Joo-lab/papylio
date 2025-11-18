@@ -1,7 +1,7 @@
 import sys
 from PySide2.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
     QLabel, QLineEdit, QPushButton, QFormLayout, QSpinBox, QDoubleSpinBox,
-    QTreeView, QMainWindow, QMessageBox
+    QTreeView, QMainWindow, QMessageBox, QCheckBox
 )
 
 from PySide2.QtGui import QStandardItem, QStandardItemModel
@@ -66,8 +66,21 @@ class ClassificationWidget(QWidget):
         self.model = QStandardItemModel()
         self.root = self.model
         # self.root = self.model.invisibleRootItem()
-        self.model.setHorizontalHeaderLabels(["Name", "Method", "Parameters"])
+        self.model.setHorizontalHeaderLabels(["", "States", "Name", "Method", "Variable", "Select", "Parameters"])
         self.tree_view.setModel(self.model)
+
+        self.model.itemChanged.connect(self.on_item_changed)
+
+        # --- Column sizing ---
+        self.tree_view.setColumnWidth(0, 40)    #
+        self.tree_view.setColumnWidth(1, 120)   # States
+        self.tree_view.setColumnWidth(2, 160)   # Name
+        self.tree_view.setColumnWidth(3, 180)   # Comment
+        self.tree_view.setColumnWidth(4, 120)   # Method
+        self.tree_view.setColumnWidth(5, 120)   # Variable
+        self.tree_view.setColumnWidth(6, 120)   # Select
+        self.tree_view.setColumnWidth(7, 250)   # Parameters
+
         main_layout.addWidget(self.tree_view)
         # self.tree_view.setColumnWidth(0, 150)
         # self.tree_view.setColumnWidth(1,100)
@@ -200,20 +213,50 @@ class ClassificationWidget(QWidget):
             self.setDisabled(False)
             for name, classification in self.file.classifications.items():
                 if not classification.attrs:
-                    row_data = [name[len('classification_'):], '', '']
+                    row_data = ['', '', name[len('classification_'):], '', '', '', '']
                 else:
                     configuration = json.loads(classification.attrs['configuration'])
-                    row_data = [name, configuration['classification_type'], configuration]
-                # row_data.append(selection.sum().item())
+                    classification_type = configuration.get('classification_type', '')
+                    variable = configuration.get('variable', '')
+                    select = configuration.get('select', '')
+                    parameters = configuration.get('classification_kwargs', {})
+                    row_data = [
+                        '',
+                        '',
+                        name[len('classification_'):],
+                        classification_type,
+                        variable,
+                        select,
+                        json.dumps(parameters)
+                    ]
+
                 items = [QStandardItem(str(d)) for d in row_data]
                 items[0].setCheckable(True)
-                items[0].setData(name)
-                if 'configuration' in self.file.selected.attrs.keys():
-                    if np.isin(name, json.loads(self.file.selected.attrs['configuration'])):
+                # items[1].setData('ttt')
+                items[2].setData(name)
+
+                self.root.appendRow(items)
+
+                # text_edit = QLineEdit()
+                # text_edit.setText('test')
+                # # text_edit.setPlaceholderText("Enter name...")
+                #
+                # def on_text_changed(text, name=name):
+                #     print(f"Renamed {name} → {text}")
+                #
+                # text_edit.editingFinished.connect(lambda w=text_edit, n=name: on_text_changed(w.text(), n))
+                # # text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+                # index = self.model.indexFromItem(items[1])
+                # self.tree_view.setIndexWidget(index, text_edit)
+
+                if 'configuration' in self.file.classification.attrs.keys():
+                    configuration = json.loads(self.file.classification.attrs['configuration'])
+                    if name in configuration:
                         items[0].setCheckState(Qt.Checked)
+                        # text_edit.setText(str(configuration[name]))
                     else:
                         items[0].setCheckState(Qt.Unchecked)
-                self.root.appendRow(items)
 
             # items = [QStandardItem('') for _ in range(6)]
             # self.root.appendRow(items)
@@ -227,18 +270,60 @@ class ClassificationWidget(QWidget):
             # self.root.appendRow(items)
         else:
             self.setDisabled(True)
+
+
     def _clear_results(self):
-        pass
+        self.file.clear_classifications()
+        self.refresh_classifications()
 
     def get_checked_classifications(self):
         pass
 
+    def on_item_changed(self, item):
+        """Triggered when a checkbox in the table is toggled."""
+        # Only respond if this is the Name column (the one with checkboxes)
+        row = item.row()
+        column = item.column()
+
+        if column == 0:
+            self.apply_classifications()
+        # name = item.data()  # stored classification name
+        # if not name:
+        #     return
+        #
+        # checked = (item.checkState() == Qt.Checked)
+        #
+        # # Example: print or update your file selections
+        # print(f"Checkbox toggled for '{name}': {'Checked' if checked else 'Unchecked'}")
+        #
+        # # If you want to apply logic to your file object:
+        # if self.file is not None:
+        #     try:
+        #         # Example: toggle selection in your file object
+        #         selected = set(json.loads(self.file.selected.attrs.get('configuration', '[]')))
+        #         if checked:
+        #             selected.add(name)
+        #         else:
+        #             selected.discard(name)
+        #         self.file.selected.attrs['configuration'] = json.dumps(list(selected))
+        #         print(f"Updated selected configurations: {selected}")
+        #     except Exception as e:
+        #         print(f"Error updating selection for {name}: {e}")
 
 
+    def apply_classifications(self):
+        apply_classifications_configuration = {}
+        for row in range(self.model.rowCount()):
+            item_checkbox = self.model.item(row, 0)
 
+            if item_checkbox.checkState() == Qt.Checked:
 
+                classification_states = self.model.item(row, 1).data()
+                classification_name = self.model.item(row, 2).data()
+                apply_classifications_configuration[classification_name] = classification_states
 
-
+        self.file.apply_classifications(**apply_classifications_configuration)
+        self.refresh_classifications()
 
 
 
