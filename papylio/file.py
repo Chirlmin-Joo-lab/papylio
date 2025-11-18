@@ -14,6 +14,7 @@ import skimage as ski
 import warnings
 import sys
 import re
+from typing import Literal
 import logging
 import inspect
 import tifffile
@@ -37,6 +38,7 @@ from papylio.log_functions import add_configuration_to_dataarray
 # from matchpoint.coordinate_transformations import translate, transform # MD: we don't want to use this anymore I think, it is only linear
                                                                            # IS: We do! But we just need to make them usable with the nonlinear mapping
 from papylio.background_subtraction import extract_background
+from papylio.analysis.classification_simple import classify_threshold
 from papylio.analysis.hidden_markov_modelling import classify_hmm
 # from papylio.plugin_manager import PluginManager
 # from papylio.plugin_manager import PluginMetaClass
@@ -1545,7 +1547,7 @@ class File:
                     classification_configurations[name] = None
         return classification_configurations
 
-    def create_classification(self, classification_type, variable, select=None, name=None, classification_kwargs=None, apply=None):
+    def create_classification(self, classification_type: Literal["threshold", "hmm"], variable, select=None, name=None, classification_kwargs=None, apply=None):
         if classification_kwargs is None:
             classification_kwargs = {}
         if isinstance(variable, str):
@@ -1558,7 +1560,6 @@ class File:
             traces = traces.sel(**select)
 
         if classification_type == 'threshold':
-            from papylio.analysis.classification_simple import classify_threshold
             ds = classify_threshold(traces, **classification_kwargs).to_dataset()
             # TODO: perhaps replace the following line with some function that actually spits out the classification kwargs.
             add_configuration_to_dataarray(ds.classification, classify_threshold, classification_kwargs)
@@ -1641,6 +1642,17 @@ class File:
         classification_combined.attrs['classification_configurations'] = json.dumps(self.classification_configurations(list(classification_assignment.keys())))
 
         self.set_variable(classification_combined, name='classification', dims=('molecule','frame'))
+
+    def clear_classifications(self):
+        dataset = self.dataset
+        dataset = dataset.drop_vars([name for name in dataset.data_vars.keys() if name.startswith('classification_')])
+        # for name, da in dataset.data_vars.items():
+        #     da.encoding['dtype'] = da.dtype
+        encoding = {
+            var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
+        }
+        dataset.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+
 
     @property
     @return_none_when_executed_by_pycharm
