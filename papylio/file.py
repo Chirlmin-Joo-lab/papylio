@@ -1082,6 +1082,15 @@ class File:
 
         return traces
 
+    @property
+    @return_none_when_executed_by_pycharm
+    def traces_names(self):
+        # return list(self.classifications.data_vars.keys())
+        return [
+            name for name, da in self.data_vars.items()
+            if da.dims and da.dims[-1] == "frame"
+        ]
+
     def plot_hmm_rates(self, name=None):
         if name is None:
             name = self.name

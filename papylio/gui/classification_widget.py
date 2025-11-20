@@ -42,7 +42,7 @@ class ClassificationWidget(QWidget):
 
         # --- Variable selector ---
         variable_layout = QHBoxLayout()
-        self.variable_selector = QLineEdit()
+        self.variable_selector = QComboBox()
         variable_layout.addWidget(QLabel("Variable:"))
         variable_layout.addWidget(self.variable_selector)
         main_layout.addLayout(variable_layout)
@@ -105,6 +105,13 @@ class ClassificationWidget(QWidget):
     def file(self, file):
         self._file = file
         self.refresh_classifications()
+        if file is not None:
+            self.variable_selector.clear()
+            for name in file.traces_names:
+                self.variable_selector.addItem(name)
+                if name == 'intensity':
+                    self.variable_selector.addItem('intensity_total')
+
         # self.update_final_selection = False
         # self.refresh_selections()
         # self.update_final_selection = True
@@ -176,7 +183,7 @@ class ClassificationWidget(QWidget):
             QMessageBox.warning(self, "No method", "Please select a classification method.")
             return
 
-        variable_name = self.variable_selector.text()
+        variable_name = self.variable_selector.currentText()
         if not variable_name:
             QMessageBox.warning(self, "No variable", "Please select a variable used for classification.")
             return
@@ -228,6 +235,10 @@ class ClassificationWidget(QWidget):
 
         items = [QStandardItem(str(d)) for d in row_data]
         items[0].setCheckable(True)
+        for i, item in enumerate(items):
+            if i not in [1]:
+                # item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                item.setEditable(False)
         # items[2].setData(name)
 
         self.root.appendRow(items)
@@ -304,6 +315,8 @@ class ClassificationWidget(QWidget):
                     self.model.blockSignals(False)
                 elif isinstance(classification_states, str):
                     classification_states = [int(x.strip()) for x in classification_states.split(',')]
+                    if len(classification_states) == 1:
+                        classification_states = classification_states[0]
                 apply_classifications_configuration[classification_name] = classification_states
 
         self.file.apply_classifications(**apply_classifications_configuration)
