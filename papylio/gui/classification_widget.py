@@ -72,14 +72,13 @@ class ClassificationWidget(QWidget):
         self.model.itemChanged.connect(self.on_item_changed)
 
         # --- Column sizing ---
-        self.tree_view.setColumnWidth(0, 40)    #
-        self.tree_view.setColumnWidth(1, 120)   # States
-        self.tree_view.setColumnWidth(2, 160)   # Name
-        self.tree_view.setColumnWidth(3, 180)   # Comment
-        self.tree_view.setColumnWidth(4, 120)   # Method
-        self.tree_view.setColumnWidth(5, 120)   # Variable
-        self.tree_view.setColumnWidth(6, 120)   # Select
-        self.tree_view.setColumnWidth(7, 250)   # Parameters
+        self.tree_view.setColumnWidth(0, 20)    # Checkbox
+        self.tree_view.setColumnWidth(1, 60)    # States
+        self.tree_view.setColumnWidth(2, 100)   # Name
+        self.tree_view.setColumnWidth(3, 100)   # Method
+        self.tree_view.setColumnWidth(4, 100)   # Variable
+        self.tree_view.setColumnWidth(5, 100)   # Select
+        self.tree_view.setColumnWidth(6, 250)   # Parameters
 
         main_layout.addWidget(self.tree_view)
         # self.tree_view.setColumnWidth(0, 150)
@@ -202,72 +201,50 @@ class ClassificationWidget(QWidget):
         try:
             self.file.create_classification(method_name, variable_name, select=None, name=name, classification_kwargs=kwargs,
                                             apply=None)
-            self.refresh_classifications()
+            name = 'classification_' + name
+            self.add_classification(name, self.file.classifications[name])
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
             return
+
+    def add_classification(self, name, classification):
+        if not classification.attrs:
+            row_data = ['', '', name[len('classification_'):], '', '', '', '']
+        else:
+            configuration = json.loads(classification.attrs['configuration'])
+            classification_type = configuration.get('classification_type', '')
+            variable = configuration.get('variable', '')
+            select = configuration.get('select', '')
+            parameters = configuration.get('classification_kwargs', {})
+            row_data = [
+                '',
+                '',
+                name[len('classification_'):],
+                classification_type,
+                variable,
+                select,
+                json.dumps(parameters)
+            ]
+
+        items = [QStandardItem(str(d)) for d in row_data]
+        items[0].setCheckable(True)
+        # items[2].setData(name)
+
+        self.root.appendRow(items)
+        if 'configuration' in self.file.classification.attrs.keys():
+            configuration = json.loads(self.file.classification.attrs['configuration'])
+            if name in configuration:
+                items[0].setCheckState(Qt.Checked)
+                # text_edit.setText(str(configuration[name]))
+            else:
+                items[0].setCheckState(Qt.Unchecked)
 
     def refresh_classifications(self):
         self.root.removeRows(0, self.root.rowCount())
         if self.file is not None and '.nc' in self.file.extensions:
             self.setDisabled(False)
             for name, classification in self.file.classifications.items():
-                if not classification.attrs:
-                    row_data = ['', '', name[len('classification_'):], '', '', '', '']
-                else:
-                    configuration = json.loads(classification.attrs['configuration'])
-                    classification_type = configuration.get('classification_type', '')
-                    variable = configuration.get('variable', '')
-                    select = configuration.get('select', '')
-                    parameters = configuration.get('classification_kwargs', {})
-                    row_data = [
-                        '',
-                        '',
-                        name[len('classification_'):],
-                        classification_type,
-                        variable,
-                        select,
-                        json.dumps(parameters)
-                    ]
-
-                items = [QStandardItem(str(d)) for d in row_data]
-                items[0].setCheckable(True)
-                # items[1].setData('ttt')
-                items[2].setData(name)
-
-                self.root.appendRow(items)
-
-                # text_edit = QLineEdit()
-                # text_edit.setText('test')
-                # # text_edit.setPlaceholderText("Enter name...")
-                #
-                # def on_text_changed(text, name=name):
-                #     print(f"Renamed {name} → {text}")
-                #
-                # text_edit.editingFinished.connect(lambda w=text_edit, n=name: on_text_changed(w.text(), n))
-                # # text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-                # index = self.model.indexFromItem(items[1])
-                # self.tree_view.setIndexWidget(index, text_edit)
-
-                if 'configuration' in self.file.classification.attrs.keys():
-                    configuration = json.loads(self.file.classification.attrs['configuration'])
-                    if name in configuration:
-                        items[0].setCheckState(Qt.Checked)
-                        # text_edit.setText(str(configuration[name]))
-                    else:
-                        items[0].setCheckState(Qt.Unchecked)
-
-            # items = [QStandardItem('') for _ in range(6)]
-            # self.root.appendRow(items)
-            #
-            # row_data = ['', '', '', '', 'Selected', str(self.file.number_of_selected_molecules)]
-            # items = [QStandardItem(str(d)) for d in row_data]
-            # self.root.appendRow(items)
-            #
-            # row_data = ['', '', '', '', 'Total', str(self.file.number_of_molecules)]
-            # items = [QStandardItem(str(d)) for d in row_data]
-            # self.root.appendRow(items)
+                self.add_classification(name, classification)
         else:
             self.setDisabled(True)
 
@@ -285,7 +262,7 @@ class ClassificationWidget(QWidget):
         row = item.row()
         column = item.column()
 
-        if column == 0:
+        if column in [0, 1]:
             self.apply_classifications()
         # name = item.data()  # stored classification name
         # if not name:
@@ -318,12 +295,18 @@ class ClassificationWidget(QWidget):
 
             if item_checkbox.checkState() == Qt.Checked:
 
-                classification_states = self.model.item(row, 1).data()
-                classification_name = self.model.item(row, 2).data()
+                classification_states = self.model.item(row, 1).text()
+                classification_name = 'classification_' + self.model.item(row, 2).text()
+                if classification_states in [None, '']:
+                    classification_states = np.unique(self.file.classifications[classification_name]).astype(int).tolist()
+                    self.model.blockSignals(True)
+                    self.model.item(row, 1).setText(str(classification_states)[1:-1])
+                    self.model.blockSignals(False)
+                elif isinstance(classification_states, str):
+                    classification_states = [int(x.strip()) for x in classification_states.split(',')]
                 apply_classifications_configuration[classification_name] = classification_states
 
         self.file.apply_classifications(**apply_classifications_configuration)
-        self.refresh_classifications()
 
 
 
