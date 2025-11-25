@@ -24,34 +24,28 @@ class ClassificationWidget(QWidget):
 
         main_layout = QVBoxLayout(self)
 
+        form = QFormLayout()
+        main_layout.addLayout(form)
+
         # --- Classification name input ---
-        name_layout = QHBoxLayout()
-        name_layout.addWidget(QLabel("Name:"))
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("e.g. HMM")
-        name_layout.addWidget(self.name_edit)
-        main_layout.addLayout(name_layout)
-
-        # --- Method selector ---
-        method_layout = QHBoxLayout()
-        self.method_selector = QComboBox()
-        self.method_selector.currentTextChanged.connect(self._update_method_panel)
-        method_layout.addWidget(QLabel("Method:"))
-        method_layout.addWidget(self.method_selector)
-        main_layout.addLayout(method_layout)
+        form.addRow("Name:", self.name_edit)
 
         # --- Variable selector ---
-        variable_layout = QHBoxLayout()
         self.variable_selector = QComboBox()
-        variable_layout.addWidget(QLabel("Variable:"))
-        variable_layout.addWidget(self.variable_selector)
-        main_layout.addLayout(variable_layout)
+        form.addRow("Variable:", self.variable_selector)
+
+        # --- Method selector ---
+        self.method_selector = QComboBox()
+        self.method_selector.currentTextChanged.connect(self._update_method_panel)
+        form.addRow("Method:", self.method_selector)
 
         # --- Dynamic options container ---
         self.stack = QWidget()
         self.stack_layout = QVBoxLayout(self.stack)
         self.stack_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(self.stack)
+        form.addRow("Options:", self.stack)
 
         # --- Buttons ---
         button_layout = QHBoxLayout()
@@ -60,6 +54,13 @@ class ClassificationWidget(QWidget):
         button_layout.addWidget(self.run_button)
         button_layout.addWidget(self.clear_button)
         main_layout.addLayout(button_layout)
+
+        # Taborder
+        # QWidget.setTabOrder(self.name_edit, self.variable_selector)
+        # QWidget.setTabOrder(self.variable_selector, self.method_selector)
+        # QWidget.setTabOrder(self.method_selector, self.stack)
+        # QWidget.setTabOrder(self.stack, self.run_button)
+        # QWidget.setTabOrder(self.run_button, self.clear_button)
 
         # --- Results table ---
         self.tree_view = QTreeView(self)
