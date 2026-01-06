@@ -29,7 +29,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib2 import Path
 
-from PySide2.QtWidgets import QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QCheckBox, QLabel
+from PySide2.QtWidgets import (QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QCheckBox, QLabel,
+                               QTableWidget, QTableWidgetItem, QHeaderView, QTreeView, QStyledItemDelegate)
+from PySide2.QtGui import QStandardItemModel, QStandardItem, QColor
 from PySide2.QtGui import QKeySequence
 from PySide2.QtCore import Qt
 
@@ -49,6 +51,8 @@ class TracePlotWindow(QWidget):
     def __init__(self, dataset=None, plot_variables=['intensity', 'FRET'],
                  ylims=[(0, 35000), (0, 1)], colours=[('g', 'r'), ('b')], width=14, height=None, save_path=None, parent=None,
                  show=True):
+
+        plot_configuration = {'intensity': {'ylims': (0,35000), 'colors': ('g','r')}, 'FRET': {'ylims': (0,1), 'colors': ('b')}}
 
         if height is None:
             height = max(len(plot_variables) * 3.5, 9)
@@ -110,11 +114,19 @@ class TracePlotWindow(QWidget):
         layout.addLayout(layout_bar)
         layout.addWidget(self.canvas)
 
-        self.setLayout(layout)
+        # self.setLayout(layout)
         # Create a placeholder widget to hold our toolbar and canvas.
         # widget = QWidget()
         # widget.setLayout(layout)
         # self.setCentralWidget(widget)
+
+        self.init_plot_configuration()
+        self.view.setMinimumWidth(200)
+
+        layout_main = QHBoxLayout()
+        layout_main.addLayout(layout)
+        layout_main.addWidget(self.view)
+        self.setLayout(layout_main)
 
         self.dataset = dataset
 
@@ -123,8 +135,62 @@ class TracePlotWindow(QWidget):
 
             app.exec_()
 
+    def init_plot_configuration(self):
+        ## PLOT CONFIGURATION
+
+        self._dataset
+
+        variables = [ name for name, da in self._dataset.data_vars.items() if da.dims and da.dims[-1] == "frame" ]
+
+        self.view = QTreeView()
+        self.model = QStandardItemModel()
+        self.model.setHorizontalHeaderLabels(["Variable", "Plot Range", "Color"])
+
+        # Fill model
+        for var in variables:
+            # # Enabled checkbox
+            # enabled_item = QStandardItem()
+            # enabled_item.setCheckable(True)
+            # enabled_item.setCheckState(Qt.Checked)
+
+            # Variable name (not editable)
+            name_item = QStandardItem(var)
+            name_item.setEditable(False)
+            name_item.setCheckable(True)
+            name_item.setCheckState(Qt.Checked)
+
+            # Plot range text
+            range_item = QStandardItem("0, 10")
+
+            # Color column
+            color_item = QStandardItem("blue")
+            color_item.setEditable(True)
+
+            self.model.appendRow([name_item, range_item, color_item])
+
+        self.model.itemChanged.connect(self.on_item_change)
+
+        self.view.setModel(self.model)
+        self.view.setAlternatingRowColors(True)
+        self.view.setRootIsDecorated(False)
+        self.view.header().setStretchLastSection(True)
+
+    def on_item_change(self, item):
+        # Only react to the checkbox column (column 0)
+        if item.column() == 0:
+            state = item.checkState()
+            variable_name = item.model().item(item.row(), 0).text()
+
+            if state == Qt.Checked:
+                self.plot_variables.append(variable_name)
+            else:
+                self.plot_variables.pop(self.plot_variables.index(variable_name))
+
+        self.canvas.init_plot_artists()
+
+
     def deactivate_line_edit(self):
-        self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
+            self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
 
     @property
     def dataset(self):
@@ -134,6 +200,7 @@ class TracePlotWindow(QWidget):
     def dataset(self, value):
         if value is not None and (hasattr(value, 'frame') or hasattr(value, 'time')):
             self._dataset = value
+            self.init_plot_configuration()
             self.canvas.init_plot_artists()
             self.set_selection()
             self.setDisabled(False)
@@ -650,6 +717,8 @@ class BlitManager:
 #        self.panel = TraceAnalysisPanel(parent=self)
 #        # self.Bind(wx.EVT_CLOSE, self.OnClose)
 #        self.Show()
+
+
 
 if __name__ == "__main__":
 
