@@ -33,6 +33,9 @@ def experiment_hj(shared_datadir):
 def file_hj(experiment_hj):
     return experiment_hj.files.select('HJ')[0]
 
+def test_trace_plot(file_hj):
+    file_hj.show_traces()
+
 def test_classification_widget(file_hj):
     from papylio.gui.classification_widget import ClassificationWidget
     app = QApplication(sys.argv)
