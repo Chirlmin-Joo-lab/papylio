@@ -48,8 +48,11 @@ from matplotlib.figure import Figure
 
 
 #TODO
+# - Change plot configuration to more vertical layout, with multiple configuration lines per variable
 # - Change function input per plot variable?
-# -
+# - Add colorblind colors
+# - Fix the layout. Now sometimes the title is visible and sometimes not.
+# - Save settings to dataset (or is this already done?)
 
 
 class TracePlotWindow(QWidget):
@@ -139,6 +142,8 @@ class TracePlotWindow(QWidget):
             self.show()
 
             app.exec_()
+
+        self.setFocus()
 
     def deactivate_line_edit(self):
             self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
@@ -262,7 +267,7 @@ class PlotConfiguration(QWidget):
 
         self.view = QTreeView()
         self.model = QStandardItemModel()
-        self.model.setHorizontalHeaderLabels(["Variable", "Plot Range", "Color"])
+        self.model.setHorizontalHeaderLabels(["Variable", "Plot", "range", "Color"])
 
         self.model.itemChanged.connect(self._on_item_change)
 
@@ -337,15 +342,17 @@ class PlotConfiguration(QWidget):
             else:
                 name_item.setCheckState(Qt.Unchecked)
 
-            range_string = str(self.dataset[var].attrs['plot_settings']['range']).replace('(', '').replace(')', '')
-            range_item = QStandardItem(range_string)
-            range_item.setEditable(True)
+            plot_range = self.dataset[var].attrs['plot_settings']['range']
+            range_low_item = QStandardItem(str(plot_range[0]))
+            range_low_item.setEditable(True)
+            range_high_item = QStandardItem(str(plot_range[1]))
+            range_high_item.setEditable(True)
 
             color_string = ', '.join(self.dataset[var].attrs['plot_settings']['color'])
             color_item = QStandardItem(color_string)
             color_item.setEditable(True)
 
-            self.model.appendRow([name_item, range_item, color_item])
+            self.model.appendRow([name_item, range_low_item, range_high_item, color_item])
 
         self.parent().canvas.plot_variables = self.plot_variables_active
 
@@ -356,14 +363,17 @@ class PlotConfiguration(QWidget):
             self.dataset[variable_name].attrs['plot_settings']['active'] = bool(state)
             self.parent().canvas.plot_variables = self.plot_variables_active
             self.parent().molecule = self.parent().molecule
-        # elif item.column() == 1:
-        #     plot_range = tuple(float(r) for r in item.text().split(','))
-        #     self.dataset[variable_name].attrs['plot_settings']['range'] = plot_range
-        #     self.parent().canvas.set_plot_range(variable_name, plot_range)
-        # elif item.column() == 2:
-        #     color = tuple(item.text().split(','))
-        #     self.dataset[variable_name].attrs['plot_settings']['range'] = plot_range
-        #     self.parent().canvas.set_plot_range(variable_name, plot_range)
+        elif item.column() in [1, 2]:
+            plot_range = tuple(float(item.model().item(item.row(), i).text()) for i in [1,2])
+            self.dataset[variable_name].attrs['plot_settings']['range'] = plot_range
+            self.parent().canvas.set_plot_range(variable_name, plot_range)
+            self.parent().molecule = self.parent().molecule
+        elif item.column() == 3:
+            color = tuple(item.text().replace(' ','').split(','))
+            self.dataset[variable_name].attrs['plot_settings']['color'] = color
+            self.parent().canvas.set_plot_color(variable_name, color)
+
+        self.parent().setFocus()
 
 
 class TracePlotCanvas(FigureCanvasQTAgg):
@@ -423,6 +433,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
 
     def init_plot_artists(self):
         for i, plot_variable in enumerate(self.plot_variables):
+            # self.plot_axes[plot_variable].cla()
             data_array = self.parent_window.dataset[plot_variable]
 
             # For excluding nan values
@@ -498,7 +509,6 @@ class TracePlotCanvas(FigureCanvasQTAgg):
     def plot_variables(self, plot_variables):
         self._plot_variables = plot_variables
         self.init_plots()
-        self.parent_window.setFocus()
 
     @property
     def molecule(self):
@@ -516,7 +526,6 @@ class TracePlotCanvas(FigureCanvasQTAgg):
             return
         elif molecule is not None and previous_molecule is None:
             self.show_artists(True, draw=False)
-
 
         self._molecule['file'] = self._molecule['file'].astype(str)
 
@@ -572,8 +581,24 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         # tell the blitting manager to do its thing
         self.bm.update()
 
-    def set_plot_variable_color(self, plot_variable, color):
-        pass
+    def set_plot_range(self, plot_variable, plot_range):
+        self.plot_axes[plot_variable].set_ylim(plot_range[0], plot_range[1])
+        self.init_plot_artists()
+        # self.init_plots() # Perhaps this can be init_plot_artists only, but then probably the blit background needs to be updated.
+
+        # self.draw()  # full redraw
+        # self.bm.on_draw(None)
+
+    def set_plot_color(self, plot_variable, colors):
+        artists = self.plot_artists[plot_variable]
+        for artist, color in zip(artists, colors):
+            artist.set_color(color)
+        artists = self.histogram_artists[plot_variable]
+        for artist, color in zip(artists, colors):
+            for bar in artist:
+                bar.set_facecolor(color)
+
+        self.draw()
 
     def save(self):
         save_path = self.parent_window.save_path
