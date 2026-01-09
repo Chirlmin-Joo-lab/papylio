@@ -125,7 +125,7 @@ class TracePlotWindow(QWidget):
         # self.setCentralWidget(widget)
 
         self.plot_configuration = PlotConfiguration(parent=self)
-        self.plot_configuration.setMinimumWidth(200)
+        self.plot_configuration.setMinimumWidth(250)
 
         layout_main = QHBoxLayout()
         layout_main.addLayout(layout)
@@ -140,7 +140,6 @@ class TracePlotWindow(QWidget):
 
         if show:
             self.show()
-
             app.exec_()
 
         self.setFocus()
@@ -267,13 +266,13 @@ class PlotConfiguration(QWidget):
 
         self.view = QTreeView()
         self.model = QStandardItemModel()
-        self.model.setHorizontalHeaderLabels(["Variable", "Plot", "range", "Color"])
+        self.model.setHorizontalHeaderLabels(["Variable", ""])
 
         self.model.itemChanged.connect(self._on_item_change)
 
         self.view.setModel(self.model)
         self.view.setAlternatingRowColors(True)
-        self.view.setRootIsDecorated(False)
+        self.view.setRootIsDecorated(True)
         self.view.header().setStretchLastSection(True)
 
         self._dataset = None
@@ -342,6 +341,8 @@ class PlotConfiguration(QWidget):
             else:
                 name_item.setCheckState(Qt.Unchecked)
 
+            self.model.appendRow(name_item)
+
             plot_range = self.dataset[var].attrs['plot_settings']['range']
             range_low_item = QStandardItem(str(plot_range[0]))
             range_low_item.setEditable(True)
@@ -352,26 +353,41 @@ class PlotConfiguration(QWidget):
             color_item = QStandardItem(color_string)
             color_item.setEditable(True)
 
-            self.model.appendRow([name_item, range_low_item, range_high_item, color_item])
+            range_low_text_item = QStandardItem("Y min")
+            range_low_text_item.setEditable(False)
+
+            range_high_text_item = QStandardItem("Y max")
+            range_high_text_item.setEditable(False)
+
+            color_text_item = QStandardItem("Color(s)")
+            color_text_item.setEditable(False)
+
+            name_item.appendRow([range_low_text_item, range_low_item])
+            name_item.appendRow([range_high_text_item, range_high_item])
+            name_item.appendRow([color_text_item, color_item])
 
         self.parent().canvas.plot_variables = self.plot_variables_active
 
+        self.parent().setFocus()
+
     def _on_item_change(self, item):
-        variable_name = item.model().item(item.row(), 0).text()
         if item.column() == 0:
+            variable_name = item.model().item(item.row(), 0).text()
             state = item.checkState()
             self.dataset[variable_name].attrs['plot_settings']['active'] = bool(state)
             self.parent().canvas.plot_variables = self.plot_variables_active
             self.parent().molecule = self.parent().molecule
-        elif item.column() in [1, 2]:
-            plot_range = tuple(float(item.model().item(item.row(), i).text()) for i in [1,2])
-            self.dataset[variable_name].attrs['plot_settings']['range'] = plot_range
-            self.parent().canvas.set_plot_range(variable_name, plot_range)
-            self.parent().molecule = self.parent().molecule
-        elif item.column() == 3:
-            color = tuple(item.text().replace(' ','').split(','))
-            self.dataset[variable_name].attrs['plot_settings']['color'] = color
-            self.parent().canvas.set_plot_color(variable_name, color)
+        elif item.column() == 1:
+            variable_name = item.model().item(item.parent().row(), 0).text()
+            if item.row() in [0, 1]:
+                plot_range = tuple(float(item.parent().child(i,1).text()) for i in [0,1])
+                self.dataset[variable_name].attrs['plot_settings']['range'] = plot_range
+                self.parent().canvas.set_plot_range(variable_name, plot_range)
+                self.parent().molecule = self.parent().molecule
+            elif item.row() == 2:
+                color = tuple(item.text().replace(' ','').split(','))
+                self.dataset[variable_name].attrs['plot_settings']['color'] = color
+                self.parent().canvas.set_plot_color(variable_name, color)
 
         self.parent().setFocus()
 
@@ -380,7 +396,8 @@ class TracePlotCanvas(FigureCanvasQTAgg):
     # Kader om plot als geselecteerd
     # Autosave function
     def __init__(self, parent=None, width=14, height=7, dpi=100):
-        self.figure = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi, constrained_layout=True)  # , figsize=(2, 2))
+        self.figure = matplotlib.figure.Figure(figsize=(width, height), dpi=dpi, constrained_layout=False, tight_layout=True)  # , figsize=(2, 2))
+        # self.figure.subplots_adjust(top=0.95, left=0.05, right=0.95, bottom=0.05, hspace=0.05, wspace=0.05)
         super().__init__(self.figure)
         self.parent_window = parent
 
@@ -388,14 +405,17 @@ class TracePlotCanvas(FigureCanvasQTAgg):
 
         self._plot_variables = []
 
-    def init_plots(self):
-        # Remove current blitmanager
+    def _remove_blit_manager(self):
         if hasattr(self, "bm"):
             try:
                 self.mpl_disconnect(self.bm.cid)
             except Exception:
                 pass
             del self.bm
+
+    def init_plots(self):
+        # Remove current blitmanager
+        self._remove_blit_manager()
 
         self.figure.clf()
         plot_variables = self.plot_variables
@@ -432,6 +452,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         #self.figure, self.axes = mpl.figure.Figure().subplots(2,1)
 
     def init_plot_artists(self):
+        self._remove_blit_manager()
         for i, plot_variable in enumerate(self.plot_variables):
             # self.plot_axes[plot_variable].cla()
             data_array = self.parent_window.dataset[plot_variable]
@@ -450,7 +471,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
             plot_settings = self.parent_window.dataset[plot_variable].attrs['plot_settings']
 
             if i == 0:
-                self.title_artist = self.plot_axes[plot_variable].set_title('')
+                self.title_artist = self.plot_axes[plot_variable].set_title('Init')
             for j, plot_artist in enumerate(self.plot_artists[plot_variable]):
                 plot_artist.set_color(plot_settings['color'][j])
             # molecule.intensity.plot.line(x='frame', ax=self.plot_axes[plot_variable], color=self.parent_window.colours[i])
@@ -486,6 +507,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         artists = [self.title_artist] + \
                   [a for b in self.plot_artists.values() for a in b] + \
                   [a for c in self.histogram_artists.values() for b in c for a in b]
+
         self.bm = BlitManager(self, artists)
         self.draw()
         self.show_artists(show=True, draw=True)
