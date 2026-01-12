@@ -9,6 +9,7 @@ import numpy as np #scientific computing with Python
 import pandas as pd
 import matplotlib.pyplot as plt #Provides a MATLAB-like plotting framework
 import skimage.io as io
+import ast
 import xarray as xr
 import skimage as ski
 import warnings
@@ -449,7 +450,8 @@ class File:
         rot90 = self.configuration['movie']['rot90']
         self.movie = Movie(filepath, rot90)
         if 'channel_arrangement' in self.dataset_attributes.keys():
-            self.movie.channel_arrangement = self.dataset_attributes['channel_arrangement']
+            channel_arangement_text_string=self.dataset_attributes['channel_arrangement']
+            self.movie.channel_arrangement = ast.literal_eval(channel_arangement_text_string)
         # self.number_of_frames = self.movie.number_of_frames
 
     def import_coeff_file(self, extension):
