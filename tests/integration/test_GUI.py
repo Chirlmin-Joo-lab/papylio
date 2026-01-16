@@ -19,7 +19,7 @@ def test_GUI(shared_datadir):
 
     app = QApplication(sys.argv)
 
-    window = MainWindow(shared_datadir / 'BN_TIRF')
+    window = MainWindow(shared_datadir / 'Papylio example dataset - analyzed')
     window.show()
 
     app.exec_()

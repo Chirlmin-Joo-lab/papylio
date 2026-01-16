@@ -320,6 +320,7 @@ class MainWindow(QMainWindow):
         self.selection = SelectionWidget(parent=self)
         tabs.addTab(self.selection, 'Selection (beta)')
         self.classification = ClassificationWidget(parent=self)
+        self.classification.classificationChanged.connect(self.update_plots)
         tabs.addTab(self.classification, 'Classification (beta)')
         tabs.currentChanged.connect(self.setTabFocus)
 

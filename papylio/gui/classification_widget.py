@@ -1,4 +1,5 @@
 import sys
+from PySide2.QtCore import Signal
 from PySide2.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
     QLabel, QLineEdit, QPushButton, QFormLayout, QSpinBox, QDoubleSpinBox,
     QTreeView, QMainWindow, QMessageBox, QCheckBox
@@ -16,6 +17,8 @@ import json
 import typing
 
 class ClassificationWidget(QWidget):
+    classificationChanged = Signal()
+
     def __init__(self, parent=None):
         super(ClassificationWidget, self).__init__(parent)
 
@@ -211,6 +214,7 @@ class ClassificationWidget(QWidget):
                                             apply=None)
             name = 'classification_' + name
             self.add_classification(name, self.file.classifications[name])
+            self.classificationChanged.emit()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
             return

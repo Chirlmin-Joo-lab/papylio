@@ -128,8 +128,8 @@ class TracePlotWindow(QWidget):
         self.plot_configuration.setMinimumWidth(250)
 
         layout_main = QHBoxLayout()
-        layout_main.addLayout(layout)
-        layout_main.addWidget(self.plot_configuration)
+        layout_main.addLayout(layout, stretch=4)
+        layout_main.addWidget(self.plot_configuration, stretch=1)
         self.setLayout(layout_main)
 
         self.plot_variables = plot_variables
@@ -267,6 +267,7 @@ class PlotConfiguration(QWidget):
         self.view = QTreeView()
         self.model = QStandardItemModel()
         self.model.setHorizontalHeaderLabels(["Variable", ""])
+        self.view.setColumnWidth(0, 200)
 
         self.model.itemChanged.connect(self._on_item_change)
 
@@ -276,7 +277,7 @@ class PlotConfiguration(QWidget):
         self.view.header().setStretchLastSection(True)
 
         self._dataset = None
-        self._variables = []
+        self._trace_variables = []
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.view)
@@ -288,89 +289,144 @@ class PlotConfiguration(QWidget):
     @dataset.setter
     def dataset(self, dataset):
         self._dataset = dataset
-        self._trace_variables = [name for name, da in self.parent()._dataset.data_vars.items() if
-                            da.dims and da.dims[-1] == "frame"]
+        self._trace_variables_dataset = [name for name, da in self.parent()._dataset.data_vars.items() if
+                                        da.dims and da.dims[0] == "molecule" and da.dims[-1] == "frame"]
+        trace_variables_new = [v for v in self._trace_variables_dataset if v not in self._trace_variables]
+        self._trace_variables += trace_variables_new
+
         self._init_plot_settings_from_dataset()
-        self._fill_trace_variable_list()
+        # self._fill_trace_variable_list()
+        for trace_variable in trace_variables_new:
+            self._add_trace_variable_to_list(trace_variable)
 
-    def _init_plot_settings_from_dataset(self):
-        for var in self._trace_variables:
-            # self.dataset[var].attrs['plot_settings'] = {'range': [0, 3500], 'color': ['g', 'r']}
-            if 'plot_settings' in self.dataset[var].attrs:
-                plot_settings = self.dataset[var].attrs['plot_settings']
-            else:
-                plot_settings = {}
-
-            if 'active' not in plot_settings:
-                if var in ['intensity', 'FRET']:
-                    plot_settings['active'] = True
-                else:
-                    plot_settings['active'] = False
-
-            # Plot range text
-            if 'range' not in plot_settings:
-                if var in ['FRET']:
-                    plot_settings['range'] = (-0.05, 1.05)
-                else:
-                    plot_settings['range'] = (self.dataset[var].min().round().item(),
-                                              self.dataset[var].max().round().item())
-
-            # Color column
-            if 'color' not in plot_settings:
-                if 'channel' in self.dataset[var].dims:
-                    plot_settings['color'] = (('g','r') + ('k',)*10)[0:len(self.dataset.channel)]
-                elif var in ['FRET']:
-                    plot_settings['color'] = ('b',)
-                else:
-                    plot_settings['color'] = ('k',)
-
-            self.dataset[var].attrs['plot_settings'] = plot_settings
-
-
-    @property
-    def plot_variables_active(self):
-        return [var for var in self._trace_variables if self.dataset[var].attrs['plot_settings']['active']]
-
-    def _fill_trace_variable_list(self):
-        for var in self._trace_variables:
-            name_item = QStandardItem(var)
-            name_item.setEditable(False)
-            name_item.setCheckable(True)
-            if self.dataset[var].attrs['plot_settings']['active']:
-                name_item.setCheckState(Qt.Checked)
-            else:
-                name_item.setCheckState(Qt.Unchecked)
-
-            self.model.appendRow(name_item)
-
-            plot_range = self.dataset[var].attrs['plot_settings']['range']
-            range_low_item = QStandardItem(str(plot_range[0]))
-            range_low_item.setEditable(True)
-            range_high_item = QStandardItem(str(plot_range[1]))
-            range_high_item.setEditable(True)
-
-            color_string = ', '.join(self.dataset[var].attrs['plot_settings']['color'])
-            color_item = QStandardItem(color_string)
-            color_item.setEditable(True)
-
-            range_low_text_item = QStandardItem("Y min")
-            range_low_text_item.setEditable(False)
-
-            range_high_text_item = QStandardItem("Y max")
-            range_high_text_item.setEditable(False)
-
-            color_text_item = QStandardItem("Color(s)")
-            color_text_item.setEditable(False)
-
-            name_item.appendRow([range_low_text_item, range_low_item])
-            name_item.appendRow([range_high_text_item, range_high_item])
-            name_item.appendRow([color_text_item, color_item])
-
+        self._enable_dataset_variables()
         self.parent().canvas.plot_variables = self.plot_variables_active
 
         self.parent().setFocus()
 
+    def _enable_trace_variable(self, variable):
+        self.model.blockSignals(True)
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row, 0)
+            if item.text() == variable:
+                item.setFlags(item.flags() | Qt.ItemIsEnabled)
+        self.model.blockSignals(False)
+
+    def _disable_trace_variable(self, variable):
+        self.model.blockSignals(True)
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row, 0)
+            if item.text() == variable:
+                item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+        self.model.blockSignals(False)
+
+    def _disable_all_rows(self):
+        self.model.blockSignals(True)
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row, 0)
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+        self.model.blockSignals(False)
+
+    def _enable_dataset_variables(self):
+        self._disable_all_rows()
+        for var in self._trace_variables_dataset:
+            self._enable_trace_variable(var)
+
+    def _get_plot_settings_from_treeview(self):
+        plot_settings = {}
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row, 0)
+            variable = item.text()
+            active = bool(item.checkState())
+            plot_range = tuple(float(item.child(i,1).text()) for i in [0,1])
+            color = tuple(item.child(2,1).text().replace(' ', '').split(','))
+            plot_settings[variable] = dict(active=active, plot_range=plot_range, color=color)
+        return plot_settings
+
+
+    def _init_plot_settings_from_dataset(self):
+        plot_settings = self._get_plot_settings_from_treeview()
+
+        for var in self._trace_variables_dataset:
+            # self.dataset[var].attrs['plot_settings'] = {'plot_range': [0, 3500], 'color': ['g', 'r']}
+            if var not in plot_settings:
+                if 'plot_settings' in self.dataset[var].attrs:
+                    plot_settings[var] = self.dataset[var].attrs['plot_settings']
+                else:
+                    plot_settings[var] = {}
+
+            if 'active' not in plot_settings[var]:
+                if var in ['intensity', 'FRET']:
+                    plot_settings[var]['active'] = True
+                else:
+                    plot_settings[var]['active'] = False
+
+            # Plot range text
+            if 'plot_range' not in plot_settings[var]:
+                if var in ['FRET']:
+                    plot_settings[var]['plot_range'] = (-0.05, 1.05)
+                elif 'classification' in var:
+                    plot_settings[var]['plot_range'] = (self.dataset[var].min().round().item()-0.5,
+                                                        self.dataset[var].max().round().item()+0.5)
+                else:
+                    plot_settings[var]['plot_range'] = (self.dataset[var].min().round().item(),
+                                                        self.dataset[var].max().round().item())
+
+            # Color column
+            if 'color' not in plot_settings[var]:
+                if 'channel' in self.dataset[var].dims:
+                    plot_settings[var]['color'] = (('g','r') + ('k',)*10)[0:len(self.dataset.channel)]
+                elif var in ['FRET']:
+                    plot_settings[var]['color'] = ('b',)
+                else:
+                    plot_settings[var]['color'] = ('k',)
+
+            self.dataset[var].attrs['plot_settings'] = plot_settings[var]
+
+
+    @property
+    def plot_variables_active(self):
+        return [var for var in self._trace_variables if var in self._trace_variables_dataset and self.dataset[var].attrs['plot_settings']['active']]
+
+    # def _fill_trace_variable_list(self):
+
+
+    def _add_trace_variable_to_list(self, plot_variable):
+        name_item = QStandardItem(plot_variable)
+        name_item.setEditable(False)
+        name_item.setCheckable(True)
+        if self.dataset[plot_variable].attrs['plot_settings']['active']:
+            name_item.setCheckState(Qt.Checked)
+        else:
+            name_item.setCheckState(Qt.Unchecked)
+
+        self.model.appendRow(name_item)
+
+        plot_range = self.dataset[plot_variable].attrs['plot_settings']['plot_range']
+        plot_range_low_item = QStandardItem(str(plot_range[0]))
+        plot_range_low_item.setEditable(True)
+        plot_range_high_item = QStandardItem(str(plot_range[1]))
+        plot_range_high_item.setEditable(True)
+
+        color_string = ', '.join(self.dataset[plot_variable].attrs['plot_settings']['color'])
+        color_item = QStandardItem(color_string)
+        color_item.setEditable(True)
+
+        plot_range_low_text_item = QStandardItem("Y min")
+        plot_range_low_text_item.setEditable(False)
+
+        plot_range_high_text_item = QStandardItem("Y max")
+        plot_range_high_text_item.setEditable(False)
+
+        color_text_item = QStandardItem("Color(s)")
+        color_text_item.setEditable(False)
+
+        name_item.appendRow([plot_range_low_text_item, plot_range_low_item])
+        name_item.appendRow([plot_range_high_text_item, plot_range_high_item])
+        name_item.appendRow([color_text_item, color_item])
+
     def _on_item_change(self, item):
+        # self._get_plot_settings_from_treeview()
         if item.column() == 0:
             variable_name = item.model().item(item.row(), 0).text()
             state = item.checkState()
@@ -381,7 +437,7 @@ class PlotConfiguration(QWidget):
             variable_name = item.model().item(item.parent().row(), 0).text()
             if item.row() in [0, 1]:
                 plot_range = tuple(float(item.parent().child(i,1).text()) for i in [0,1])
-                self.dataset[variable_name].attrs['plot_settings']['range'] = plot_range
+                self.dataset[variable_name].attrs['plot_settings']['plot_range'] = plot_range
                 self.parent().canvas.set_plot_range(variable_name, plot_range)
                 self.parent().molecule = self.parent().molecule
             elif item.row() == 2:
@@ -432,11 +488,11 @@ class TracePlotCanvas(FigureCanvasQTAgg):
 
             if i > 0:
                 plot.sharex(self.plot_axes[plot_variables[0]])
-                # histogram.sharex(self.histogram_axes[plot_variables[0]])
+                histogram.sharex(self.histogram_axes[plot_variables[0]])
 
             plot_settings = self.parent_window.dataset[plot_variable].attrs['plot_settings']
 
-            plot.set_ylim(plot_settings['range'])
+            plot.set_ylim(plot_settings['plot_range'])
             plot.set_ylabel(plot_variable)
 
             histogram.get_yaxis().set_visible(False)
@@ -480,13 +536,13 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                                                                                             orientation='horizontal',
                                                                                             # range=self.plot_axes[
                                                                                             #     plot_variable].get_ylim(),
-                                                                                            range=plot_settings['range'],
+                                                                                            range=plot_settings['plot_range'],
                                                                                             color=plot_settings['color'],
                                                                                             alpha=0.5)[2]
             if not isinstance(self.histogram_artists[plot_variable], list):
                 self.histogram_artists[plot_variable] = [self.histogram_artists[plot_variable]]
 
-            if i == len(self.parent_window.plot_variables) - 1:
+            if i == len(self.plot_variables) - 1:
                 if 'time' in self.parent_window.dataset.coords.keys():
                     self.plot_axes[plot_variable].set_xlabel(f'Time ({self.parent_window.dataset.time.units})')
                 else:
@@ -580,7 +636,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                 self.plot_artists[plot_variable][j].set_ydata(data[j])
                 # TODO: When you shift the view, change the y positions of the bars to the new view, if possible. use set_y
                 plot_settings = self.parent_window.dataset[plot_variable].attrs['plot_settings']
-                n, _ = np.histogram(data[j], 50, range=plot_settings['range']) # range=self.plot_axes[plot_variable].get_ylim())
+                n, _ = np.histogram(data[j], 50, range=plot_settings['plot_range']) # range=self.plot_axes[plot_variable].get_ylim())
                 for count, artist in zip(n, self.histogram_artists[plot_variable][j]):
                     artist.set_width(count)
 
