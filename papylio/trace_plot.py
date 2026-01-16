@@ -48,10 +48,8 @@ from matplotlib.figure import Figure
 
 
 #TODO
-# - Change plot configuration to more vertical layout, with multiple configuration lines per variable
 # - Change function input per plot variable?
 # - Add colorblind colors
-# - Fix the layout. Now sometimes the title is visible and sometimes not.
 # - Save settings to dataset (or is this already done?)
 
 
@@ -490,10 +488,14 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                 plot.sharex(self.plot_axes[plot_variables[0]])
                 histogram.sharex(self.histogram_axes[plot_variables[0]])
 
+            if i < len(plot_variables) - 1:
+                plot.tick_params(labelbottom=False)
+                histogram.tick_params(labelbottom=False)
+
             plot_settings = self.parent_window.dataset[plot_variable].attrs['plot_settings']
 
             plot.set_ylim(plot_settings['plot_range'])
-            plot.set_ylabel(plot_variable)
+            plot.set_ylabel(plot_variable[0].upper() + plot_variable[1:].replace('_', '\n'))
 
             histogram.get_yaxis().set_visible(False)
 
