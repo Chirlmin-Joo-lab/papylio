@@ -2064,8 +2064,7 @@ class File:
         self.show_coordinates(figure=figure)
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
-    def show_traces(self, plot_variables=['intensity', 'FRET'], ylims=[(0, 35000), (0, 1)], colours=[('g', 'r'), ('b')],
-                    selected=False, split_illuminations=True, **kwargs):
+    def show_traces(self, selected=False, split_illuminations=True, **kwargs):
         # probably better to put selected and illumination options in TracePlotWindow
         dataset = xr.Dataset()
         for variable in plot_variables:
@@ -2096,7 +2095,7 @@ class File:
             save_path.mkdir()
 
         from papylio.trace_plot import TracePlotWindow
-        TracePlotWindow(dataset=dataset, plot_variables=plot_variables, ylims=ylims, colours=colours, save_path=save_path, **kwargs)
+        TracePlotWindow(dataset=dataset, save_path=save_path, **kwargs)
         if selected:
             selected_original[dict(molecule=selected_original)] = dataset.selected
         else:

@@ -54,14 +54,34 @@ from matplotlib.figure import Figure
 
 
 class TracePlotWindow(QWidget):
-    def __init__(self, dataset=None, plot_variables=['intensity', 'FRET'],
-                 ylims=[(0, 35000), (0, 1)], colours=[('g', 'r'), ('b')], width=14, height=None, save_path=None, parent=None,
-                 show=True):
+    def __init__(self, dataset=None,
+                 plot_settings=None,
+                 width=14, height=None, save_path=None, parent=None,
+                 show=True, **kwargs):
 
-        plot_configuration = {'intensity': {'ylims': (0,35000), 'colors': ('g','r')}, 'FRET': {'ylims': (0,1), 'colors': ('b')}}
+        if plot_settings is None:
+            plot_settings = {'intensity': {'active': True, 'plot_range': (0, 10000), 'color': ('g', 'r')},
+                             'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
+
+        # To accomodate old arguments
+        if 'plot_variables' in kwargs:
+            plot_settings = {}
+            for plot_variable, ylim, color in zip(kwargs['plot_variables'], kwargs['ylims'], kwargs['colours']):
+                plot_settings[plot_variable] = dict(active=True, plot_range=ylim, color=color)
+            import warnings
+            warnings.simplefilter("always", DeprecationWarning)
+
+            warnings.warn(
+                "Use of `plot_variables`, `ylims` and `colours` arguments is depricated,"
+                "use `plot_settings` instead, "
+                "e.g. `plot_settings = {'intensity': {'active': True, 'plot_range': (0, 10000), 'color': ('g', 'r')}, "
+                "'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}`",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         if height is None:
-            height = max(len(plot_variables) * 3.5, 9)
+            height = max(len(plot_settings) * 3.5, 9)
 
         from papylio.experiment import get_QApplication
         #TODO: Use selection only if it is present.
@@ -122,17 +142,13 @@ class TracePlotWindow(QWidget):
         # widget.setLayout(layout)
         # self.setCentralWidget(widget)
 
-        self.plot_configuration = PlotConfiguration(parent=self)
+        self.plot_configuration = PlotConfiguration(parent=self, initial_plot_settings=plot_settings)
         self.plot_configuration.setMinimumWidth(250)
 
         layout_main = QHBoxLayout()
         layout_main.addLayout(layout, stretch=4)
         layout_main.addWidget(self.plot_configuration, stretch=1)
         self.setLayout(layout_main)
-
-        self.plot_variables = plot_variables
-        self.ylims = ylims
-        self.colours = colours
 
         self.dataset = dataset
 
@@ -258,7 +274,7 @@ class TracePlotWindow(QWidget):
 
 
 class PlotConfiguration(QWidget):
-    def __init__(self, parent):
+    def __init__(self, parent, initial_plot_settings=None):
 
         super().__init__(parent=parent)
 
@@ -280,6 +296,10 @@ class PlotConfiguration(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.view)
 
+        if initial_plot_settings is not None:
+            for trace_variable in initial_plot_settings.keys():
+                self._add_trace_variable_to_list(trace_variable, initial_plot_settings[trace_variable])
+
     @property
     def dataset(self):
         return self._dataset
@@ -289,13 +309,15 @@ class PlotConfiguration(QWidget):
         self._dataset = dataset
         self._trace_variables_dataset = [name for name, da in self.parent()._dataset.data_vars.items() if
                                         da.dims and da.dims[0] == "molecule" and da.dims[-1] == "frame"]
+        # if 'intensity' in self._trace_variables_dataset:
+        #     self._trace_variables_dataset.insert(0, 'intensity_total')
         trace_variables_new = [v for v in self._trace_variables_dataset if v not in self._trace_variables]
-        self._trace_variables += trace_variables_new
+        # self._trace_variables += trace_variables_new
 
         self._init_plot_settings_from_dataset()
         # self._fill_trace_variable_list()
         for trace_variable in trace_variables_new:
-            self._add_trace_variable_to_list(trace_variable)
+            self._add_trace_variable_to_list(trace_variable, self.dataset[trace_variable].attrs['plot_settings'])
 
         self._enable_dataset_variables()
         self.parent().canvas.plot_variables = self.plot_variables_active
@@ -389,24 +411,26 @@ class PlotConfiguration(QWidget):
     # def _fill_trace_variable_list(self):
 
 
-    def _add_trace_variable_to_list(self, plot_variable):
+    def _add_trace_variable_to_list(self, plot_variable, plot_settings):
+        self._trace_variables.append(plot_variable)
+
         name_item = QStandardItem(plot_variable)
         name_item.setEditable(False)
         name_item.setCheckable(True)
-        if self.dataset[plot_variable].attrs['plot_settings']['active']:
+        if plot_settings['active']:
             name_item.setCheckState(Qt.Checked)
         else:
             name_item.setCheckState(Qt.Unchecked)
 
         self.model.appendRow(name_item)
 
-        plot_range = self.dataset[plot_variable].attrs['plot_settings']['plot_range']
+        plot_range = plot_settings['plot_range']
         plot_range_low_item = QStandardItem(str(plot_range[0]))
         plot_range_low_item.setEditable(True)
         plot_range_high_item = QStandardItem(str(plot_range[1]))
         plot_range_high_item.setEditable(True)
 
-        color_string = ', '.join(self.dataset[plot_variable].attrs['plot_settings']['color'])
+        color_string = ', '.join(plot_settings['color'])
         color_item = QStandardItem(color_string)
         color_item.setEditable(True)
 
