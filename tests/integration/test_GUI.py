@@ -36,6 +36,12 @@ def file_hj(experiment_hj):
 def test_trace_plot(file_hj):
     file_hj.show_traces()
 
+def test_trace_plot_two_illuminations(file_hj):
+    ds = file_hj.dataset
+    ds.illumination[:] = [0, ] * 100 + [1, ] * 200 + [0, ] * 100
+    ds.to_netcdf(file_hj.absoluteFilePath.with_suffix('.nc'))
+    file_hj.show_traces()
+
 def test_classification_widget(file_hj):
     from papylio.gui.classification_widget import ClassificationWidget
     app = QApplication(sys.argv)

@@ -57,7 +57,7 @@ class TracePlotWindow(QWidget):
     def __init__(self, dataset=None,
                  plot_settings=None,
                  width=14, height=None, save_path=None, parent=None,
-                 show=True, **kwargs):
+                 show=True, split_illuminations=False, **kwargs):
 
         if plot_settings is None:
             plot_settings = {'intensity': {'active': True, 'plot_range': (0, 10000), 'color': ('g', 'r')},
@@ -80,6 +80,8 @@ class TracePlotWindow(QWidget):
                 stacklevel=2,
             )
 
+        self.split_illuminations = split_illuminations
+
         if height is None:
             height = max(len(plot_settings) * 3.5, 9)
 
@@ -98,7 +100,7 @@ class TracePlotWindow(QWidget):
         else:
             self.save_path = Path(save_path)
 
-        self._dataset = dataset
+        # self._dataset = dataset
 
         self.canvas = TracePlotCanvas(self, width=width, height=height, dpi=100)
 
@@ -169,6 +171,8 @@ class TracePlotWindow(QWidget):
     def dataset(self, value):
         if value is not None and (hasattr(value, 'frame') or hasattr(value, 'time')):
             self._dataset = value
+            if self.split_illuminations:
+                self.perform_split_illuminations()
             self.plot_configuration.dataset = self._dataset
             self.set_selection()
             self.setDisabled(False)
@@ -176,6 +180,29 @@ class TracePlotWindow(QWidget):
             self._dataset = None
             self.setDisabled(True)
         self.molecule_index = 0
+
+    def perform_split_illuminations(self):
+        illuminations_in_file = np.unique(self._dataset.illumination)
+        if len(illuminations_in_file) > 1:
+            for plot_variable in ['intensity_total', 'intensity', 'FRET']:
+                if plot_variable in self._dataset:
+                    # plot_variable_index = plot_variables.index(plot_variable)
+                    for j, illumination_index in enumerate(illuminations_in_file):
+                        name = f'{plot_variable}_i{illumination_index}'
+                        self._dataset[name] = self._dataset[plot_variable].sel(frame=self._dataset.illumination == illumination_index)
+                        # plot_variables.insert(plot_variable_index + j + 1, name)
+                        # if j > 0:
+                        #     ylims.insert(plot_variable_index + j, ylims[plot_variable_index])
+                        #     colours.insert(plot_variable_index + j, colours[plot_variable_index])
+                        if 'plot_settings' in self.dataset[plot_variable].attrs:
+                            self._dataset[name].attrs['plot_settings'] = self._dataset[plot_variable].attrs['plot_settings']
+                        else:
+                            self._dataset[name].attrs['plot_settings'] = dict(active=True)
+                    if 'plot_settings' not in self._dataset[plot_variable].attrs:
+                        self._dataset[plot_variable].attrs['plot_settings'] = {}
+                    self._dataset[plot_variable].attrs['plot_settings']['active'] = False
+                    # plot_variables.pop(plot_variable_index)
+                    self._dataset = self._dataset.drop_vars(plot_variable)
 
     @property
     def selection_state(self):
@@ -383,7 +410,7 @@ class PlotConfiguration(QWidget):
 
             # Plot range text
             if 'plot_range' not in plot_settings[var]:
-                if var in ['FRET']:
+                if 'FRET' in var:
                     plot_settings[var]['plot_range'] = (-0.05, 1.05)
                 elif 'classification' in var:
                     plot_settings[var]['plot_range'] = (self.dataset[var].min().round().item()-0.5,
@@ -396,7 +423,7 @@ class PlotConfiguration(QWidget):
             if 'color' not in plot_settings[var]:
                 if 'channel' in self.dataset[var].dims:
                     plot_settings[var]['color'] = (('g','r') + ('k',)*10)[0:len(self.dataset.channel)]
-                elif var in ['FRET']:
+                elif 'FRET' in var:
                     plot_settings[var]['color'] = ('b',)
                 else:
                     plot_settings[var]['color'] = ('k',)
@@ -490,6 +517,15 @@ class TracePlotCanvas(FigureCanvasQTAgg):
             except Exception:
                 pass
             del self.bm
+
+    @property
+    def plot_variables(self):
+        return self._plot_variables
+
+    @plot_variables.setter
+    def plot_variables(self, plot_variables):
+        self._plot_variables = plot_variables
+        self.init_plots()
 
     def init_plots(self):
         # Remove current blitmanager
@@ -604,15 +640,6 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                     bar.set_alpha(int(show)*0.5)
         if draw:
             self.draw()
-
-    @property
-    def plot_variables(self):
-        return self._plot_variables
-
-    @plot_variables.setter
-    def plot_variables(self, plot_variables):
-        self._plot_variables = plot_variables
-        self.init_plots()
 
     @property
     def molecule(self):

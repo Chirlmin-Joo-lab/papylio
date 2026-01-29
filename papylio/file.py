@@ -2064,30 +2064,19 @@ class File:
         self.show_coordinates(figure=figure)
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
-    def show_traces(self, selected=False, split_illuminations=True, **kwargs):
+    def show_traces(self, split_illuminations=True, **kwargs):
         # probably better to put selected and illumination options in TracePlotWindow
-        dataset = xr.Dataset()
-        for variable in plot_variables:
-            dataset[variable] = getattr(self, variable)
-        selected_original = self.selected
-        dataset['selected'] = selected_original
-        if selected:
-            dataset = dataset.sel(molecule=dataset['selected'])
+        # dataset = xr.Dataset()
+        # for variable in plot_variables:
+        #     dataset[variable] = getattr(self, variable)
 
-        if split_illuminations:
-            illuminations_in_file = np.unique(dataset.illumination)
-            if len(illuminations_in_file) > 1:
-                for plot_variable in ['intensity', 'FRET']:
-                    if plot_variable in plot_variables:
-                        plot_variable_index = plot_variables.index(plot_variable)
-                        for j, illumination_index in enumerate(illuminations_in_file):
-                            name = f'{plot_variable}_i{illumination_index}'
-                            dataset[name] = dataset[plot_variable].sel(frame=dataset.illumination == illumination_index)
-                            plot_variables.insert(plot_variable_index + j + 1, name)
-                            if j > 0:
-                                ylims.insert(plot_variable_index + j, ylims[plot_variable_index])
-                                colours.insert(plot_variable_index + j, colours[plot_variable_index])
-                        plot_variables.pop(plot_variable_index)
+        dataset = self.dataset
+        # selected_original = self.selected
+        # dataset['selected'] = selected_original
+        # if selected:
+        #     dataset = dataset.sel(molecule=dataset['selected'])
+
+
 
         # dataset = self.dataset
         save_path = self.experiment.main_path.joinpath('Trace plots')
@@ -2095,7 +2084,7 @@ class File:
             save_path.mkdir()
 
         from papylio.trace_plot import TracePlotWindow
-        TracePlotWindow(dataset=dataset, save_path=save_path, **kwargs)
+        TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations, save_path=save_path, **kwargs)
         if selected:
             selected_original[dict(molecule=selected_original)] = dataset.selected
         else:
