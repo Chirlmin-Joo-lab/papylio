@@ -34,13 +34,16 @@ from pathlib2 import Path
 from PySide2.QtWidgets import (QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QCheckBox, QLabel,
                                QTableWidget, QTableWidgetItem, QHeaderView, QTreeView, QStyledItemDelegate)
 from PySide2.QtGui import QStandardItemModel, QStandardItem, QColor
-from PySide2.QtGui import QKeySequence
+from PySide2.QtGui import QKeySequence, QCloseEvent
 from PySide2.QtCore import Qt
 
 import sys
 import time
 
 import numpy as np
+
+import netCDF4
+import json
 
 # from matplotlib.backends.qt_compat import QtWidgets
 from PySide2 import QtWidgets
@@ -58,7 +61,7 @@ from matplotlib.figure import Figure
 class TracePlotWindow(QWidget):
     def __init__(self, dataset=None,
                  plot_settings=None,
-                 width=14, height=None, save_path=None, parent=None,
+                 width=14, height=None, dataset_path=None, save_path=None, parent=None,
                  show=True, split_illuminations=False, **kwargs):
 
         if plot_settings is None:
@@ -155,12 +158,27 @@ class TracePlotWindow(QWidget):
         self.setLayout(layout_main)
 
         self.dataset = dataset
+        self.dataset_path = Path(dataset_path)
 
         if show:
             self.show()
             app.exec_()
 
         self.setFocus()
+
+    def closeEvent(self, event: QCloseEvent):
+        self.save_plot_settings()
+        self.save_selection()
+
+    def save_plot_settings(self):
+        if self.dataset_path is not None:
+            with netCDF4.Dataset(self.dataset_path, "a") as nc:
+                for variable, plot_settings in self.plot_configuration.plot_settings.items():
+                    nc[variable].setncattr("plot_settings", json.dumps(plot_settings))
+
+    def save_selection(self):
+        if self.dataset_path is not None:
+            self.dataset.selected.astype('bool').to_netcdf(self.dataset_path, engine='netcdf4', mode='a')
 
     def deactivate_line_edit(self):
             self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
@@ -173,8 +191,10 @@ class TracePlotWindow(QWidget):
     def dataset(self, value):
         if value is not None and (hasattr(value, 'frame') or hasattr(value, 'time')):
             self._dataset = value
-            # if self.split_illuminations:
-                # self.perform_split_illuminations()
+            self._dataset['selected'] = self._dataset.selected.astype('bool')
+            if 'intensity' in self._dataset:
+                self._dataset['intensity_total'] = self._dataset['intensity'].sum('channel')
+
             self.plot_configuration.dataset = self._dataset
             self.set_selection()
             self.setDisabled(False)
@@ -182,29 +202,6 @@ class TracePlotWindow(QWidget):
             self._dataset = None
             self.setDisabled(True)
         self.molecule_index = 0
-
-    # def perform_split_illuminations(self):
-    #     illuminations_in_file = np.unique(self._dataset.illumination)
-    #     if len(illuminations_in_file) > 1:
-    #         for plot_variable in ['intensity_total', 'intensity', 'FRET']:
-    #             if plot_variable in self._dataset:
-    #                 # plot_variable_index = plot_variables.index(plot_variable)
-    #                 for j, illumination_index in enumerate(illuminations_in_file):
-    #                     name = f'{plot_variable}_i{illumination_index}'
-    #                     self._dataset[name] = self._dataset[plot_variable].sel(frame=self._dataset.illumination == illumination_index)
-    #                     # plot_variables.insert(plot_variable_index + j + 1, name)
-    #                     # if j > 0:
-    #                     #     ylims.insert(plot_variable_index + j, ylims[plot_variable_index])
-    #                     #     colours.insert(plot_variable_index + j, colours[plot_variable_index])
-    #                     if 'plot_settings' in self.dataset[plot_variable].attrs:
-    #                         self._dataset[name].attrs['plot_settings'] = self._dataset[plot_variable].attrs['plot_settings']
-    #                     else:
-    #                         self._dataset[name].attrs['plot_settings'] = dict(active=True)
-    #                 if 'plot_settings' not in self._dataset[plot_variable].attrs:
-    #                     self._dataset[plot_variable].attrs['plot_settings'] = {}
-    #                 self._dataset[plot_variable].attrs['plot_settings']['active'] = False
-    #                 # plot_variables.pop(plot_variable_index)
-    #                 self._dataset = self._dataset.drop_vars(plot_variable)
 
     @property
     def selection_state(self):
@@ -327,10 +324,6 @@ class PlotConfiguration(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.view)
 
-        # self.initial_plot_settings = initial_plot_settings
-        # if initial_plot_settings is not None:
-        #     for trace_variable in initial_plot_settings.keys():
-        #         self._add_trace_variable_to_list(trace_variable, initial_plot_settings[trace_variable])
         self.plot_settings = initial_plot_settings
 
     @property
@@ -342,28 +335,15 @@ class PlotConfiguration(QWidget):
         self._dataset = dataset
         self._trace_variables_dataset = [name for name, da in self._dataset.data_vars.items() if
                 da.dims and da.dims[0] == "molecule" and da.dims[-1] == "frame"]
-        # if 'intensity' in self._trace_variables_dataset:
-        #     self._trace_variables_dataset.insert(0, 'intensity_total')
-        # trace_variables_new = [v for v in self._trace_variables_dataset if v not in self._trace_variables]
-        # self._trace_variables += trace_variables_new
 
         self._add_missing_plot_settings_from_dataset()
-        # self._fill_trace_variable_list()
 
         self._add_plot_settings_to_model()
 
         self._enable_dataset_variables()
-        # self.canvas.plot_variables = self.plot_variables_active
         self.canvas.plot_settings = self.plot_settings
 
         self.parent().setFocus()
-
-    # @property
-    # def plot_settings(self):
-    #     plot_settings = {}
-    #     for trace_variable in self._trace_variables_dataset:
-    #         plot_settings[trace_variable] = self.dataset[trace_variable].attrs['plot_settings']
-    #     return plot_settings
 
     def _enable_trace_variable(self, variable):
         self.model.blockSignals(True)
@@ -393,31 +373,13 @@ class PlotConfiguration(QWidget):
         for var in self._trace_variables_dataset:
             self._enable_trace_variable(var)
 
-    # def _get_plot_settings_from_treeview(self):
-    #     plot_settings = {}
-    #     for row in range(self.model.rowCount()):
-    #         item = self.model.item(row, 0)
-    #         variable = item.text()
-    #         active = bool(item.checkState())
-    #         plot_range = []
-    #         for setting_row in range(item.child().rowCount()):
-    #             item_setting = self.model.item(setting_row, 0)
-    #             if item_settin
-    #         plot_range = tuple(float(item.child(i,1).text()) for i in [0,1])
-    #         color = tuple(item.child(2,1).text().replace(' ', '').split(','))
-    #         plot_settings[variable] = dict(active=active, plot_range=plot_range, color=color)
-    #     return plot_settings
-
-
     def _add_missing_plot_settings_from_dataset(self):
-        # plot_settings = self._get_plot_settings_from_treeview()
         plot_settings = self.plot_settings
 
         for var in self._trace_variables_dataset:
-            # self.dataset[var].attrs['plot_settings'] = {'plot_range': [0, 3500], 'color': ['g', 'r']}
             if var not in plot_settings:
                 if 'plot_settings' in self.dataset[var].attrs:
-                    plot_settings[var] = self.dataset[var].attrs['plot_settings']
+                    plot_settings[var] = json.loads(self.dataset[var].attrs['plot_settings'])
                 else:
                     plot_settings[var] = {}
 
@@ -450,18 +412,11 @@ class PlotConfiguration(QWidget):
             if 'intensity' in var or var == 'FRET':
                 illuminations = np.unique(self.dataset.illumination)
                 if len(illuminations) > 1:
-                    plot_settings[var]['split_illuminations'] = True
+                    plot_settings[var]['split_illuminations'] = False
                     for illumination in illuminations:
                         plot_settings[var][f'illumination_{illumination}'] = True
 
-            # self.dataset[var].attrs['plot_settings'] = plot_settings[var]
         self.plot_settings = plot_settings
-
-    # @property
-    # def plot_variables_active(self):
-    #     return [var for var in self._trace_variables if var in self._trace_variables_dataset and self.dataset[var].attrs['plot_settings']['active']]
-
-    # def _fill_trace_variable_list(self):
 
     def _add_plot_settings_to_model(self):
         for plot_variable, plot_settings_of_variable in self.plot_settings.items():
@@ -565,7 +520,6 @@ class PlotConfiguration(QWidget):
         self.model.blockSignals(False)
 
     def _on_item_change(self, item):
-        # self._get_plot_settings_from_treeview()
         if item.column() == 0:
             variable_name = item.model().item(item.row(), 0).text()
             active = bool(item.checkState())
@@ -647,9 +601,6 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         self.plot_axes = {}
         self.histogram_axes = {}
 
-        # self.plot_artists = {}
-        # self.histogram_artists = {}
-
     def _remove_blit_manager(self):
         if hasattr(self, "bm"):
             try:
@@ -672,11 +623,6 @@ class TracePlotCanvas(FigureCanvasQTAgg):
     @property
     def plot_variables(self):
         return list(self.plot_settings.keys())
-
-    # @plot_variables.setter
-    # def plot_variables(self, plot_variables):
-    #     self._plot_variables = plot_variables
-    #     self.init_plots()
 
     @property
     def dataset(self):
@@ -711,28 +657,11 @@ class TracePlotCanvas(FigureCanvasQTAgg):
     def get_axis_names_with_plot_variable(self, plot_variable):
         trace_artists = self.get_trace_artists_with_attribute('plot_variable', plot_variable)
         axis_names = [trace_artist.axis_name for trace_artist in trace_artists]
-        # return list(dict.fromkeys(axis_names)) # Same as np.unique
         return axis_names
 
     @property
     def axis_names(self):
         return list(dict.fromkeys([trace_artist.axis_name for trace_artist in self.trace_artists])) # Same as np.unique
-        # axis_names = []
-        # for plot_variable in self.plot_variables:
-        #     if 'intensity' in plot_variable or 'FRET' in plot_variable:
-        #         plot_settings = self.plot_settings[plot_variable]
-        #         if 'split_illuminations' in plot_settings and plot_settings['split_illuminations']:
-        #             for key, value in plot_settings.items():
-        #                 if key.startswith('illumination') and value:
-        #                     axis_names.append(plot_variable + f'_i{key[-1]}')
-        #         else:
-        #             axis_names.append(plot_variable)
-        # return axis_names
-
-    # def axis_names_with_plot_variable(self, plot_variable):
-    #     return np.unique([artist_info['axis_name'] for artist_info in self.artist_info if artist_info['plot_variable']==plot_variable]).tolist()
-
-
 
     def init_plots(self):
         # Remove current blitmanager

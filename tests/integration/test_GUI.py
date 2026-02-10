@@ -39,6 +39,7 @@ def test_trace_plot(file_hj):
 def test_trace_plot_two_illuminations(file_hj):
     ds = file_hj.dataset
     ds.illumination[:] = [0, ] * 100 + [1, ] * 200 + [0, ] * 100
+    ds.classification_FRET.attrs['plot_settings'] = '{"active": true, "plot_range": [-0.05, 1.05], "color": ["b"]}'
     ds.to_netcdf(file_hj.absoluteFilePath.with_suffix('.nc'))
     file_hj.show_traces()
 

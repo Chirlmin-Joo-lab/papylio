@@ -2065,33 +2065,15 @@ class File:
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
     def show_traces(self, split_illuminations=True, **kwargs):
-        # probably better to put selected and illumination options in TracePlotWindow
-        # dataset = xr.Dataset()
-        # for variable in plot_variables:
-        #     dataset[variable] = getattr(self, variable)
-
         dataset = self.dataset
-        # selected_original = self.selected
-        # dataset['selected'] = selected_original
-        # if selected:
-        #     dataset = dataset.sel(molecule=dataset['selected'])
 
-
-
-        # dataset = self.dataset
         save_path = self.experiment.main_path.joinpath('Trace plots')
         if not save_path.is_dir():
             save_path.mkdir()
 
         from papylio.trace_plot import TracePlotWindow
-        TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations, save_path=save_path, **kwargs)
-        if selected:
-            selected_original[dict(molecule=selected_original)] = dataset.selected
-        else:
-            selected_original = dataset.selected
-
-        # We could also save the whole dataset, but since currently only alterations are made to selected.
-        selected_original.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
+                        dataset_path=self.absoluteFilePath.with_suffix('.nc'), save_path=save_path, **kwargs)
 
 
 def calculate_intensity_total(intensity):
