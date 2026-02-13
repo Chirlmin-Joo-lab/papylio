@@ -157,8 +157,11 @@ class TracePlotWindow(QWidget):
         layout_main.addWidget(self.plot_configuration, stretch=1)
         self.setLayout(layout_main)
 
+        self.dataset_path = dataset_path
+        if self.dataset_path is not None:
+            self.dataset_path = Path(self.dataset_path)
+
         self.dataset = dataset
-        self.dataset_path = Path(dataset_path)
 
         if show:
             self.show()
@@ -409,6 +412,9 @@ class PlotConfiguration(QWidget):
                 else:
                     plot_settings[var]['color'] = ('k',)
 
+            if 'axis' not in plot_settings[var]:
+                plot_settings[var]['axis'] = var
+
             if 'intensity' in var or var == 'FRET':
                 illuminations = np.unique(self.dataset.illumination)
                 if len(illuminations) > 1:
@@ -484,6 +490,16 @@ class PlotConfiguration(QWidget):
 
             name_item.appendRow([color_text_item, color_item])
 
+        if 'axis' not in current_settings:
+            axis_text_item = QStandardItem("Axis")
+            axis_text_item.setEditable(False)
+
+            axis_item = QStandardItem(plot_settings['axis'])
+            axis_item.setEditable(True)
+            axis_item.setting_name = 'axis'
+
+            name_item.appendRow([axis_text_item, axis_item])
+
         if 'split_illuminations' in plot_settings:
             if 'split_illuminations' not in current_settings:
                 split_illuminations_text_item = QStandardItem("Split illuminations")
@@ -537,6 +553,9 @@ class PlotConfiguration(QWidget):
                 color = tuple(item.text().replace(' ','').split(','))
                 self.plot_settings[variable_name][item.setting_name] = color
                 self.canvas.set_plot_color(variable_name, color)
+            elif item.setting_name == 'axis':
+                self.plot_settings[variable_name][item.setting_name] = item.text()
+                self.canvas.plot_settings = self.plot_settings
             elif item.setting_name == 'split_illuminations':
                 split_illuminations = bool(item.checkState())
                 self.plot_settings[variable_name][item.setting_name] = split_illuminations
@@ -633,20 +652,24 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         if not self._trace_artists:
             trace_artists = []
             for plot_variable in self.plot_variables:
-                if 'intensity' in plot_variable or 'FRET' in plot_variable:
-                    plot_settings = self.plot_settings[plot_variable]
-                    if 'split_illuminations' in plot_settings and plot_settings['split_illuminations']:
-                        for key, value in plot_settings.items():
-                            if key.startswith('illumination') and value:
-                                illumination = int(key.replace('illumination_', ''))
-                                axis_name = plot_variable + f'_i{illumination}'
-                                trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=illumination, axis_name=axis_name))
-                                # artist_info.append(dict(plot_variable=plot_variable, illumination=illumination, axis_name=axis_name))
+                plot_settings = self.plot_settings[plot_variable]
+                axis_setting = plot_settings.get('axis', plot_variable)
+                # Support multiple axes separated by commas
+                axes = [a.strip() for a in axis_setting.split(',')]
+                for axis in axes:
+                    if 'intensity' in plot_variable or 'FRET' in plot_variable:
+                        if 'split_illuminations' in plot_settings and plot_settings['split_illuminations']:
+                            for key, value in plot_settings.items():
+                                if key.startswith('illumination') and value:
+                                    illumination = int(key.replace('illumination_', ''))
+                                    axis_name = axis + f'_i{illumination}'
+                                    trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=illumination, axis_name=axis_name))
+                                    # artist_info.append(dict(plot_variable=plot_variable, illumination=illumination, axis_name=axis_name))
+                        else:
+                            trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=axis))
                     else:
-                        trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=plot_variable))
-                else:
-                    trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=plot_variable))
-                        # artist_info.append(dict(plot_variable=plot_variable, illumination=None, axis_name=plot_variable))
+                        trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=axis))
+                            # artist_info.append(dict(plot_variable=plot_variable, illumination=None, axis_name=plot_variable))
             self._trace_artists = trace_artists
 
         return self._trace_artists
@@ -698,8 +721,22 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                     plot.set_xlabel('Frame')
 
             import re
-            plot_variable = re.sub(r"_i\d+", "", axis_name)
-            plot_settings = self.plot_settings[plot_variable]
+            # Find the first plot_variable that uses this axis
+            # We use the original axis name for lookup in plot_settings, 
+            # stripping the illumination suffix if present.
+            axis_base_name = re.sub(r"_i\d+", "", axis_name)
+            
+            # Prefer the plot_variable that is exactly the same as axis_base_name if it exists
+            if axis_base_name in self.plot_settings:
+                plot_variable_for_settings = axis_base_name
+            else:
+                # Otherwise just take the first one that maps to this axis
+                plot_variable_for_settings = next(
+                    (pv for pv, ps in self.plot_settings.items() if axis_base_name in [a.strip() for a in ps.get('axis', pv).split(',')]),
+                    axis_base_name
+                )
+            
+            plot_settings = self.plot_settings.get(plot_variable_for_settings, {'plot_range': (0, 1)})
 
             plot.set_ylim(plot_settings['plot_range'])
             plot.set_ylabel(axis_name[0].upper() + axis_name[1:].replace('_', '\n'))
