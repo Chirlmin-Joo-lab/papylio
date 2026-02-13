@@ -415,6 +415,9 @@ class PlotConfiguration(QWidget):
             if 'axis' not in plot_settings[var]:
                 plot_settings[var]['axis'] = var
 
+            if 'secondary' not in plot_settings[var]:
+                plot_settings[var]['secondary'] = False
+
             if 'intensity' in var or var == 'FRET':
                 illuminations = np.unique(self.dataset.illumination)
                 if len(illuminations) > 1:
@@ -500,6 +503,21 @@ class PlotConfiguration(QWidget):
 
             name_item.appendRow([axis_text_item, axis_item])
 
+        if 'secondary' not in current_settings:
+            secondary_text_item = QStandardItem("Secondary axis")
+            secondary_text_item.setEditable(False)
+
+            secondary_checkbox = QStandardItem()
+            secondary_checkbox.setCheckable(True)
+            if plot_settings['secondary']:
+                secondary_checkbox.setCheckState(Qt.Checked)
+            else:
+                secondary_checkbox.setCheckState(Qt.Unchecked)
+            secondary_checkbox.setEditable(False)
+            secondary_checkbox.setting_name = 'secondary'
+
+            name_item.appendRow([secondary_text_item, secondary_checkbox])
+
         if 'split_illuminations' in plot_settings:
             if 'split_illuminations' not in current_settings:
                 split_illuminations_text_item = QStandardItem("Split illuminations")
@@ -556,6 +574,10 @@ class PlotConfiguration(QWidget):
             elif item.setting_name == 'axis':
                 self.plot_settings[variable_name][item.setting_name] = item.text()
                 self.canvas.plot_settings = self.plot_settings
+            elif item.setting_name == 'secondary':
+                secondary = bool(item.checkState())
+                self.plot_settings[variable_name][item.setting_name] = secondary
+                self.canvas.plot_settings = self.plot_settings
             elif item.setting_name == 'split_illuminations':
                 split_illuminations = bool(item.checkState())
                 self.plot_settings[variable_name][item.setting_name] = split_illuminations
@@ -574,6 +596,7 @@ class TraceArtist:
     plot_variable: str
     illumination: int
     axis_name: str
+    secondary: bool = False
     plot_artists: Optional[list[Artist]] = None
     histogram_artists: Optional[list[Artist]] = None
 
@@ -656,6 +679,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                 axis_setting = plot_settings.get('axis', plot_variable)
                 # Support multiple axes separated by commas
                 axes = [a.strip() for a in axis_setting.split(',')]
+                secondary = plot_settings.get('secondary', False)
                 for axis in axes:
                     if 'intensity' in plot_variable or 'FRET' in plot_variable:
                         if 'split_illuminations' in plot_settings and plot_settings['split_illuminations']:
@@ -663,12 +687,12 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                                 if key.startswith('illumination') and value:
                                     illumination = int(key.replace('illumination_', ''))
                                     axis_name = axis + f'_i{illumination}'
-                                    trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=illumination, axis_name=axis_name))
+                                    trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=illumination, axis_name=axis_name, secondary=secondary))
                                     # artist_info.append(dict(plot_variable=plot_variable, illumination=illumination, axis_name=axis_name))
                         else:
-                            trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=axis))
+                            trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=axis, secondary=secondary))
                     else:
-                        trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=axis))
+                        trace_artists.append(TraceArtist(plot_variable=plot_variable, illumination=None, axis_name=axis, secondary=secondary))
                             # artist_info.append(dict(plot_variable=plot_variable, illumination=None, axis_name=plot_variable))
             self._trace_artists = trace_artists
 
@@ -697,6 +721,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                          # wspace=0.05, hspace=0.05)
 
         self.plot_axes = {}
+        self.twin_axes = {}
         self.histogram_axes = {}
 
         # self.plot_artists = {}
@@ -745,6 +770,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
 
             self.plot_axes[axis_name] = plot
             self.histogram_axes[axis_name] = histogram
+            self.twin_axes[axis_name] = None
 
         self.init_plot_artists()
 
@@ -801,7 +827,14 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         # self.show_artists(show=True, draw=True)
 
     def init_plot_artist(self, trace_artist, plot_settings, x, y):
-        trace_artist.plot_artists = self.plot_axes[trace_artist.axis_name].plot(x, y.T)
+        axis = self.plot_axes[trace_artist.axis_name]
+        if trace_artist.secondary:
+            if self.twin_axes[trace_artist.axis_name] is None:
+                self.twin_axes[trace_artist.axis_name] = axis.twinx()
+            axis = self.twin_axes[trace_artist.axis_name]
+            axis.set_ylim(plot_settings['plot_range'])
+
+        trace_artist.plot_artists = axis.plot(x, y.T)
         # molecule.intensity.plot.line(x='frame', ax=self.plot_axes[plot_variable], color=self.parent_window.colours[i])
         histogram_artists = (
             self.histogram_axes[trace_artist.axis_name].hist(y.T, bins=50, orientation='horizontal',
@@ -899,8 +932,12 @@ class TracePlotCanvas(FigureCanvasQTAgg):
 
     def set_plot_range(self, plot_variable, plot_range):
         axis_names = self.get_axis_names_with_plot_variable(plot_variable)
+        secondary = self.plot_settings[plot_variable].get('secondary', False)
         for axis_name in axis_names:
-            self.plot_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
+            if secondary and self.twin_axes.get(axis_name) is not None:
+                self.twin_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
+            else:
+                self.plot_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
         self.init_plot_artists()
         # self.init_plots() # Perhaps this can be init_plot_artists only, but then probably the blit background needs to be updated.
 
