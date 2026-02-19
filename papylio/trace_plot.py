@@ -32,10 +32,11 @@ import numpy as np
 from pathlib2 import Path
 
 from PySide2.QtWidgets import (QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QCheckBox, QLabel,
-                               QTableWidget, QTableWidgetItem, QHeaderView, QTreeView, QStyledItemDelegate)
+                               QTableWidget, QTableWidgetItem, QHeaderView, QTreeView, QStyledItemDelegate,
+                               QAbstractItemView)
 from PySide2.QtGui import QStandardItemModel, QStandardItem, QColor
-from PySide2.QtGui import QKeySequence, QCloseEvent
-from PySide2.QtCore import Qt
+from PySide2.QtGui import QKeySequence, QCloseEvent, QDragMoveEvent
+from PySide2.QtCore import Qt, QModelIndex, QTimer
 
 import sys
 import time
@@ -51,11 +52,6 @@ from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 
-
-#TODO
-# - Change function input per plot variable?
-# - Add colorblind colors
-# - Save settings to dataset (or is this already done?)
 
 
 class TracePlotWindow(QWidget):
@@ -302,6 +298,35 @@ class TracePlotWindow(QWidget):
     #     print('test')
 
 
+class PlotConfigurationModel(QStandardItemModel):
+    """
+    Custom model that only allows reordering of top-level rows.
+    Disallows dropping into child items.
+    """
+
+    def flags(self, index):
+        default_flags = super().flags(index)
+
+        # Only top-level items can be dragged
+        if not index.parent().isValid():# & index.column() == 0:
+            return default_flags | Qt.ItemIsDragEnabled & ~Qt.ItemIsDropEnabled
+        else:
+            # Children cannot be dragged or accept drops
+            return default_flags & ~Qt.ItemIsDropEnabled & ~Qt.ItemIsDragEnabled
+
+    def supportedDropActions(self):
+        return Qt.MoveAction
+
+    def dropMimeData(self, data, action, row, column, parent):
+        # Only allow drops at root level
+        if parent.isValid():
+            return False
+
+        self.blockSignals(True)
+        result = super().dropMimeData(data, action, row, 0, parent)
+        self.blockSignals(False)
+        return result
+
 class PlotConfiguration(QWidget):
     def __init__(self, parent, canvas, initial_plot_settings=None):
 
@@ -310,13 +335,21 @@ class PlotConfiguration(QWidget):
         self.canvas = canvas
 
         self.view = QTreeView()
-        self.model = QStandardItemModel()
+        self.model = PlotConfigurationModel()
         self.model.setHorizontalHeaderLabels(["Variable", ""])
         self.view.setColumnWidth(0, 200)
 
         self.model.itemChanged.connect(self._on_item_change)
+        self.model.rowsRemoved.connect(self._on_rows_changed)
 
         self.view.setModel(self.model)
+
+        self.view.setDragEnabled(True)
+        self.view.setAcceptDrops(True)
+        self.view.setDropIndicatorShown(True)
+        self.view.setDefaultDropAction(Qt.MoveAction)
+        self.view.setDragDropMode(QTreeView.InternalMove)
+
         self.view.setAlternatingRowColors(True)
         self.view.setRootIsDecorated(True)
         self.view.header().setStretchLastSection(True)
@@ -425,7 +458,15 @@ class PlotConfiguration(QWidget):
                     for illumination in illuminations:
                         plot_settings[var][f'illumination_{illumination}'] = True
 
-        self.plot_settings = plot_settings
+        # Normalize order values
+        ordered_variables = sorted(plot_settings.keys(),
+                              key=lambda v: plot_settings[v].get('order', 1000))
+        plot_settings_ordered = {}
+        for i, plot_variable in enumerate(ordered_variables):
+            plot_settings[plot_variable]['order'] = i
+            plot_settings_ordered[plot_variable] = plot_settings[plot_variable]
+
+        self.plot_settings = plot_settings_ordered
 
     def _add_plot_settings_to_model(self):
         for plot_variable, plot_settings_of_variable in self.plot_settings.items():
@@ -443,7 +484,14 @@ class PlotConfiguration(QWidget):
         name_item = QStandardItem(plot_variable)
         name_item.setEditable(False)
         name_item.setCheckable(True)
-        self.model.appendRow(name_item)
+        name_item.setDropEnabled(False)
+        empty_item = QStandardItem()
+        empty_item.setDropEnabled(False)
+        self.model.appendRow([name_item, empty_item])
+        QTimer.singleShot(0, lambda: [
+            self.view.setFirstColumnSpanned(row, QModelIndex(), True)
+            for row in range(self.model.rowCount())
+        ])
         return name_item
 
     def _add_plot_settings_of_variable_to_model(self, plot_variable, plot_settings):
@@ -459,7 +507,7 @@ class PlotConfiguration(QWidget):
         # Find current settings for variable
         current_settings = []
         for row in range(name_item.rowCount()):
-            current_settings.append(name_item.child(row, 1).setting_name)
+            current_settings.append(name_item.child(row, 1).data(Qt.UserRole))
 
         if 'plot_range' not in current_settings:
             plot_range = plot_settings['plot_range']
@@ -469,7 +517,7 @@ class PlotConfiguration(QWidget):
 
             plot_range_low_item = QStandardItem(str(plot_range[0]))
             plot_range_low_item.setEditable(True)
-            plot_range_low_item.setting_name = 'plot_range'
+            plot_range_low_item.setData('plot_range', Qt.UserRole)
 
             name_item.appendRow([plot_range_low_text_item, plot_range_low_item])
 
@@ -478,7 +526,7 @@ class PlotConfiguration(QWidget):
 
             plot_range_high_item = QStandardItem(str(plot_range[1]))
             plot_range_high_item.setEditable(True)
-            plot_range_high_item.setting_name = 'plot_range'
+            plot_range_high_item.setData('plot_range', Qt.UserRole)
 
             name_item.appendRow([plot_range_high_text_item, plot_range_high_item])
 
@@ -489,7 +537,7 @@ class PlotConfiguration(QWidget):
             color_string = ', '.join(plot_settings['color'])
             color_item = QStandardItem(color_string)
             color_item.setEditable(True)
-            color_item.setting_name = 'color'
+            color_item.setData('color', Qt.UserRole)
 
             name_item.appendRow([color_text_item, color_item])
 
@@ -499,7 +547,7 @@ class PlotConfiguration(QWidget):
 
             axis_item = QStandardItem(plot_settings['axis'])
             axis_item.setEditable(True)
-            axis_item.setting_name = 'axis'
+            axis_item.setData('axis', Qt.UserRole)
 
             name_item.appendRow([axis_text_item, axis_item])
 
@@ -514,7 +562,7 @@ class PlotConfiguration(QWidget):
             else:
                 secondary_checkbox.setCheckState(Qt.Unchecked)
             secondary_checkbox.setEditable(False)
-            secondary_checkbox.setting_name = 'secondary'
+            secondary_checkbox.setData('secondary', Qt.UserRole)
 
             name_item.appendRow([secondary_text_item, secondary_checkbox])
 
@@ -531,7 +579,7 @@ class PlotConfiguration(QWidget):
                 else:
                     split_illuminations_checkbox.setCheckState(Qt.Unchecked)
                 split_illuminations_checkbox.setEditable(False)
-                split_illuminations_checkbox.setting_name = 'split_illuminations'
+                split_illuminations_checkbox.setData('split_illuminations', Qt.UserRole)
 
                 name_item.appendRow([split_illuminations_text_item, split_illuminations_checkbox])
 
@@ -547,7 +595,7 @@ class PlotConfiguration(QWidget):
                     else:
                         illumination_checkbox.setCheckState(Qt.Unchecked)
                     illumination_checkbox.setEditable(False)
-                    illumination_checkbox.setting_name = f'illumination_{illumination}'
+                    illumination_checkbox.setData(f'illumination_{illumination}', Qt.UserRole)
 
                     name_item.appendRow([illumination_text_item, illumination_checkbox])
 
@@ -555,39 +603,69 @@ class PlotConfiguration(QWidget):
 
     def _on_item_change(self, item):
         if item.column() == 0:
+            # self._update_order_from_model()
             variable_name = item.model().item(item.row(), 0).text()
             active = bool(item.checkState())
-            self.plot_settings[variable_name]['active'] = active
-            self.canvas.plot_settings = self.plot_settings
+            if active is not self.plot_settings[variable_name]['active']:
+                self.plot_settings[variable_name]['active'] = active
+                self.canvas.plot_settings = self.plot_settings
             # self.parent().molecule = self.parent().molecule
-        elif item.column() == 1:
+        elif item.column() == 1:# and item.text() is not '':
             variable_name = item.model().item(item.parent().row(), 0).text()
-            if item.setting_name == 'plot_range':
+            if item.data(Qt.UserRole)  == 'plot_range':
                 plot_range = tuple(float(item.parent().child(i,1).text()) for i in [0,1])
-                self.plot_settings[variable_name][item.setting_name] = plot_range
+                self.plot_settings[variable_name][item.data(Qt.UserRole)] = plot_range
                 self.canvas.set_plot_range(variable_name, plot_range)
                 # self.parent().molecule = self.parent().molecule
-            elif item.setting_name == 'color':
+            elif item.data(Qt.UserRole) == 'color':
                 color = tuple(item.text().replace(' ','').split(','))
-                self.plot_settings[variable_name][item.setting_name] = color
+                self.plot_settings[variable_name][item.data(Qt.UserRole)] = color
                 self.canvas.set_plot_color(variable_name, color)
-            elif item.setting_name == 'axis':
-                self.plot_settings[variable_name][item.setting_name] = item.text()
+            elif item.data(Qt.UserRole) == 'axis':
+                self.plot_settings[variable_name][item.data(Qt.UserRole)] = item.text()
                 self.canvas.plot_settings = self.plot_settings
-            elif item.setting_name == 'secondary':
+            elif item.data(Qt.UserRole) == 'secondary':
                 secondary = bool(item.checkState())
-                self.plot_settings[variable_name][item.setting_name] = secondary
+                self.plot_settings[variable_name][item.data(Qt.UserRole)] = secondary
                 self.canvas.plot_settings = self.plot_settings
-            elif item.setting_name == 'split_illuminations':
+            elif item.data(Qt.UserRole) == 'split_illuminations':
                 split_illuminations = bool(item.checkState())
-                self.plot_settings[variable_name][item.setting_name] = split_illuminations
+                self.plot_settings[variable_name][item.data(Qt.UserRole)] = split_illuminations
                 self.canvas.plot_settings = self.plot_settings
-            elif item.setting_name.startswith('illumination'):
+            elif item.data(Qt.UserRole).startswith('illumination'):
                 illumination = bool(item.checkState())
-                self.plot_settings[variable_name][item.setting_name] = illumination
+                self.plot_settings[variable_name][item.data(Qt.UserRole)] = illumination
                 self.canvas.plot_settings = self.plot_settings
 
         self.parent().setFocus()
+
+    def _on_rows_changed(self):
+        for row in range(self.model.rowCount()):
+            self.view.setFirstColumnSpanned(row, QModelIndex(), True)
+        self._update_order_from_model()
+
+    def _update_order_from_model(self):
+        """
+        Update plot_settings order after rows are reordered by drag & drop.
+        """
+        plot_settings_new = {}
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row, 0)
+            var_name = item.text()
+            if var_name in self.plot_settings:
+                plot_settings_new[var_name] = self.plot_settings[var_name]
+                plot_settings_new[var_name]['order'] = row
+
+        self.plot_settings = plot_settings_new
+        self.canvas.plot_settings = self.plot_settings
+
+        self.parent().setFocus()
+
+        # Update canvas with new ordering
+        # self.canvas.plot_settings = self.plot_settings
+
+        # Refocus parent window
+        # self.parent().setFocus()
 
 from dataclasses import dataclass
 from matplotlib.artist import Artist
@@ -823,6 +901,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                   [bar for trace_artist in self.trace_artists for histogram_artist in trace_artist.histogram_artists for bar in histogram_artist]
 
         self.bm = BlitManager(self, artists)
+        self.molecule = self.molecule
         self.draw()
         # self.show_artists(show=True, draw=True)
 
