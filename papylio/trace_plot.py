@@ -468,9 +468,16 @@ class PlotConfiguration(QWidget):
 
         self.plot_settings = plot_settings_ordered
 
+    def _apply_row_spanning_for_plot_variables(self):
+        for row in range(self.model.rowCount()):
+            self.view.setFirstColumnSpanned(row, QModelIndex(), True)
+        self.view.doItemsLayout()  # Important to refresh treeview, otherwise it is not stay up to date with the model.
+
     def _add_plot_settings_to_model(self):
         for plot_variable, plot_settings_of_variable in self.plot_settings.items():
             self._add_plot_settings_of_variable_to_model(plot_variable, plot_settings_of_variable)
+
+        self._apply_row_spanning_for_plot_variables()
 
     def _get_or_create_name_item(self, plot_variable):
         # Look for existing item
@@ -488,10 +495,6 @@ class PlotConfiguration(QWidget):
         empty_item = QStandardItem()
         empty_item.setDropEnabled(False)
         self.model.appendRow([name_item, empty_item])
-        QTimer.singleShot(0, lambda: [
-            self.view.setFirstColumnSpanned(row, QModelIndex(), True)
-            for row in range(self.model.rowCount())
-        ])
         return name_item
 
     def _add_plot_settings_of_variable_to_model(self, plot_variable, plot_settings):
@@ -640,8 +643,7 @@ class PlotConfiguration(QWidget):
         self.parent().setFocus()
 
     def _on_rows_changed(self):
-        for row in range(self.model.rowCount()):
-            self.view.setFirstColumnSpanned(row, QModelIndex(), True)
+        self._apply_row_spanning_for_plot_variables()
         self._update_order_from_model()
 
     def _update_order_from_model(self):
@@ -736,8 +738,10 @@ class TracePlotCanvas(FigureCanvasQTAgg):
     @plot_settings.setter
     def plot_settings(self, plot_settings):
         self._trace_artists = []
-        plot_settings_active = {pv: ps for pv, ps in plot_settings.items() if 'active' in ps and ps['active']}
-        self._plot_settings = plot_settings_active
+        plot_settings = {pv: ps for pv, ps in plot_settings.items() if 'active' in ps and ps['active']}
+        data_vars_names = list(self.dataset.data_vars.keys())
+        plot_settings = {pv: ps for pv, ps in plot_settings.items() if pv in data_vars_names}
+        self._plot_settings = plot_settings
         self.init_plots()
 
     @property
