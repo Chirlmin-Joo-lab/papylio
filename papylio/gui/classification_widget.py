@@ -25,10 +25,9 @@ class ClassificationWidget(QWidget):
         self.methods = {}
         self._file = None# name -> function
 
-        main_layout = QVBoxLayout(self)
+        main_layout = QHBoxLayout(self)
 
         form = QFormLayout()
-        main_layout.addLayout(form)
 
         # --- Classification name input ---
         self.name_edit = QLineEdit()
@@ -54,9 +53,8 @@ class ClassificationWidget(QWidget):
         button_layout = QHBoxLayout()
         self.run_button = QPushButton("Classify")
         self.clear_button = QPushButton("Clear")
-        button_layout.addWidget(self.run_button)
         button_layout.addWidget(self.clear_button)
-        main_layout.addLayout(button_layout)
+        button_layout.addWidget(self.run_button)
 
         # Taborder
         # QWidget.setTabOrder(self.name_edit, self.variable_selector)
@@ -84,7 +82,15 @@ class ClassificationWidget(QWidget):
         self.tree_view.setColumnWidth(5, 100)   # Select
         self.tree_view.setColumnWidth(6, 250)   # Parameters
 
-        main_layout.addWidget(self.tree_view)
+
+        form_buttons_layout = QVBoxLayout()
+        form_buttons_layout.addLayout(form)
+        form_buttons_layout.addStretch()
+        form_buttons_layout.addLayout(button_layout)
+
+        main_layout.addWidget(self.tree_view, stretch=3)
+        main_layout.addLayout(form_buttons_layout, stretch=1)
+        # main_layout.addLayout(button_layout)
         # self.tree_view.setColumnWidth(0, 150)
         # self.tree_view.setColumnWidth(1,100)
         # self.model.itemChanged.connect(self.on_item_change)
