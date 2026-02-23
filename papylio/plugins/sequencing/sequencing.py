@@ -22,6 +22,12 @@ from .sequencing_data import SequencingData, make_sequencing_dataset
 from .mapping_collection import MappingCollection
 
 
+def find_file(root_folder, target_filename):
+    for root, dirs, files in os.walk(root_folder):
+        if target_filename in files:
+            return os.path.join(root, target_filename)
+    return None
+
 
 class Experiment:
     def __init__(self, *args, **kwargs):
@@ -30,13 +36,10 @@ class Experiment:
         self.sequencing_data_for_mapping = None # To be removed
         self._tile_mappings = None
 
-        if 'sequencing' in self.configuration.keys():
-            sequencing_data_relative_file_path = self.configuration['sequencing']['data_file_path']
-            sequencing_data_file_path = self.main_path.joinpath(sequencing_data_relative_file_path)
-            # This should work fine for the case where it is a relative or absolute path
-            if sequencing_data_file_path is not None:
-                self.sequencing_data = SequencingData(sequencing_data_file_path, load=False)
-                print(f"\nImport sequencing data:\n{sequencing_data_relative_file_path}")
+        sequencing_data_file_path = find_file(self.main_path, 'sequencing_data.nc')
+        if sequencing_data_file_path is not None:
+            self.sequencing_data = SequencingData(sequencing_data_file_path, load=False)
+            print(f"\nImport sequencing data:\n{Path.relative_to(sequencing_data_file_path, self.main_path)}")
 
     @property
     @return_none_when_executed_by_pycharm
@@ -72,10 +75,10 @@ class Experiment:
                                                extract_sequence_subset=extract_sequence_subset, chunksize=chunksize)
         self.sequencing_data = SequencingData(nc_file_path, load=False)
         # TODO: Insert full path if the path is on another drive.
-        if store_relative_filepath:
-            nc_file_path = os.path.relpath(nc_file_path, start=self.main_path)
-        self.configuration['sequencing'] = {'data_file_path': nc_file_path}
-        self.configuration.save()
+        # if store_relative_filepath:
+        #     nc_file_path = os.path.relpath(nc_file_path, start=self.main_path)
+        # self.configuration['sequencing'] = {'data_file_path': nc_file_path}
+        # self.configuration.save()
 
     def import_sequencing_data_old(self):
         raise DeprecationWarning('import_sequencing_data_old will be removed')

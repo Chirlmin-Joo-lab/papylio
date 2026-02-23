@@ -1,23 +1,11 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Sep 14 15:24:46 2018
-
-@author: ivoseverins
-"""
-# Use the following lines on Mac
-# from sys import platform
-# if platform == "darwin":
-#     from matplotlib import use
-#     use('WXAgg')
 import PySide2
-import os  # Miscellaneous operating system interfaces - to be able to switch from Mac to Windows
-from pathlib import Path  # For efficient path manipulation
+import os
+from pathlib import Path
 
 import tqdm
 import yaml
 import numpy as np
 import pandas as pd
-# import wx
 
 ###################################################
 ## To enable interactive plotting with PySide2 in PyCharm 2022.3
@@ -29,14 +17,13 @@ use('Qt5Agg')
 ###################################################
 
 import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt  # Provides a MATLAB-like plotting framework
+import matplotlib.pyplot as plt
 import xarray as xr
 from collections import UserDict
 import re
 import tifffile
 
 from papylio.file import File
-# from papylio.molecule import Molecules
 from papylio.file_collection import FileCollection
 from papylio.plotting import histogram
 from papylio.movie.movie import Movie
@@ -44,78 +31,6 @@ from papylio.movie.movie import Movie
 # from papylio.plugin_manager import PluginMetaClass
 from papylio.plugin_manager import plugins
 
-import re  # Regular expressions
-import warnings
-from nd2reader import ND2Reader
-
-
-# import matplotlib.pyplot as plt #Provides a MATLAB-like plotting framework
-# import itertools #Functions creating iterators for efficient looping
-# np.seterr(divide='ignore', invalid='ignore')
-# import pandas as pd
-# from threshold_analysis_v2 import stepfinder
-# import pickle
-
-class Configuration(UserDict):
-    # Ruamel yaml parser may be better for preserving comments
-    # https://sourceforge.net/projects/ruamel-yaml/
-    def __init__(self, filepath):
-        self.reload_block = 0
-        self.filepath = Path(filepath)
-        self.previous_file_modification_time = 0
-
-        # Load custom config file or otherwise load the default config file
-        if self.filepath.is_file():
-            self.load()
-        else:
-            filepath = Path(__file__).with_name('default_configuration.yml')
-            with filepath.open('r') as yml_file:
-                self._data = yaml.load(yml_file, Loader=yaml.SafeLoader)
-            # self.load(Path(__file__).with_name('default_configuration.yml'))
-            self.save()
-
-    @property
-    def data(self):
-        self.load()
-        return self._data
-
-    @data.setter
-    def data(self, data):
-        self._data = data
-
-    @property
-    def file_modification_time(self):
-        return self.filepath.stat().st_mtime
-
-    def __enter__(self):
-        self.load()
-        self.reload_block += 1
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.reload_block -= 1
-
-    @property
-    def reload(self):
-        return self.reload_block == 0
-
-    def __getitem__(self, item):
-        return self.data[item]
-
-    def load(self, filepath=None):
-        if self.reload:
-            file_modification_time = self.file_modification_time
-            if file_modification_time != self.previous_file_modification_time:
-                if filepath is None:
-                    filepath = self.filepath
-                with filepath.open('r') as yml_file:
-                    self._data = yaml.load(yml_file, Loader=yaml.SafeLoader)
-                self.previous_file_modification_time = file_modification_time
-
-    def save(self):
-        with self.filepath.open('w') as yml_file:
-            yaml.dump(self._data, yml_file, sort_keys=False)
-
-# from PyQt5.QtWidgets import QFileDialog
 def get_QApplication():
     from PySide2 import QtWidgets
     app = QtWidgets.QApplication.instance()
@@ -125,16 +40,6 @@ def get_QApplication():
     return app
 
 def get_path(main_window):
-    # if not 'app' in globals().keys():
-    #     global app
-    #     app = wx.App(None)
-    # dlg = wx.DirDialog(None, message="Choose a folder", defaultPath="")
-    # if dlg.ShowModal() == wx.ID_OK:
-    #     path = dlg.GetPath()
-    # else:
-    #     path = None
-    # dlg.Destroy()
-
     app = get_QApplication()
     from PySide2.QtWidgets import QFileDialog, QMainWindow
     if main_window is None:
@@ -163,6 +68,7 @@ class Experiment:
         If true, then all files in the main folder are automatically imported. \n
         If false, then files are detected, but not imported.
     """
+
     # TODO: Add presets for specific microscopes
     def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None, perform_logging=True, use_colorblind_friendly_colors=True):
         """Init method for the Experiment class
@@ -191,22 +97,23 @@ class Experiment:
         self.import_all = import_all
         self.perform_logging = perform_logging
 
+        self.excluded_extensions = ['pdf', 'dat', 'db', 'py', 'yml', 'png', 'pdf', 'xlsx', 'md']
+        self.excluded_names = ['_ave', '_max', '_corrections', '_dwells', '_dwell_analysis',
+                               'darkfield', 'flatfield', '_sequencing_data', '_sequencing_match']
+        self.excluded_paths = ['Analysis', 'Sequencing data', 'Results']
+
         set_default_matplotlib_colors(use_colorblind_friendly_colors)
 
         self._channels = np.atleast_1d(np.array(channels))
         self._number_of_channels = len(channels)
         self._pairs = [[c1, c2] for i1, c1 in enumerate(channels) for i2, c2 in enumerate(channels) if i2 > i1]
 
-        # Load custom config file or otherwise load the default config file
-        self.configuration = Configuration(self.main_path.joinpath('config.yml'))
-
         os.chdir(main_path)
 
         # file_paths = self.find_file_paths()
         # self.add_files(file_paths, test_duplicates=False)
 
-        with self.configuration:
-            self.add_files(self.main_path, test_duplicates=False)
+        self.add_files(self.main_path, test_duplicates=False)
 
         self.common_image_corrections = xr.Dataset()
         self.load_darkfield_correction()
@@ -332,14 +239,14 @@ class Experiment:
                      #p.is_file() &
                      # Exclude stings in filename
                      all(name not in p.with_suffix('').name for name in
-                         self.configuration['files']['excluded_names']) &
+                         self.excluded_names) &
                      # Exclude strings in path
                      all(path not in str(p.relative_to(self.main_path).parent) for path in
-                         self.configuration['files']['excluded_paths']) &
+                         self.excluded_paths) &
                      # Exclude hidden folders
                      ('.' not in [s[0] for s in p.parts]) &
                      # Exclude file extensions
-                     (p.suffix[1:] not in self.configuration['files']['excluded_extensions'])
+                     (p.suffix[1:] not in self.excluded_extensions)
              )
              ]
 
@@ -615,16 +522,6 @@ class Experiment:
         fig.savefig(self.main_path.joinpath('number_of_molecules.pdf'), bbox_inches='tight')
         fig.savefig(self.main_path.joinpath('number_of_molecules.png'), bbox_inches='tight')
 
-    def select(self):
-        """Simple method to look through all molecules in the experiment
-
-        Plots a molecule. If enter is pressed the next molecule is shown.
-
-        """
-        for molecule in self.molecules:
-            molecule.plot()
-            input("Press enter to continue")
-
     def print_files(self):
         self.files.print()
 
@@ -638,16 +535,6 @@ class Experiment:
 
         with xr.open_mfdataset(file_paths, concat_dim='molecule', combine='nested') as ds:
             ds_sel = ds.query(query)  # HJ1_WT, HJ7_G116T
-            # if not 'app' in globals().keys():
-            #     global app
-            #     app = wx.App(None)
-            # app = wit.InspectableApp()
-            # frame = TraceAnalysisFrame(None, ds_sel, "Sample editor")
-            # frame.molecules = exp.files[1].molecules
-            # print('test')
-            # import wx.lib.inspection
-            # wx.lib.inspection.InspectionTool().Show()
-            # app.MainLoop()
             from papylio.trace_plot import TracePlotWindow
             TracePlotWindow(dataset=ds_sel, save_path=None, **kwargs)
 

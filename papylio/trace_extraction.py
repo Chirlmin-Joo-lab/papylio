@@ -23,7 +23,7 @@ def make_gaussian_mask(size, offsets, sigma=1.291):
     masks = masks/norm_factors
     return masks
 
-def extract_traces(movie, coordinates, background=None, mask_size=1.291, neighbourhood_size=11, correct_illumination=False):
+def extract_traces(movie, coordinates, mask_size, neighbourhood_size=11):
     # go through all images, extract donor and acceptor signal
     # TODO: Process the movie in chunks
     # TODO: Make sure the corretions are not reloaded for each chunk,

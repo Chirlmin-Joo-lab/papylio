@@ -87,6 +87,7 @@ class File:
         self.movie = None
         self.mapping = None
 
+        self.rotation = 0
 
         # I think it will be easier if we have import functions for specific data instead of specific files.
         # For example. the sifx, pma and tif files can better be handled in the Movie class. Here we then just have a method import_movie.
@@ -107,7 +108,6 @@ class File:
                                 '.mapping': self.import_mapping_file,
                                 '.pks': self.import_pks_file,
                                 '.traces': self.import_traces_file,
-                                '_steps_data.xlsx': self.import_excel_file,
                                 '.nc': self.noneFunction
                                 }
 
@@ -174,11 +174,6 @@ class File:
         except FileNotFoundError:
             return 0
 
-    @property
-    @return_none_when_executed_by_pycharm
-    def configuration(self):
-        return self.experiment.configuration
-
     # @property
     # def molecule(self):
     #     with xr.open_dataset(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4') as dataset:
@@ -209,30 +204,26 @@ class File:
     def number_of_selected_molecules(self):
         return len(self.selected_molecules)
 
-    # def get_projection_image(self, configuration):
+    # @property
+    def projection_image(self, **kwargs):
+        return self.get_projection_image(**kwargs)
 
     # @property
-    def projection_image(self):
-        return self.get_projection_image()
+    def average_image(self, **kwargs):
+        return self.get_projection_image(projection_type='average', **kwargs)
 
     # @property
-    def average_image(self):
-        return self.get_projection_image(projection_type='average')
+    def maximum_projection_image(self, **kwargs):
+        return self.get_projection_image(projection_type='maximum', **kwargs)
 
-    # @property
-    def maximum_projection_image(self):
-        return self.get_projection_image(projection_type='maximum')
-
-    def get_projection_image(self, load=True, **kwargs):
-        configuration = self.experiment.configuration['projection_image'].copy()
-        configuration.update(kwargs)
+    def get_projection_image(self, load=True, frame_range=(0,20), **kwargs):
         # TODO: Make this independent of Movie, probably we want to copy all Movie metadata to the nc file.
-        if configuration['frame_range'][1] is None:
-            configuration['frame_range'] = (configuration['frame_range'][0], self.movie.number_of_frames)
-        elif configuration['frame_range'][1] > self.movie.number_of_frames:
-            configuration['frame_range'] = (configuration['frame_range'][0], self.movie.number_of_frames)
-            warnings.warn(f'Frame range exceeds available frames, used frame range {configuration["frame_range"]} instead')
-        image_filename = Movie.image_info_to_filename(self.name, **configuration)
+        if frame_range[1] is None:
+            frame_range = (frame_range[0], self.movie.number_of_frames)
+        elif frame_range[1] > self.movie.number_of_frames:
+            frame_range = (frame_range[0], self.movie.number_of_frames)
+            warnings.warn(f'Frame range exceeds available frames, used frame range {frame_range} instead')
+        image_filename = Movie.image_info_to_filename(self.name, frame_range=frame_range, **kwargs)
         image_file_path = self.absoluteFilePath.with_name(image_filename).with_suffix('.tif')
 
         if load and image_file_path.is_file():
@@ -242,15 +233,7 @@ class File:
             # return self.movie.separate_channels(tifffile.imread(image_file_path))
             return tifffile.imread(image_file_path)
         else:
-            return self.movie.make_projection_image(**configuration, write=True, flatten_channels=True)
-
-    # @property
-    # def coordinates(self):
-    #     with xr.open_dataset(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4') as dataset:
-    #         #.set_index({'molecule': ('molecule_in_file','file')})
-    #         return dataset['coordinates'].load()
-    #
-    # @coordinates.setter
+            return self.movie.make_projection_image(frame_range=frame_range, **kwargs, write=True, flatten_channels=True)
 
     @property
     @return_none_when_executed_by_pycharm
@@ -288,10 +271,6 @@ class File:
         self.coordinates = coordinates
 
     def coordinates_from_channel(self, channel):
-        # if not self._pks_file:
-        #     _pks_file = PksFile(self.absoluteFilePath.with_suffix('.pks'))
-
-        #return np.concatenate([[molecule.coordinates[0, :] for molecule in self.molecules]])
         if type(channel) is str:
             channel = {'d': 0, 'a': 1, 'g':0, 'r':1}[channel]
 
@@ -363,31 +342,6 @@ class File:
         else:
             return {}
 
-    # def get_coordinates(self, selected=False):
-    #     if selected:
-    #         molecules = self.selectedMolecules
-    #     else:
-    #         molecules = self.molecules
-    #
-    #     return np.vstack([molecule.coordinates for molecule in molecules])
-
-    #in analogy with coordinates, also background:
-    # @background.setter
-    # def background(self, background, number_of_channels = None):
-    #     if number_of_channels is None:
-    #         number_of_channels = self.number_of_channels
-    #     self.number_of_molecules = np.shape(background)[0]//number_of_channels
-    #
-    #     for i, molecule in enumerate(self.molecules):
-    #         molecule.background = background[(i * number_of_channels):((i + 1) * number_of_channels)]
-    #
-    # def background_from_channel(self, channel):
-    #     if type(channel) is str:
-    #         channel = {'d': 0, 'a': 1, 'g':0, 'r':1}[channel]
-    #
-    #     return np.vstack([molecule.background[channel] for molecule in self.molecules])
-    #
-
     def _init_dataset(self, number_of_molecules):
         selected = xr.DataArray(False, dims=('molecule',), coords={'molecule': range(number_of_molecules)}, name='selected')
         add_configuration_to_dataarray(selected)
@@ -447,8 +401,7 @@ class File:
         else:
             filepath = self.absoluteFilePath.with_suffix(extension)
 
-        rot90 = self.configuration['movie']['rot90']
-        self.movie = Movie(filepath, rot90)
+        self.movie = Movie(filepath, self.rotation)
         if 'channel_arrangement' in self.dataset_attributes.keys():
             channel_arangement_text_string=self.dataset_attributes['channel_arrangement']
             self.movie.channel_arrangement = ast.literal_eval(channel_arangement_text_string)
@@ -546,7 +499,8 @@ class File:
         tifffile.imwrite(self.experiment.main_path / 'darkfield.tif', image, imagej=True)
         self.experiment.load_darkfield_correction()
 
-    def find_coordinates(self, **configuration):
+    def find_coordinates(self, channels=('donor',), method='by_channel', peak_finding=None, projection_image=None,
+                         sliding_window=None, coordinate_optimization=None):
         '''
         This function finds and sets the locations of all molecules within the movie's images.
 
@@ -592,26 +546,28 @@ class File:
         ADD DESCRIPTIONS HERE!!!
         '''
 
-        # TODO: Add configuration to nc file
         # TODO: Split method into multiple functions
 
-        # --- Refresh configuration ----
-        # if not configuration:
-        configuration_from_config_file = self.experiment.configuration['find_coordinates']
+        if sliding_window is None:
+            sliding_window = {'use_sliding_window': False, 'frame_increment': 20, 'minimal_point_separation': 2}
 
-        configuration_from_config_file.update(configuration)
-        configuration = configuration_from_config_file
+        if peak_finding is None:
+            peak_finding = {'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10, 'filter_neighbourhood_size_max': 5}
+
+        if projection_image is None:
+            projection_image = {'projection_type': 'average', 'frame_range': [0, 20], 'illumination': 0}
+
+        if coordinate_optimization is None:
+            coordinate_optimization = {'coordinates_within_margin':  {'margin': 10},
+                                       'coordinates_after_gaussian_fit':  {'gaussian_width': 3}}
 
         # --- Get settings from configuration file ----
-        channels = configuration['channels']
-        method = configuration['method']
-        peak_finding_configuration = configuration['peak_finding']
-        projection_type = configuration['projection_image']['projection_type']
-        frame_range = configuration['projection_image']['frame_range']
-        illumination = configuration['projection_image']['illumination']
+        peak_finding_configuration = peak_finding
+        projection_type = projection_image['projection_type']
+        frame_range = projection_image['frame_range']
+        illumination = projection_image['illumination']
 
-        sliding_window = configuration['sliding_window']
-        use_sliding_window = configuration['sliding_window']['use_sliding_window']
+        use_sliding_window = sliding_window['use_sliding_window']
         minimal_point_separation = sliding_window['minimal_point_separation']
 
         # --- set illumination configuration
@@ -670,7 +626,8 @@ class File:
                     channel_images = [(donor_image + acceptor_image_transformed) / 2]
                 elif method == 'sum_channels':
                     channel_images = [(donor_image + acceptor_image_transformed)]
-                channels = ['d'] # When number of channels can be > 2 this should probably be the channel with the lowest number
+                channels = [
+                    'd']  # When number of channels can be > 2 this should probably be the channel with the lowest number
 
                 # TODO: Make this a separate plotting function, possibly in Movie
                 # plt.imshow(np.stack([donor_image.astype('uint8'),
@@ -690,11 +647,11 @@ class File:
                     {'coordinates_within_margin': coordinates_within_margin,
                      'coordinates_after_gaussian_fit': coordinates_after_gaussian_fit,
                      'coordinates_without_intensity_at_radius': coordinates_without_intensity_at_radius}
-                for f, kwargs in configuration['coordinate_optimization'].items():
+                for f, kwargs in coordinate_optimization.items():
                     if len(channel_coordinates) == 0:
                         break
-                    channel_coordinates = coordinate_optimization_functions[f](channel_coordinates, channel_image, **kwargs)
-
+                    channel_coordinates = coordinate_optimization_functions[f](channel_coordinates, channel_image,
+                                                                               **kwargs)
 
                 channel_coordinates = set_of_tuples_from_array(channel_coordinates)
 
@@ -704,10 +661,10 @@ class File:
         for coordinate_set in coordinate_sets:
             if len(coordinate_set) == 0:
                 # Reset current .nc file
-                self._init_dataset(0) # SHK: Creating a dummy dataset tp avoid errors in the downstream analysis
+                self._init_dataset(0)  # SHK: Creating a dummy dataset tp avoid errors in the downstream analysis
                 # This actually creates an empty dataset.
                 coordinates = xr.DataArray(np.empty((0, 2, 2)), dims=('molecule', 'channel', 'dimension'),
-                                    coords={'channel': [0, 1], 'dimension': [b'x', b'y']}, name='coordinates')
+                                           coords={'channel': [0, 1], 'dimension': [b'x', b'y']}, name='coordinates')
                 coordinates.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='a')
                 print('no peaks found')
                 return
@@ -721,16 +678,17 @@ class File:
             # --- turn into array ---
             coordinate_sets[i] = array_from_set_of_tuples(coordinate_sets[i])
 
-            if use_sliding_window: # Do we actually need to put this if statement here [IS: 31-08-2020]
-                                   # If not, in default configuration take minimal_point_separation outside sliding_window
-                coordinate_sets[i] = merge_nearby_coordinates(coordinate_sets[i], distance_threshold=minimal_point_separation)
+            if use_sliding_window:  # Do we actually need to put this if statement here [IS: 31-08-2020]
+                # If not, in default configuration take minimal_point_separation outside sliding_window
+                coordinate_sets[i] = merge_nearby_coordinates(coordinate_sets[i],
+                                                              distance_threshold=minimal_point_separation)
 
             # Map coordinates to main channel in movie
             # TODO: make this usable for any number of channels
 
-            coordinate_sets[i] = coordinate_sets[i]+self.movie.get_channel_from_name(channels[i]).boundaries[0]
+            coordinate_sets[i] = coordinate_sets[i] + self.movie.get_channel_from_name(channels[i]).boundaries[0]
             if channels[i] in ['a', 'acceptor']:
-            # if i > 0: #i.e. if channel is not main channel # this didn't work when selecting only the acceptor channel
+                # if i > 0: #i.e. if channel is not main channel # this didn't work when selecting only the acceptor channel
                 # Maybe we can do this earlier, right after point detection, then we need only a single coordinate_set
                 coordinate_sets[i] = self.mapping.transform_coordinates(coordinate_sets[i],
                                                                         direction='Acceptor2Donor')
@@ -749,17 +707,20 @@ class File:
         # TODO: Use set_coordinates_of_channel
         coordinates_in_main_channel = coordinates
         coordinates_list = [coordinates]
-        for i in range(self.movie.number_of_channels)[1:]: # This for loop will only be useful once we make this usable for more than two channels
+        for i in range(self.movie.number_of_channels)[
+            1:]:  # This for loop will only be useful once we make this usable for more than two channels
             if self.movie.number_of_channels > 2:
                 raise NotImplementedError()
-            coordinates_in_other_channel = self.mapping.transform_coordinates(coordinates_in_main_channel, direction='Donor2Acceptor')
+            coordinates_in_other_channel = self.mapping.transform_coordinates(coordinates_in_main_channel,
+                                                                              direction='Donor2Acceptor')
             coordinates_list.append(coordinates_in_other_channel)
 
         coordinates = np.hstack(coordinates_list)
 
-        coordinates_selections = [coordinates_within_margin_selection(coordinates, bounds=self.movie.channels[i].boundaries,
-                                                                      **configuration['coordinate_optimization']['coordinates_within_margin'])
-                                  for i, coordinates in enumerate(coordinates_list)]
+        coordinates_selections = [
+            coordinates_within_margin_selection(coordinates, bounds=self.movie.channels[i].boundaries,
+                                                **coordinate_optimization['coordinates_within_margin'])
+            for i, coordinates in enumerate(coordinates_list)]
         selection = np.vstack(coordinates_selections).all(axis=0)
         coordinates = coordinates[selection]
 
@@ -770,9 +731,10 @@ class File:
         # self.coordinates = coordinates
 
         peaks = xr.DataArray(coordinates, dims=("peak", 'dimension'),
-                     coords={'peak': range(len(coordinates)), 'dimension': [b'x', b'y']}, name='coordinates')
+                             coords={'peak': range(len(coordinates)), 'dimension': [b'x', b'y']}, name='coordinates')
 
-        coordinates = split_dimension(peaks, 'peak', ('molecule', 'channel'), (-1, self.movie.number_of_channels)).reset_index('molecule', drop=True)
+        coordinates = split_dimension(peaks, 'peak', ('molecule', 'channel'),
+                                      (-1, self.movie.number_of_channels)).reset_index('molecule', drop=True)
         # file = str(self.relativeFilePath)
         # #coordinates = split_dimension(coordinates, 'molecule', ('molecule_in_file', 'file'), (-1, 1), (-1, [file]), to='multiindex')
         # coordinates = coordinates.reset_index('molecule').rename(molecule_='molecule_in_file')
@@ -876,99 +838,11 @@ class File:
 
     @coordinates.setter
     def coordinates(self, coordinates):
-        # Reset current .nc file
         self._init_dataset(len(coordinates.molecule))
-
         coordinates.drop('file', errors='ignore').to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='a')
-        # self.extract_background()
 
-        # self.molecules.export_pks_file(self.absoluteFilePath.with_suffix('.pks'))
-
-    def extract_background(self, configuration=None):
-        #TODO: probably remove this
-        sys.stdout.write(f' Calculating background in {self}')
-        # --- Refresh configuration ----
-        if not configuration:
-            configuration = self.experiment.configuration['background']
-
-        # --- get settings from configuration file ----
-        if 'frames_for_background' in configuration.keys():
-            frames_for_background = configuration['frames_for_background']
-            if frames_for_background['last_frame'] == 'last':
-                frames_for_background['last_frame'] = self.movie.number_of_frames-1
-            frames_for_background = [int(frames_for_background['first_frame']),
-                                     int(frames_for_background['last_frame']) - frames_for_background['first_frame'] + 1]
-        else:
-            print('configurations for the background subtraction is not found. All the frames will be used.')
-            frames_for_background = [0, self.movie.number_of_frames-1]
-
-        # --- get the averaged images for background extraction per illumination profile
-        # todo: In the following code, let's use 'illumination' instead of 'illuminations', similar to channel.
-        if self.movie.illumination_arrangement is not None:
-            image_for_background = [None] * len(self.movie.illumination_arrangement)
-            illuminations_to_use = self.movie.illumination_arrangement
-        else:
-            image_for_background = [None]
-            illuminations_to_use = [None]
-        for illumination_id, illumination in enumerate(illuminations_to_use):
-            image_for_background[illumination_id] = \
-                        self.movie.make_projection_image(projection_type='average',
-                                                         start_frame=frames_for_background[0],
-                                                         number_of_frames=frames_for_background[1],
-                                                         illumination=illumination)
-
-        # START of original code
-        # background_list = []
-        # for i, channel in enumerate(self.movie.channels):
-        #     channel_image = self.movie.get_channel(image_for_background[illumination_id], i)
-        #     channel_coordinates = self.coordinates_from_channel(i).values-self.movie.channels[i].vertices[0]
-        #     background_list.append(extract_background(channel_image, channel_coordinates, method=configuration['method']))
-        #
-        # background = xr.DataArray(np.vstack(background_list).T, dims=['molecule','channel'], name='background')
-
-
-        # END of original, START modified
-        background_list = []
-        for illumination_id, illumination in enumerate(illuminations_to_use):
-            tmp_background_list = []
-            for i, channel in enumerate(self.movie.channels):
-                channel_image = self.movie.get_channel(image_for_background[illumination_id], i)
-                channel_coordinates = self.coordinates_from_channel(i).values-self.movie.channels[i].vertices[0]
-                tmp_background_list.append(extract_background(channel_image, channel_coordinates, method=configuration['method']))
-            background_list.append(np.vstack(tmp_background_list).T)
-        background = xr.DataArray(background_list, dims=['illumination', 'molecule', 'channel'], name='background')
-        # END modified
-
-        background.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='a')
-        sys.stdout.write(f'\r   background calculated {self}\n')
-
-    def import_excel_file(self, filename=None):
-        if filename is None:
-            filename = f'{self.absoluteFilePath}_steps_data.xlsx'
-        try:
-            steps_data = pd.read_excel(filename, index_col=[0,1],
-                                       dtype={'kon':np.str})       # reads from the 1st excel sheet of the file
-
-            print(f'imported steps data from excel file for {self.name}')
-        except FileNotFoundError:
-            print(f'No saved analysis for {self.name} as {filename}')
-            return
-        molecules = steps_data.index.unique(0)
-        indices = [int(m.split()[-1]) for m in molecules]
-        for mol in self.molecules:
-            if mol.index + 1 not in indices:
-                continue
-            mol.steps = steps_data.loc[f'mol {mol.index + 1}']
-            # if saved steps are found for molecule it is assumed selected
-            # mol.isSelected = True
-            if 'kon' in mol.steps.columns:
-                k = [int(i) for i in mol.steps.kon[0]]
-                mol.kon_boolean = np.array(k).astype(bool).reshape((4,3))
-        return steps_data
-
-    def extract_traces(self, mask_size=None, neighbourhood_size=None, background_correction=None, alpha_correction=None,
+    def extract_traces(self, mask_size, neighbourhood_size=11, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
-        # TODO: Add configuration to nc file
         if self.number_of_molecules == 0:
             print('   no traces available!!')
             return
@@ -976,15 +850,6 @@ class File:
         if self.movie is None: raise FileNotFoundError('No movie file was found')
 
         print(f'  Extracting traces in {self}')
-
-        configuration = self.configuration['trace_extraction']
-        # channel = configuration['channel']  # Default was 'all'
-        if mask_size is None:
-            mask_size = configuration['mask_size']  # Default was 11
-        if neighbourhood_size is None:
-            neighbourhood_size = configuration['neighbourhood_size']  # Default was 11
-        # subtract_background = configuration['subtract_background']
-        # correct_illumination = configuration['correct_illumination']
 
         if mask_size == 'TIR-T' or mask_size == 'TIR-V':
             mask_size = 1.291
@@ -995,26 +860,8 @@ class File:
         elif mask_size == 'BN-TIRF':
             mask_size = 1.01
 
-        # if subtract_background:
-        #     background = self.background
-        # else:
-        #     background = None
-
-        # if correct_illumination:
-        #     if not hasattr(self.dataset, 'illumination_correction'):
-        #         self.determine_illumination_correction(frames=frames)
-        #     # frames = frames.astype(float)
-        #     # frames.loc[{'channel': channel.index}] *= self.illumination_correction[frame_number, channel.index]
-        #     frames = frames * self.illumination_correction
-
-        # channel_offsets = xr.DataArray(np.vstack([channel.origin for channel in self.movie.channels]),
-        #                                dims=('channel', 'dimension'),
-        #                                coords={'channel': [channel.index for channel in self.movie.channels],
-        #                                        'dimension': ['x', 'y']}) # TODO: Move to Movie
-        # coordinates = self.coordinates - channel_offsets
-
-        intensity = extract_traces(self.movie, self.coordinates, background=None, mask_size=mask_size,
-                                   neighbourhood_size=neighbourhood_size, correct_illumination=False)
+        intensity = extract_traces(self.movie, self.coordinates, mask_size=mask_size,
+                                   neighbourhood_size=neighbourhood_size)
 
         add_configuration_to_dataarray(intensity, units='a.u.') # TODO: Link to units in movie metadata?
         intensity.attrs['configuration'] = json.dumps(dict(mask_size=mask_size, neighbourhood_size=neighbourhood_size))
@@ -1209,23 +1056,31 @@ class File:
         data = self.savetoExcel(filename)
         return data
 
-    def perform_mapping(self, **configuration):
-        image = self.average_image()
-        if not configuration:
-            configuration = self.experiment.configuration['mapping']
+    def perform_mapping(self, method='icp', distance_threshold=3, transformation_type='polynomial',
+                        initial_translation='width/2', peak_finding=None, coordinate_optimization=None):
 
-        transformation_type = configuration['transformation_type']
+        if peak_finding is None:
+            peak_finding = {'donor': {'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10,
+                                      'filter_neighbourhood_size_max': 5},
+                            'acceptor': {'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10,
+                                      'filter_neighbourhood_size_max': 5}}
+
+        if coordinate_optimization is None:
+            coordinate_optimization = {'coordinates_within_margin':  {'margin': 10},
+                                       'coordinates_after_gaussian_fit':  {'gaussian_width': 5}}
+
+        image = self.average_image()
+
         print(transformation_type)
-        method = configuration['method']
 
         donor_image = self.movie.get_channel(image=image, channel='d')
         acceptor_image = self.movie.get_channel(image=image, channel='a')
         donor_coordinates = find_peaks(image=donor_image,
-                                       **configuration['peak_finding']['donor'])
+                                       **peak_finding['donor'])
         if donor_coordinates.size == 0: #should throw a error message to warm no acceptor molecules found
             print('No donor molecules found')
         acceptor_coordinates = find_peaks(image=acceptor_image,
-                                          **configuration['peak_finding']['acceptor'])
+                                          **peak_finding['acceptor'])
         if acceptor_coordinates.size == 0: #should throw a error message to warm no acceptor molecules found
             print('No acceptor molecules found')
         acceptor_coordinates = mp.coordinate_transformations.transform(acceptor_coordinates, translation=[image.shape[1]//2, 0])
@@ -1241,19 +1096,19 @@ class File:
         # for f, kwargs in configuration['coordinate_optimization'].items():
         #     coordinates = coordinate_optimization_functions[f](coordinates, image, **kwargs)
 
-        if 'coordinates_after_gaussian_fit' in configuration['coordinate_optimization']:
-            gaussian_width = configuration['coordinate_optimization']['coordinates_after_gaussian_fit']['gaussian_width']
+        if 'coordinates_after_gaussian_fit' in coordinate_optimization:
+            gaussian_width = coordinate_optimization['coordinates_after_gaussian_fit']['gaussian_width']
             coordinates = coordinates_after_gaussian_fit(coordinates, image, gaussian_width)
 
-        if 'coordinates_without_intensity_at_radius' in configuration['coordinate_optimization']:
+        if 'coordinates_without_intensity_at_radius' in coordinate_optimization:
             coordinates = coordinates_without_intensity_at_radius(coordinates, image,
-                                                                  **configuration['coordinate_optimization']['coordinates_without_intensity_at_radius'])
+                                                                  **coordinate_optimization['coordinates_without_intensity_at_radius'])
                                                                   # radius=4,
                                                                   # cutoff=np.median(image),
                                                                   # fraction_of_peak_max=0.35) # was 0.25 in IDL code
 
-        if 'coordinates_within_margin' in configuration['coordinate_optimization']:
-            margin = configuration['coordinate_optimization']['coordinates_within_margin']['margin']
+        if 'coordinates_within_margin' in coordinate_optimization:
+            margin = coordinate_optimization['coordinates_within_margin']['margin']
         else:
             margin = 0
 
@@ -1266,20 +1121,10 @@ class File:
         # Possibly do this with mapping.nearest_neighbour match
         # self.coordinates = np.hstack([donor_coordinates, acceptor_coordinates]).reshape((-1, 2))
 
-        if ('initial_translation' in configuration) and (configuration['initial_translation'] == 'width/2'):
-            # initial_transformation = {'translation': [image.shape[0] // 2, 0]}
+        if initial_translation == 'width/2':
             initial_transformation = {'translation': [image.shape[1] // 2, 0]}
         else:
-            if configuration['initial_translation'][0] == '[':  # remove brackets
-                arr = [float(x) for x in configuration['initial_translation'][1:-1].split(' ')]
-                initial_transformation = {'translation': arr}
-            else:
-                arr = [float(x) for x in configuration['initial_translation'].split(' ')]
-                initial_transformation = {'translation': configuration['initial_translation']}
-
-        # Obtain specific mapping parameters from configuration file
-        additional_mapping_parameters = {key: configuration[key]
-                                         for key in (configuration.keys() and {'distance_threshold'})}
+            initial_transformation = {'translation': initial_translation}
 
         self.mapping = mp.MatchPoint(source_name='Donor',
                                      source=donor_coordinates,
@@ -1288,10 +1133,9 @@ class File:
                                      method=method,
                                      transformation_type=transformation_type,
                                      initial_transformation=initial_transformation)
-        self.mapping.perform_mapping(**additional_mapping_parameters)
+        self.mapping.perform_mapping(distance_threshold=distance_threshold)
         self.mapping.file = self
 
-        # self.export_mapping(filetype='classic')
         self.export_mapping()
 
         self.show_mapping_in_image()
@@ -1923,60 +1767,40 @@ class File:
         return axes
 
 
-    def show_image(self, projection_type='default', figure=None, unit='pixel', **kwargs):
+    def show_image(self, projection_type='average', frame_range=[0, 20], illumination=0, figure=None, unit='pixel', **kwargs):
         # TODO: Show two channels separately and connect axes
-        # Refresh configuration
-        if projection_type == 'default':
-            projection_type = self.experiment.configuration['projection_image']['projection_type']
 
         if figure is None:
             figure = plt.figure()
         axis = figure.gca()
 
+        image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range, illumination=illumination, **kwargs)
         # Choose method to plot
         if projection_type == 'average':
-            image = self.average_image()
             axis.set_title('Average image')
         elif projection_type == 'maximum':
-            image = self.maximum_projection_image()
             axis.set_title('Maximum projection')
-
 
         if unit == 'pixel':
             unit_string = ' (pixels)'
         elif unit == 'metric':
             kwargs['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
             unit_string = f' ({self.movie.pixel_size_unit})'
+        else:
+            raise ValueError('Wrong unit value')
 
         axis.imshow(image, **kwargs)
         axis.set_title(self.relativeFilePath)
         axis.set_xlabel('x'+unit_string)
         axis.set_ylabel('y'+unit_string)
-
-        # TODO: Remove following commented out code
-        # as the vmin and vmax can now be set by passing the kwargs to imshow.
-        #
-        # image_handle = axis.imshow(image)
-        #
-        # # process keyword arguments
-        # colorscale = list(image_handle.get_clim())
-        # if 'vmin' in kwargs:
-        #     colorscale[0] = kwargs['vmin']
-        # if 'vmax' in kwargs:
-        #     colorscale[1] = kwargs['vmax']
-        # image_handle.set_clim(colorscale)
-
         return figure, axis
 
     def show_average_image(self, figure=None, **kwargs):
         self.show_image(projection_type='average', figure=figure, **kwargs)
 
-    def show_coordinates(self, figure=None, annotate=None, unit='pixel', **kwargs):
+    def show_coordinates(self, figure=None, annotate=False, unit='pixel', **kwargs):
         if not figure:
             figure = plt.figure()
-
-        if annotate is None:
-            annotate = self.experiment.configuration['show_movie']['annotate']
 
         if self.coordinates is not None:
             axis = figure.gca()
