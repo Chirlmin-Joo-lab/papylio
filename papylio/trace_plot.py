@@ -61,7 +61,7 @@ class TracePlotWindow(QWidget):
                  show=True, split_illuminations=False, **kwargs):
 
         if plot_settings is None:
-            plot_settings = {'intensity': {'active': True, 'plot_range': (0, 10000), 'color': ('g', 'r')},
+            plot_settings = {'intensity': {'active': True, 'color': ('g', 'r')},
                              'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
 
         # To accomodate old arguments
@@ -337,7 +337,7 @@ class PlotConfiguration(QWidget):
         self.view = QTreeView()
         self.model = PlotConfigurationModel()
         self.model.setHorizontalHeaderLabels(["Variable", ""])
-        self.view.setColumnWidth(0, 200)
+        # self.view.setColumnWidth(0, 200)
 
         self.model.itemChanged.connect(self._on_item_change)
         self.model.rowsRemoved.connect(self._on_rows_changed)
@@ -353,6 +353,10 @@ class PlotConfiguration(QWidget):
         self.view.setAlternatingRowColors(True)
         self.view.setRootIsDecorated(True)
         self.view.header().setStretchLastSection(True)
+        self.view.header().setSectionResizeMode(
+            0,
+            QHeaderView.ResizeToContents
+        )
 
         self._dataset = None
         self._trace_variables = []
