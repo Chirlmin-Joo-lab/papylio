@@ -18,6 +18,29 @@ import scipy.ndimage.filters as filters
 
 
 def extract_background(image, coordinates, method='ROI_minimum', filter_neighbourhood_size=10, radius=5):
+    """Estimate background intensity values for a set of coordinates in an image.
+
+    Supports several simple methods: global channel mean/median, local ROI minimum/median,
+    and annular (surrounding) mean/median.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D image array
+    coordinates : array-like
+        N x 2 array of (x,y) coordinates
+    method : str, optional
+        One of {'channel_mean','channel_median','ROI_minimum','ROI_median','surrounding_mean','surrounding_median'}
+    filter_neighbourhood_size : int, optional
+        Neighborhood size used for local filters (ROI methods)
+    radius : int, optional
+        Radius in pixels for surrounding (annular) methods
+
+    Returns
+    -------
+    np.ndarray
+        1D array of background estimates per coordinate
+    """
     background = np.zeros(coordinates.shape[0])
 
     if method == 'channel_mean':

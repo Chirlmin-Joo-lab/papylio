@@ -1,3 +1,15 @@
+"""Papylio: Single-Molecule Data Analysis and Visualization Platform.
+
+A comprehensive Python package for analyzing, visualizing, and extracting insights
+from single-molecule microscopy data, including FRET analysis, trace extraction,
+hidden Markov modeling, and sequencing data integration.
+
+Main Classes
+------------
+- Experiment: Collection of data files in an experiment
+- File: Single-molecule data file with coordinate and trace analysis
+- Movie: Microscopy image sequence/movie loader
+"""
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parents[1]))

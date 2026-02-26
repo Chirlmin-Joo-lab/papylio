@@ -29,6 +29,19 @@ from papylio.movie.background_correction import get_threshold
 from skimage import measure
 
 def autoconfig_AND_perform_mapping(mapping_file_index, main_path):
+    """Attempt to perform mapping for a file and run auto-configuration on failure.
+
+    Tries normal mapping first; if that fails it calls `autoconfig` to adapt
+    threshold and mapping parameters and retries until success or until stopping
+    criteria are reached.
+
+    Parameters
+    ----------
+    mapping_file_index : int
+        Index of the file within the experiment.files list to use for mapping.
+    main_path : str or Path
+        Path to the experiment root used to construct an Experiment object.
+    """
     exp = Experiment(main_path)
     mapping_file = exp.files[mapping_file_index]
     print(mapping_file.name)
@@ -78,6 +91,22 @@ def autoconfig_AND_perform_mapping(mapping_file_index, main_path):
                 
 def autoconfig(exp, input_file, opt='mapping'): 
 # step 1. find recommended threshold for donor and acceptor channel
+    """Automatically estimate mapping-related threshold and radius parameters.
+
+    Analyses donor/acceptor average images to recommend threshold and neighborhood
+    radius values. Writes the recommended values back into the Experiment
+    configuration under either the 'mapping' or 'find_coordinates' sections.
+
+    Parameters
+    ----------
+    exp : papylio.experiment.Experiment
+        The experiment object whose configuration will be updated.
+    input_file : papylio.file.File
+        The file used to derive recommendations (typically the mapping file).
+    opt : {'mapping','find_coordinates'}
+        Which configuration block to update.
+    """
+    # step 1. find recommended threshold for donor and acceptor channel
     show=0
     average_image = input_file.average_image
     donor_image=input_file.movie.get_channel(channel='d')
@@ -176,4 +205,3 @@ def autoconfig(exp, input_file, opt='mapping'):
         exp.configuration['find_coordinates']['coordinate_optimization']['coordinates_without_intensity_at_radius']['fraction_of_peak_max']=\
                float( factor_threshold)
     exp.export_config_file()
-    
