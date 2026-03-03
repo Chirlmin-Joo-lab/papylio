@@ -15,6 +15,7 @@ import skimage as ski
 import warnings
 import sys
 import re
+from typing import Literal
 import logging
 import inspect
 import tifffile
@@ -38,6 +39,7 @@ from papylio.log_functions import add_configuration_to_dataarray
 # from matchpoint.coordinate_transformations import translate, transform # MD: we don't want to use this anymore I think, it is only linear
                                                                            # IS: We do! But we just need to make them usable with the nonlinear mapping
 from papylio.background_subtraction import extract_background
+from papylio.analysis.classification_simple import classify_threshold
 from papylio.analysis.hidden_markov_modelling import classify_hmm
 # from papylio.plugin_manager import PluginManager
 # from papylio.plugin_manager import PluginMetaClass
@@ -1082,6 +1084,15 @@ class File:
 
         return traces
 
+    @property
+    @return_none_when_executed_by_pycharm
+    def traces_names(self):
+        # return list(self.classifications.data_vars.keys())
+        return [
+            name for name, da in self.data_vars.items()
+            if da.dims and da.dims[-1] == "frame"
+        ]
+
     def plot_hmm_rates(self, name=None):
         if name is None:
             name = self.name
@@ -1547,7 +1558,7 @@ class File:
                     classification_configurations[name] = None
         return classification_configurations
 
-    def create_classification(self, classification_type, variable, select=None, name=None, classification_kwargs=None, apply=None):
+    def create_classification(self, classification_type: Literal["threshold", "hmm"], variable, select=None, name=None, classification_kwargs=None, apply=None):
         if classification_kwargs is None:
             classification_kwargs = {}
         if isinstance(variable, str):
@@ -1560,7 +1571,6 @@ class File:
             traces = traces.sel(**select)
 
         if classification_type == 'threshold':
-            from papylio.analysis.classification_simple import classify_threshold
             ds = classify_threshold(traces, **classification_kwargs).to_dataset()
             # TODO: perhaps replace the following line with some function that actually spits out the classification kwargs.
             add_configuration_to_dataarray(ds.classification, classify_threshold, classification_kwargs)
@@ -1643,6 +1653,17 @@ class File:
         classification_combined.attrs['classification_configurations'] = json.dumps(self.classification_configurations(list(classification_assignment.keys())))
 
         self.set_variable(classification_combined, name='classification', dims=('molecule','frame'))
+
+    def clear_classifications(self):
+        dataset = self.dataset
+        dataset = dataset.drop_vars([name for name in dataset.data_vars.keys() if name.startswith('classification_')])
+        # for name, da in dataset.data_vars.items():
+        #     da.encoding['dtype'] = da.dtype
+        encoding = {
+            var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
+        }
+        dataset.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+
 
     @property
     @return_none_when_executed_by_pycharm
@@ -2045,46 +2066,16 @@ class File:
         self.show_coordinates(figure=figure)
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
-    def show_traces(self, plot_variables=['intensity', 'FRET'], ylims=[(0, 35000), (0, 1)], colours=[('g', 'r'), ('b')],
-                    selected=False, split_illuminations=True, **kwargs):
-        # probably better to put selected and illumination options in TracePlotWindow
-        dataset = xr.Dataset()
-        for variable in plot_variables:
-            dataset[variable] = getattr(self, variable)
-        selected_original = self.selected
-        dataset['selected'] = selected_original
-        if selected:
-            dataset = dataset.sel(molecule=dataset['selected'])
+    def show_traces(self, split_illuminations=True, **kwargs):
+        dataset = self.dataset
 
-        if split_illuminations:
-            illuminations_in_file = np.unique(dataset.illumination)
-            if len(illuminations_in_file) > 1:
-                for plot_variable in ['intensity', 'FRET']:
-                    if plot_variable in plot_variables:
-                        plot_variable_index = plot_variables.index(plot_variable)
-                        for j, illumination_index in enumerate(illuminations_in_file):
-                            name = f'{plot_variable}_i{illumination_index}'
-                            dataset[name] = dataset[plot_variable].sel(frame=dataset.illumination == illumination_index)
-                            plot_variables.insert(plot_variable_index + j + 1, name)
-                            if j > 0:
-                                ylims.insert(plot_variable_index + j, ylims[plot_variable_index])
-                                colours.insert(plot_variable_index + j, colours[plot_variable_index])
-                        plot_variables.pop(plot_variable_index)
-
-        # dataset = self.dataset
         save_path = self.experiment.main_path.joinpath('Trace plots')
         if not save_path.is_dir():
             save_path.mkdir()
 
         from papylio.trace_plot import TracePlotWindow
-        TracePlotWindow(dataset=dataset, plot_variables=plot_variables, ylims=ylims, colours=colours, save_path=save_path, **kwargs)
-        if selected:
-            selected_original[dict(molecule=selected_original)] = dataset.selected
-        else:
-            selected_original = dataset.selected
-
-        # We could also save the whole dataset, but since currently only alterations are made to selected.
-        selected_original.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
+                        dataset_path=self.absoluteFilePath.with_suffix('.nc'), save_path=save_path, **kwargs)
 
 
 def calculate_intensity_total(intensity):
