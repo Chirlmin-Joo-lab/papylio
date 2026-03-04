@@ -173,7 +173,9 @@ class TracePlotWindow(QWidget):
         if self.dataset_path is not None:
             with netCDF4.Dataset(self.dataset_path, "a") as nc:
                 for variable, plot_settings in self.plot_configuration.plot_settings.items():
-                    nc[variable].setncattr("plot_settings", json.dumps(plot_settings))
+                    nc_variable = nc.variables.get(variable)
+                    if nc_variable is not None:
+                        nc_variable.setncattr("plot_settings", json.dumps(plot_settings))
 
     def save_selection(self):
         if self.dataset_path is not None:
@@ -1018,12 +1020,15 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         self.bm.update()
 
     def set_plot_range(self, plot_variable, plot_range):
+        if plot_variable not in self.plot_settings:
+            return
+
         axis_names = self.get_axis_names_with_plot_variable(plot_variable)
         secondary = self.plot_settings[plot_variable].get('secondary', False)
         for axis_name in axis_names:
             if secondary and self.twin_axes.get(axis_name) is not None:
                 self.twin_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
-            else:
+            elif axis_name == plot_variable:
                 self.plot_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
         self.init_plot_artists()
         # self.init_plots() # Perhaps this can be init_plot_artists only, but then probably the blit background needs to be updated.
@@ -1032,6 +1037,9 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         # self.bm.on_draw(None)
 
     def set_plot_color(self, plot_variable, colors):
+        if plot_variable not in self.plot_settings:
+            return
+
         trace_artists = self.get_trace_artists_with_attribute('plot_variable', plot_variable)
         for trace_artist in trace_artists:
             trace_artist.set_color(colors)
