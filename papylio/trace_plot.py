@@ -173,7 +173,9 @@ class TracePlotWindow(QWidget):
         if self.dataset_path is not None:
             with netCDF4.Dataset(self.dataset_path, "a") as nc:
                 for variable, plot_settings in self.plot_configuration.plot_settings.items():
-                    nc[variable].setncattr("plot_settings", json.dumps(plot_settings))
+                    nc_variable = nc.variables.get(variable)
+                    if nc_variable is not None:
+                        nc_variable.setncattr("plot_settings", json.dumps(plot_settings))
 
     def save_selection(self):
         if self.dataset_path is not None:
