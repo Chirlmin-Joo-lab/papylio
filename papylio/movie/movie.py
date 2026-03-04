@@ -483,6 +483,7 @@ class Movie:
 
     @property
     def pixel_to_stage_coordinates_transformation(self):
+        #TODO: Check whether the flipping implementation is correct for different microscopes, i.e. whether the stage coordinates are flipped with respect to the pixel coordinates and whether this is correctly implemented by flipping the stage coordinates in the translation part of the transformation.
         pixels_to_um = AffineTransform(scale=self.pixel_size)
         pixels_um_to_stage_coordinates_um = AffineTransform(translation=np.flip(self.stage_coordinates))
         pixels_to_stage_coordinates_um = pixels_to_um + pixels_um_to_stage_coordinates_um
