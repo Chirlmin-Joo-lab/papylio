@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+title: "Papylio"
+type: software
+abstract: "Python package for single-molecule fluorescence data analysis."
+message: "If you use this software, please cite it as below."
+authors:
+  - given-names: Ivo
+    family-names: Severins
+    orcid: "https://orcid.org/0000-0002-8565-2387"
+  - given-names: Jacob
+    family-names: Kerssemakers
+    orcid: "https://orcid.org/0000-0002-6184-7913"
+  - given-names: Sung Hyun
+    family-names: Kim
+    orcid: "https://orcid.org/0000-0001-9272-7036"
+  - given-names: Carolien
+    family-names: Bastiaanssen
+    orcid: "https://orcid.org/0000-0003-3237-7251"
+  - given-names: Margreet
+    family-names: Docter
+    orcid: "https://orcid.org/0000-0002-3863-9657"
+  - given-names: Chirlmin
+    family-names: Joo
+    orcid: "https://orcid.org/0000-0003-2803-0335"
+keywords:
+  - single-molecule
+  - smFRET
+  - TIRF
+  - FRET
+  - fluorescence
+  - microscopy
+  - traces
+  - analysis
+  - SPARXS
+  - sequencing
