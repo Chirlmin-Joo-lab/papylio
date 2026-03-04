@@ -1,3 +1,9 @@
+"""Movie IO and processing classes.
+
+Provides the Movie base class and format-specific subclasses for reading frames,
+creating projection images, and applying corrections.
+"""
+
 import re
 import sys
 import itertools
@@ -22,21 +28,40 @@ from papylio.timer import Timer
 from papylio.log_functions import add_configuration_to_dataarray
 
 class Illumination:
+    """Represents a microscopy illumination/excitation channel.
+
+    Stores information about an illumination pattern including multiple
+    name variants for flexible identification.
+    """
     def __init__(self, name, short_name='', other_names=[]):
+        """Initialize Illumination object.
+
+        Parameters
+        ----------
+        name : str
+            Full name of the illumination (e.g., 'green', 'red')
+        short_name : str, optional
+            Short abbreviation (e.g., 'g', 'r') (default: '')
+        other_names : list, optional
+            Alternative names for this illumination (default: [])
+        """
         # self.movie = movie
         self.name = name
         self.short_name = short_name
         self.other_names = other_names
 
     def __repr__(self):
+        """Return string representation of Illumination."""
         return (f'{self.__class__.__name__}({self.name})')
 
     @property
     def names(self):
+        """list : All names/identifiers for this illumination including index."""
         return [self.index, self.name, self.short_name] + self.other_names
 
     @property
     def index(self):
+        """int : Index of this illumination in the global illuminations list (read-only)"""
         try:
             return Movie.illuminations.index(self)
         except:
@@ -44,8 +69,20 @@ class Illumination:
 
 
 class Movie:
+    """Base class for microscopy movie/image stack handling.
+
+    Provides abstract interface for loading, processing, and accessing
+    image data from various microscopy file formats.
+    """
     @classmethod
     def type_dict(cls):
+        """Get dictionary mapping file extensions to Movie subclasses.
+
+        Returns
+        -------
+        dict
+            Dictionary with file extensions as keys and Movie subclasses as values
+        """
         # It is important to import all movie files to recognize them by subclasses.
         # Perhaps we can make this more elegant in some way.
         from papylio.movie.sifx import SifxMovie
@@ -60,19 +97,22 @@ class Movie:
 
     @classmethod
     def get_illumination_from_name(cls, illumination_name):
-        """Get the channel index belonging to a specific channel (name)
-        If
+        """Get illumination object by name or index.
 
         Parameters
         ----------
-        channel : str or int
-            The name or number of a channel
+        illumination_name : str or int
+            The name, short name, or index of an illumination
 
         Returns
         -------
-        i: int
-            The index of the channel to which the channel name belongs
+        Illumination
+            The matching Illumination object
 
+        Raises
+        ------
+        ValueError
+            If illumination name is not found
         """
         for illumination in cls.illuminations:
             if illumination_name in illumination.names or illumination_name == illumination:
@@ -82,19 +122,17 @@ class Movie:
 
     @classmethod
     def get_illuminations_from_names(cls, illumination_names):
-        """Get the channel index belonging to a specific channel (name)
-        If
+        """Get list of illumination objects by names.
 
         Parameters
         ----------
-        channel : str or int
-            The name or number of a channel
+        illumination_names : str, list, or None
+            List of illumination names or 'all' for all illuminations
 
         Returns
         -------
-        i: int
-            The index of the channel to which the channel name belongs
-
+        list
+            List of Illumination objects matching the names
         """
         if illumination_names in [None, 'all']:
             return cls.illuminations
@@ -106,11 +144,47 @@ class Movie:
 
     @classmethod
     def get_illumination_indices_from_names(cls, illumination_names):
+        """Get list of illumination indices by illumination names.
+
+        Parameters
+        ----------
+        illumination_names : str, list, or None
+            Illumination name(s)
+
+        Returns
+        -------
+        list
+            List of illumination indices
+        """
         illuminations = cls.get_illuminations_from_names(illumination_names)
         return [illumination.index for illumination in illuminations]
 
     @classmethod
     def image_info_from_filename(cls, filename):
+        """Extract image metadata from filename using regex patterns.
+
+        Parses standardized filename format to extract FOV index, projection type,
+        frame range, illumination index, and correction flags.
+
+        Parameters
+        ----------
+        filename : str
+            Image filename to parse
+
+        Returns
+        -------
+        dict
+            Dictionary containing extracted image metadata
+
+        Notes
+        -----
+        Filename format patterns recognized:
+        - _fov{N}: Field of view index
+        - _ave/_max: Projection type
+        - _f{start}-{end}-{interval}: Frame range
+        - _i{N}: Illumination index
+        - _raw: Indicates raw (uncorrected) image
+        """
         image_info = {}
 
         fov_index_result = re.search('(?<=_fov)\d*(?=[_.])', filename)
@@ -162,6 +236,28 @@ class Movie:
     @classmethod
     def image_info_to_filename(cls, filename, fov_index=None, projection_type=None, frame_range=None,
                                illumination=None, apply_corrections=None):
+        """Construct standardized filename from base name and image metadata.
+
+        Parameters
+        ----------
+        filename : str
+            Base filename
+        fov_index : int, optional
+            Field of view index (default: None)
+        projection_type : str, optional
+            Projection type: 'average', 'maximum', or None (default: None)
+        frame_range : tuple, optional
+            (start, end) or (start, end, interval) frame indices (default: None)
+        illumination : int, optional
+            Illumination index (default: None)
+        apply_corrections : bool, optional
+            If False, appends '_raw' to filename (default: None)
+
+        Returns
+        -------
+        str
+            Formatted filename with metadata embedded
+        """
         # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
         if fov_index is not None:
             # filename += f'_fov{self.fov_info["fov_chosen"]:03d}'
@@ -208,6 +304,15 @@ class Movie:
         self.__dict__.update(dict)
 
     def __init__(self, filepath, rot90=0):  # , **kwargs):
+        """Initialize Movie object.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to the movie file
+        rot90 : int, optional
+            Number of 90-degree rotations to apply to images (default: 0)
+        """
         self.filepath = Path(filepath)
         self._with_counter = 0
         self.fov_index = None
@@ -253,21 +358,25 @@ class Movie:
         self.header_is_read = False
 
     def __enter__(self):
+        """Context manager entry point. Opens file for reading."""
         if self._with_counter == 0:
             self.open()
             # print('open')
         self._with_counter += 1
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit point. Closes file when exiting context."""
         self._with_counter -= 1
         if self._with_counter == 0:
             self.close()
             # print('close')
 
     def __repr__(self):
+        """Return string representation of Movie object."""
         return (f'{self.__class__.__name__}({str(self.filepath)})')
 
     def __getattr__(self, item):
+        """Lazy-load header when accessing attributes before header is read."""
         # if '_initialized' in self.__dict__ and not self.header_is_read:
         # if item != 'header_is_read' and not self.header_is_read:
         # if item == '_with_counter':
@@ -284,22 +393,27 @@ class Movie:
 
     @property
     def pixels_per_frame(self):
+        """int : Total number of pixels in one frame (width × height)"""
         return self.width * self.height
 
     @property
     def bitdepth(self):
+        """int : Bit depth of the image data (e.g., 8, 16, 32)"""
         return self.data_type.itemsize * 8  # 8 bits in a byte
 
     @property
     def bytes_per_frame(self):
+        """int : Number of bytes per frame"""
         return self.data_type.itemsize * self.pixels_per_frame
 
     @property
     def time(self):
+        """xr.DataArray : Time coordinate for each frame"""
         return self._time
 
     @time.setter
     def time(self, value):
+        """Set time coordinate for frames."""
         self._time = value
 
     # @property
@@ -319,10 +433,7 @@ class Movie:
     #         self._number_of_channels = np.product(channel_grid)
     @property
     def number_of_illuminations(self):
-        """ int : number of channels in the movie
-
-        Setting the number of channels will divide the image horizontally in equally spaced channels.
-        """
+        """int : Number of illumination channels in the movie"""
         return len(self.illuminations)
 
     @property
@@ -508,6 +619,11 @@ class Movie:
         return self.pixel_to_stage_coordinates_transformation(self.channels[0].boundaries)
 
     def read_header(self):
+        """Read and parse file header.
+
+        Calls the subclass-specific _read_header() method and applies
+        image rotations if needed.
+        """
         self._read_header()
         if not (self.rot90 % 2 == 0):
             width = self.width
@@ -518,9 +634,41 @@ class Movie:
         self.header_is_read = True
 
     def read_frame(self, frame_index, **kwargs):
+        """Read a single frame from the movie.
+
+        Parameters
+        ----------
+        frame_index : int
+            Index of frame to read
+        **kwargs
+            Additional keyword arguments passed to read_frames()
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Single frame image data
+        """
         return self.read_frames([frame_index], **kwargs).squeeze(axis=0)
 
     def read_frames(self, frame_indices=None, apply_corrections=True, xarray=True, flatten_channels=False):
+        """Read multiple frames from the movie.
+
+        Parameters
+        ----------
+        frame_indices : list or np.ndarray, optional
+            Indices of frames to read. If None, reads all frames (default: None)
+        apply_corrections : bool, optional
+            If True, apply flatfield/darkfield corrections (default: True)
+        xarray : bool, optional
+            If True, return xarray DataArray; else return numpy array (default: True)
+        flatten_channels : bool, optional
+            If True, combine channels back into spatial dimensions (default: False)
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Array of image frames with shape (frame, channel, y, x)
+        """
         if frame_indices is None:
             frame_indices = self.frame_indices.values
 
@@ -549,13 +697,30 @@ class Movie:
 
     @property
     def channel_rows(self):
+        """int : Number of channel rows in channel arrangement"""
         return len(self.channel_arrangement[0])
 
     @property
     def channel_columns(self):
+        """int : Number of channel columns in channel arrangement"""
         return len(self.channel_arrangement[0, 0])
 
     def separate_channels(self, frames):
+        """Separate channels from spatial dimensions.
+
+        Splits frames from single image dimension into separate channel dimension
+        based on channel_arrangement pattern.
+
+        Parameters
+        ----------
+        frames : np.ndarray or xr.DataArray
+            Input frames with channels arranged spatially
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Frames with channel as separate dimension
+        """
         # if frames.ndim == 2:
         #     frames = frames[None, :, :]
         # return expand_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2))
@@ -577,6 +742,18 @@ class Movie:
         # return xr.DataArray(new, dims=['frame','y','x','channel'])
 
     def flatten_channels(self, frames):
+        """Combine channel dimension back into spatial dimensions.
+
+        Parameters
+        ----------
+        frames : np.ndarray or xr.DataArray
+            Frames with channel as separate dimension
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Frames with channels arranged spatially
+        """
         # return split_along_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), inverse=True)
         # return split_along_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), inverse=True)
         # if frames.shape[-3]//channel_columns//channel_rows == 1:
@@ -593,6 +770,20 @@ class Movie:
         )
 
     def frames_to_xarray_dataarray(self, frames, frame_indices):
+        """Convert frame array to xarray DataArray with coordinates.
+
+        Parameters
+        ----------
+        frames : np.ndarray
+            Frame array to convert
+        frame_indices : array-like
+            Frame indices for coordinates
+
+        Returns
+        -------
+        xr.DataArray
+            DataArray with frame, channel, y, x dimensions and coordinates
+        """
         frames = xr.DataArray(frames,
                               dims=('frame', 'channel', 'y', 'x'),
                               coords={'frame': frame_indices,
@@ -1121,7 +1312,27 @@ class Movie:
 
 
 class Channel:
+    """Represents a single color channel in a multi-channel microscopy image.
+
+    Stores channel information including name, color mapping, and spatial location
+    within multi-channel images where channels are arranged in a grid pattern.
+    """
     def __init__(self, movie, name, short_name, other_names=[], colour_map=None):
+        """Initialize Channel object.
+
+        Parameters
+        ----------
+        movie : Movie
+            Parent Movie object
+        name : str
+            Full name of the channel (e.g., 'green', 'red')
+        short_name : str
+            Short abbreviation for the channel
+        other_names : list, optional
+            Alternative names for the channel (default: [])
+        colour_map : matplotlib.colors.Colormap, optional
+            Color map for displaying this channel. If None, auto-generated from name
+        """
         self.movie = movie
         self.name = name
         self.short_name = short_name
@@ -1132,14 +1343,17 @@ class Channel:
             self.colour_map = make_colour_map(channel_colour)
 
     def __repr__(self):
+        """Return string representation of Channel."""
         return (f'{self.__class__.__name__}({self.name})')
 
     @property
     def names(self):
+        """list : All names/identifiers for this channel."""
         return [self.index, str(self.index), self.name, self.short_name] + self.other_names
 
     @property
     def index(self):
+        """int : Index of this channel in the movie's channel list (read-only)"""
         try:
             return self.movie.channels.index(self)
         except:
@@ -1147,14 +1361,17 @@ class Channel:
 
     @property
     def location(self):
+        """list : [frame_index, row_index, column_index] position in channel arrangement."""
         return [int(i) for i in np.where(self.movie.channel_arrangement == self.index)]
 
     @property
     def width(self):
+        """int : Width of this channel in pixels (read-only)"""
         return self.movie.width // self.movie.channel_arrangement.shape[2]
 
     @property
     def height(self):
+        """int : Height of this channel in pixels (read-only)"""
         return self.movie.height // self.movie.channel_arrangement.shape[1]
         # for frame_index, frame in enumerate(self.channel_arrangement):
         #     for y_index, y in enumerate(frame):
@@ -1166,43 +1383,77 @@ class Channel:
 
     @property
     def dimensions(self):
+        """np.ndarray : [width, height] of the channel (read-only)"""
         return np.array([self.width, self.height])
 
     @property
     def origin(self):
+        """list : [x, y] pixel coordinates of channel origin (top-left corner)."""
         return [self.width * self.location[2],
                 self.height * self.location[1]]
 
     @property
     def boundaries(self):
-        # channel_boundaries: np.array
-        # #         Formatted as two coordinates, with the lowest and highest x and y values respectively
+        """np.ndarray : Bounding box coordinates as [[x_min, x_max], [y_min, y_max]]."""
         horizontal_boundaries = np.array([0, self.width]) + self.width * self.location[2]
         vertical_boundaries = np.array([0, self.height]) + self.height * self.location[1]
         return np.vstack([horizontal_boundaries, vertical_boundaries]).T
 
     @property
     def vertices(self):
-        #     channel_vertices : np.array
-        #         Four coordinates giving the four corners of the channel
-        #         Coordinates form a closed shape
+        """np.ndarray : Four corner coordinates of the channel forming a closed shape."""
         channel_vertices = np.array([self.origin, ] * 4)
         channel_vertices[[1, 2], 0] += self.width
         channel_vertices[[2, 3], 1] += self.height
         return channel_vertices
 
     def crop_image(self, image):
+        """Crop a single image to this channel's boundaries.
+
+        Parameters
+        ----------
+        image : np.ndarray
+            Image array to crop
+
+        Returns
+        -------
+        np.ndarray
+            Cropped image containing only this channel
+        """
         return image[self.boundaries[0, 1]:self.boundaries[1, 1],
                self.boundaries[0, 0]:self.boundaries[1, 0]]
 
     def crop_images(self, images):
+        """Crop multiple images to this channel's boundaries.
+
+        Parameters
+        ----------
+        images : np.ndarray
+            Image stack array to crop (first dimension is frame)
+
+        Returns
+        -------
+        np.ndarray
+            Cropped images containing only this channel
+        """
         return images[:, self.boundaries[0, 1]:self.boundaries[1, 1],
                self.boundaries[0, 0]:self.boundaries[1, 0]]
 
 
 class MoviePlotter:
     # Adapted from Matplotlib Image Slices Viewer
+    """Interactive image viewer for movie frames with scroll wheel navigation.
+
+    Displays frames from a Movie object with ability to navigate using scroll wheel.
+    """
     def __init__(self, movie):
+        """Initialize MoviePlotter.
+
+        Parameters
+        ----------
+        movie : Movie
+            Movie object to visualize
+        """
         fig, ax = plt.subplots(1, 1)
         fig.canvas.mpl_connect('scroll_event', self.on_scroll)
         plt.show()
@@ -1218,6 +1469,13 @@ class MoviePlotter:
         self.update()
 
     def on_scroll(self, event):
+        """Handle scroll wheel events to navigate frames.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.ScrollEvent
+            Scroll event from matplotlib
+        """
         print("%s %s" % (event.button, event.step))
         if event.button == 'up':
             self.ind = (self.ind + 1) % self.slices
@@ -1226,12 +1484,29 @@ class MoviePlotter:
         self.update()
 
     def update(self):
+        """Update displayed frame."""
         self.im.set_data(self.movie.read_frame(self.ind, flatten_channels=True, xarray=False))
         self.ax.set_ylabel('slice %s' % self.ind)
         self.im.axes.figure.canvas.draw()
 
 
 def make_colour_map(colour, N=256):
+    """Create a matplotlib colormap for the specified color.
+
+    Creates a linear colormap transitioning from black to the specified color.
+
+    Parameters
+    ----------
+    colour : str
+        Color name: 'red', 'green', 'blue', or 'grey'
+    N : int, optional
+        Number of color levels in the map (default: 256)
+
+    Returns
+    -------
+    matplotlib.colors.ListedColormap
+        Colormap object for use with matplotlib
+    """
     values = np.zeros((N, 3))
     if colour == 'grey':
         values[:, 0] = values[:, 1] = values[:, 2] = np.linspace(0, 1, N)
@@ -1248,6 +1523,33 @@ def make_colour_map(colour, N=256):
 
 
 def expand_axes(frames, expand_into, from_axes=-1, to_axes=None, new_axes_positions=[], inverse=False, squeeze=False):
+    """Expand/split array axes along specified dimensions.
+
+    Splits frames along specified axes into multiple sub-arrays, useful for
+    separating multi-channel or multi-frame data stored in single dimensions.
+
+    Parameters
+    ----------
+    frames : np.ndarray
+        Input array to expand
+    expand_into : int or tuple of int
+        Target sizes for expansion
+    from_axes : int or tuple of int, optional
+        Source axis/axes to expand from (default: -1)
+    to_axes : int, tuple of int, or None, optional
+        Target axis/axes to expand to (default: None)
+    new_axes_positions : list, optional
+        Positions for new axes (default: [])
+    inverse : bool, optional
+        If True, perform inverse operation (collapse instead of expand) (default: False)
+    squeeze : bool, optional
+        If True, remove singleton dimensions (default: False)
+
+    Returns
+    -------
+    np.ndarray
+        Expanded array with separated dimensions
+    """
     if isinstance(expand_into, int):
         expand_into = (expand_into,)
     if isinstance(from_axes, int):
@@ -1325,3 +1627,4 @@ def expand_axes(frames, expand_into, from_axes=-1, to_axes=None, new_axes_positi
     # print(time.time() - start)
 
     return frames
+

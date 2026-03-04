@@ -20,9 +20,31 @@ from papylio.movie.movie import Movie, Illumination
 
 
 class ND2Movie(Movie):
+    """Movie class for reading Nikon ND2 image files.
+
+    Handles loading and processing of Nikon ND2 format microscopy images,
+    including support for multi-frame acquisitions and multiple fields of view.
+    Reads metadata including pixel size, stage coordinates, and illumination info.
+    """
     extensions = ['.nd2']
 
     def __init__(self, arg, *args, **kwargs):
+        """Initialize ND2Movie instance.
+
+        Parameters
+        ----------
+        arg : str or Path
+            Path to the ND2 file
+        *args
+            Additional positional arguments passed to Movie parent class
+        **kwargs
+            Additional keyword arguments passed to Movie parent class
+
+        Notes
+        -----
+        - Supports multi-FOV (field of view) ND2 files
+        - FOV index is extracted from filename if present (e.g., '_fov001')
+        """
         super().__init__(arg, *args, **kwargs)
         # super().__init__(arg)
 
@@ -62,6 +84,11 @@ class ND2Movie(Movie):
         self.file = None # Note this is for the tif file, not the File class.
 
     def open(self):
+        """Open ND2 file for reading.
+
+        Creates an ND2Reader object to access file contents and configures
+        the iteration order for frames and channels.
+        """
         self.file = ND2Reader(str(self.filepath))
         if 'c' in self.file.axes:
             self.file.iter_axes = 'tc'
@@ -69,9 +96,16 @@ class ND2Movie(Movie):
             self.file.iter_axes = 't'
 
     def close(self):
+        """Close the ND2 file."""
         self.file.close()
 
     def _read_header(self):
+        """Read and parse ND2 file header and metadata.
+
+        Extracts image dimensions, frame/FOV information, channel/illumination
+        data, pixel calibration, and stage coordinates from ND2 metadata.
+        Automatically detects multiple fields of view based on stage position changes.
+        """
         with self:
             y_positions = self.file._parser._raw_metadata.y_data  # nikon sample stage position
             x_positions = self.file._parser._raw_metadata.x_data  # nikon sample stage position
@@ -140,6 +174,23 @@ class ND2Movie(Movie):
 
 
     def _read_frame(self, frame_number):
+        """Read a single frame from the ND2 file.
+
+        Parameters
+        ----------
+        frame_number : int
+            Index of frame to read (relative to current FOV if multi-FOV)
+
+        Returns
+        -------
+        np.ndarray
+            Single frame image array
+
+        Notes
+        -----
+        - Applies frame_offset for multi-FOV files
+        - Automatically handles out-of-range requests by returning last frame
+        """
         with self:
             if frame_number < self.number_of_frames:
                 im = self.file[frame_number + self.frame_offset]
@@ -150,6 +201,23 @@ class ND2Movie(Movie):
             return im
 
     def _read_frames(self, indices):
+        """Read multiple frames from the ND2 file.
+
+        Parameters
+        ----------
+        indices : list or np.ndarray
+            Indices of frames to read
+
+        Returns
+        -------
+        np.ndarray
+            Requested frames stacked along first dimension
+
+        Notes
+        -----
+        - Currently implemented by calling _read_frame iteratively
+        - Could be optimized for better performance with large frame batches
+        """
         # Can probably be implemented more efficiently
         return np.stack([self._read_frame(i) for i in indices])
 

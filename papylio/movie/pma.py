@@ -1,3 +1,8 @@
+"""PMa file reader for Molecular Devices PMA-format movies.
+
+Provides a lightweight interface to PMA files used by certain microscope acquisition software.
+"""
+
 import os
 import numpy as np
 
@@ -5,9 +10,30 @@ from papylio.movie.movie import Movie
 
 
 class PmaMovie(Movie):
+    """Movie class for reading Photometrics PMA image files.
+
+    Handles loading and processing of Photometrics PMA format images.
+    Supports both 8-bit and 16-bit data based on filename convention.
+    """
     extensions = ['.pma']
 
     def __init__(self, arg, *args, **kwargs):
+        """Initialize PmaMovie instance.
+
+        Parameters
+        ----------
+        arg : str or Path
+            Path to the PMA file
+        *args
+            Additional positional arguments passed to Movie parent class
+        **kwargs
+            Additional keyword arguments passed to Movie parent class
+
+        Notes
+        -----
+        - Detects bit depth from filename: '_16' suffix indicates 16-bit data
+        - Default is 8-bit data
+        """
         super().__init__(arg, *args, **kwargs)
         
         self.writepath = self.filepath.parent
@@ -32,13 +58,27 @@ class PmaMovie(Movie):
 
 
     def open(self):
+        """Open PMA file for reading.
+
+        Currently not implemented (placeholder for future optimization).
+        """
         pass  # TODO: implement this
 
     def close(self):
+        """Close the PMA file.
+
+        Currently not implemented (placeholder for future optimization).
+        """
         pass  # TODO: implement this
 
     def _read_header(self):
-        statinfo = os.stat(self.filepath)       
+        """Read and parse PMA file header.
+
+        Extracts image dimensions from the first 4 bytes of the file
+        (2 int16 values: width and height). Calculates number of frames
+        from file size.
+        """
+        statinfo = os.stat(self.filepath)
                
         with self.filepath.open('rb') as pma_file:
             self.width = np.fromfile(pma_file, np.int16, count=1)[0].astype(int)
@@ -52,6 +92,21 @@ class PmaMovie(Movie):
         # self.log_details = ''.join(self.log_details)
 
     def _read_frame(self, frame_number):
+        """Read a single frame from the PMA file.
+
+        Handles both 8-bit and 16-bit data. For 16-bit data, reads MSB and LSB
+        separately and combines them.
+
+        Parameters
+        ----------
+        frame_number : int
+            Index of frame to read
+
+        Returns
+        -------
+        np.ndarray
+            Single frame image array with shape (width, height)
+        """
         with self.filepath.open('rb') as pma_file:
             np.fromfile(pma_file, np.uint16, count=1)
             np.fromfile(pma_file, np.uint16, count=1)
@@ -68,6 +123,23 @@ class PmaMovie(Movie):
         return image
 
     def _read_frames(self, indices):
+        """Read multiple frames from the PMA file.
+
+        Parameters
+        ----------
+        indices : list or np.ndarray
+            Indices of frames to read
+
+        Returns
+        -------
+        np.ndarray
+            Requested frames stacked along first dimension
+
+        Notes
+        -----
+        - Currently implemented by calling _read_frame iteratively
+        - Could be optimized for better performance
+        """
         # Can probably be implemented more efficiently
         return np.stack([self._read_frame(i) for i in indices])
 
