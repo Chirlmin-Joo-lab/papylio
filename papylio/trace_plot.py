@@ -417,8 +417,7 @@ class PlotConfiguration(QWidget):
 
     def _add_missing_plot_settings_from_dataset(self):
         plot_settings = self.plot_settings
-
-        for var in self._trace_variables_dataset:
+        for var in set(self._trace_variables_dataset).union(set(plot_settings.keys())):
             if var not in plot_settings:
                 if 'plot_settings' in self.dataset[var].attrs:
                     plot_settings[var] = json.loads(self.dataset[var].attrs['plot_settings'])
@@ -450,6 +449,8 @@ class PlotConfiguration(QWidget):
                     plot_settings[var]['color'] = ('b',)
                 else:
                     plot_settings[var]['color'] = ('k',)
+            elif isinstance(plot_settings[var]['color'], str):
+                plot_settings[var]['color'] = (plot_settings[var]['color'],)
 
             if 'axis' not in plot_settings[var]:
                 plot_settings[var]['axis'] = var
@@ -929,7 +930,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
             self.histogram_axes[trace_artist.axis_name].hist(y.T, bins=50, orientation='horizontal',
                                                              # range=self.plot_axes[plot_variable].get_ylim(),
                                                              range=plot_settings['plot_range'],
-                                                             color=plot_settings['color'], alpha=0.5))[2]
+                                                             alpha=0.5))[2]
         if not isinstance(histogram_artists, list):
             histogram_artists = [histogram_artists]
 
