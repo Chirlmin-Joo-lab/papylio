@@ -1,3 +1,8 @@
+"""Plotting helpers used throughout Papylio.
+
+Provides utilities for common plots such as 2D marginal histograms, FRET histograms,
+and simple 3D surface image visualization.
+"""
 import numpy as np #scientific computing with Python
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -131,6 +136,11 @@ def marginal_hist2d(x, y, bins=10, range=(0, 1), xlabel=None, ylabel=None, count
 
 
 def histogram(da, axis=None, **hist_kwargs):
+    """Plot histogram(s) for an xarray DataArray.
+
+    If the DataArray contains a 'channel' dimension multiple per-channel histograms
+    are plotted (with 'step' style).
+    """
     if axis is None:
         figure, axis = plt.subplots()
     else:
@@ -157,12 +167,14 @@ def histogram(da, axis=None, **hist_kwargs):
 
 
 def histogram_FRET(data, axis, **kwargs):
+    """Plot a FRET histogram on given axis with range [0, 1]."""
     axis.hist(data, range=(0, 1), **kwargs)
     axis.set_xlim((0, 1))
     axis.set_xlabel('FRET')
     axis.set_ylabel('Count')
 
 def fit_hist(data, axis):
+    """Fit two Gaussians to a histogram of data and plot results on axis."""
     hist, bin_edges = np.histogram(data, 100, range=(0, 1))
     bin_centers = (bin_edges[0:-1] + bin_edges[1:]) / 2
 
@@ -193,6 +205,7 @@ def fit_hist(data, axis):
 
 
 def show_image_3d(image, figure=None):
+    """Render a 3D surface plot for a 2D image array."""
     if not figure:
         figure = plt.figure()
 
@@ -203,4 +216,3 @@ def show_image_3d(image, figure=None):
     X, Y = np.meshgrid(X, Y)
     axis.plot_surface(X, Y, image, cmap=cm.coolwarm,
                       linewidth=0, antialiased=False)
-

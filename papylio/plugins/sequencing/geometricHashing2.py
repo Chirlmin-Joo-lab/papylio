@@ -1,3 +1,8 @@
+"""Geometric hashing utilities for matching point sets with unknown transformations.
+
+Implements the 2D geometric hashing algorithm for robust pattern matching in image registration and alignment tasks.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -10,6 +15,11 @@ import time
 
 
 class GeometricHashTable:
+    """Hash table for 2D geometric pattern matching using invariant transformations.
+
+    Uses point set tuples and geometric hashing to efficiently match source point sets
+    to destination point sets under unknown transformations (rotation, scale, translation).
+    """
     def __init__(self, destinations, source_vertices=None, initial_source_transformation=AffineTransform(),
                  number_of_source_bases=20, number_of_destination_bases='all',
                  tuple_size=4, maximum_distance_source=None, maximum_distance_destination=None):
@@ -138,6 +148,7 @@ class GeometricHashTable:
 
 
 def mapToPoint(pointSet, startPoints, endPoints, returnTransformationMatrix=False, tr=None, di=None, ro=None):
+    """Transform a point set from start points to end points using translation, dilation, and rotation."""
     startPoints = np.atleast_2d(startPoints)
     endPoints = np.atleast_2d(endPoints)
     if len(startPoints) == 1 & len(endPoints) == 1:
@@ -183,6 +194,7 @@ def mapToPoint(pointSet, startPoints, endPoints, returnTransformationMatrix=Fals
 def compare_tuple_transformations(source_hash_table_KDTree, source_transformation_matrices, destination_hash_table_KDTree,
                                   destination_transformation_matrices, hash_table_distance_threshold=0.01,
                                   parameters=['rotation', 'scale'], bins=200):
+    """Find optimal transformation by matching tuples and analyzing transformation parameters."""
     tuple_matches = source_hash_table_KDTree.query_ball_tree(destination_hash_table_KDTree, hash_table_distance_threshold)
 
     # TODO: make this matrix multiplication
@@ -293,6 +305,7 @@ def compare_tuple_transformations(source_hash_table_KDTree, source_transformatio
 #     #return point_tuples
 
 def generate_point_tuples(point_set_KDTree, maximum_distance, tuple_size):
+    """Generate all valid point tuples (basis pairs + internal points) within maximum distance."""
     pairs = list(point_set_KDTree.query_pairs(maximum_distance))
 
     point_tuples = []
@@ -309,6 +322,7 @@ def generate_point_tuples(point_set_KDTree, maximum_distance, tuple_size):
     return point_tuples
 
 def geometric_hash_table(point_set_KDTree, point_tuples):
+    """Compute normalized hash codes for point tuples using affine transformation invariants."""
     pt = np.array(point_tuples)
     d = point_set_KDTree.data[pt]
     d0 = np.array([[0,0],[1,1]])
@@ -407,6 +421,10 @@ def geometric_hash_table(point_set_KDTree, point_tuples):
 #         # plot_tuple(np.vstack([end_points, hash_coordinates]))
 
 def geometric_hash(point_sets, maximum_distance=100, tuple_size=4):
+    """Build a geometric hash table from point sets for invariant-based matching.
+
+    Creates tuples of points and computes hash codes that are invariant to affine transformations.
+    """
     # TODO: Add minimum_distance and implement
     # TODO: Make invariant to mirroring
     # TODO: Make usable with multiple point-sets in a single hash table
@@ -472,7 +490,7 @@ def find_match_after_hashing(source, maximum_distance_source, tuple_size, source
                              hash_table_distance_threshold=0.01,
                              alpha=0.1, test_radius=10, K_threshold=10e9,
                              magnification_range=None, rotation_range=None):
-
+    """Query hash table to find best matching destination for source point set using Bayesian scoring."""
     if type(destination_KDTrees) is not list:
         destination_KDTrees = [destination_KDTrees]
 
@@ -524,12 +542,14 @@ def find_match_after_hashing(source, maximum_distance_source, tuple_size, source
                 return match
 
 def polygon_area(vertices):
+    """Calculate area of a polygon using the Shoelace formula."""
     x = vertices[:,0]
     y = vertices[:,1]
     return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
 
 def tuple_match(source, destination_KDTree, source_vertices, source_tuple, destination_tuple,
                 alpha=0.1, test_radius=10, K_threshold=10e9, scaling_range=None, rotation_range=None):
+    """Find affine transformation mapping source tuple to destination tuple using Bayesian scoring."""
     source_coordinate_tuple = source[list(source_tuple)]
     destination_coordinate_tuple = destination_KDTree.data[list(destination_tuple)]
 
@@ -611,6 +631,7 @@ def find_match(source, destination, source_vertices,
                hash_table_distance_threshold = 0.01,
                alpha = 0.1, test_radius = 10, K_threshold = 10e9
             ):
+    """High-level interface to find best matching destination for source point set."""
     # destination_KDTree, destination_tuples, destination_hash_table_KDTree = geometric_hash(destination, 40, 4)
     # source_KDTree, source_tuples, source_hash_table_KDTree = geometric_hash(source, 4, 4)
     # 200 points 200,20

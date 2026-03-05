@@ -1,3 +1,8 @@
+"""Collection of sequencing mapping objects for managing multiple tile mappings.
+
+Provides container classes for organizing and querying mapping transformations.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from objectlist import ObjectList
@@ -11,6 +16,7 @@ from matchpoint.core import distance_threshold_from_number_of_matches
 
 # TODO: Make sure that the collection can only contain MatchPoint objects
 class MappingCollection(ObjectList):
+    """Collection of MatchPoint mapping objects with visualization and analysis methods."""
     dimension_number = {0: 0, 1: 1, 'x': 0, 'y': 1}
     dimension_string = {0: 'x', 1: 'y', 'x': 'x', 'y': 'y'}
 

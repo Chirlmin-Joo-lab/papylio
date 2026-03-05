@@ -1,3 +1,8 @@
+"""Timing utilities for performance monitoring and profiling.
+
+Provides Timer class for measuring code execution time and a decorator
+for automatically timing function calls.
+"""
 import time
 import functools
 
@@ -5,12 +10,29 @@ class TimerError(Exception):
     """A custom exception used to report errors in use of Timer class"""
 
 class Timer:
+    """Context manager and timer utility for measuring execution time.
+
+    Can be used as a context manager or called directly with start()/stop() methods.
+    Useful for profiling code performance.
+    """
     def __init__(self):
+        """Initialize Timer."""
         self._start_time = None
         self.name = None
 
     def start(self, name=''):
-        """Start a new timer"""
+        """Start a new timer.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name for this timing operation (default: '')
+
+        Raises
+        ------
+        TimerError
+            If timer is already running
+        """
         if self._start_time is not None:
             raise TimerError(f"Timer is running. Use .stop() to stop it")
 
@@ -18,7 +40,13 @@ class Timer:
         self.name = name
 
     def stop(self):
-        """Stop the timer, and report the elapsed time"""
+        """Stop the timer and print elapsed time.
+
+        Raises
+        ------
+        TimerError
+            If timer is not running
+        """
         if self._start_time is None:
             raise TimerError(f"Timer is not running. Use .start() to start it")
 
@@ -29,6 +57,13 @@ class Timer:
         self.name = None
 
     def startstop(self, name=''):
+        """Stop current timer and start a new one.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name for the new timing operation (default: '')
+        """
         self.stop()
         self.start(name=name)
 

@@ -1,15 +1,24 @@
+"""Generate and categorize 8-base sequence subsets used in the Holliday junction plugin.
+
+Utilities to enumerate all 8-base sequences, basepaired-only subsets, and
+rotational symmetry / structural equivalence groupings used by analysis tools.
+"""
+
 import itertools
 import numpy as np
 
 def all_sequence_subsets():
+    """Return all 4^8 possible 8-base sequences as a numpy array."""
     bases = ['A', 'T', 'C', 'G']
     return np.array([''.join(bpc) for bpc in itertools.product(*[bases]*8)])
 
 def all_basepaired_subsets():
+    """Return all 4^4 basepaired sequence subsets (encoded as 8-base strings)."""
     basepairs = ['AT', 'TA', 'CG', 'GC']
     return np.array([''.join(bpc)[1:] + ''.join(bpc)[0] for bpc in itertools.product(*[basepairs]*4)])
 
 def basepaired_subsets():
+    """Generate all 256 basepaired sequence subsets by iterating through base pair combinations."""
     basepairs = ['AT', 'TA', 'CG', 'GC']
     basepaired_subsets = []
     for i0, bp0 in enumerate(basepairs):
@@ -24,9 +33,11 @@ def basepaired_subsets():
 
 
 def rotationally_symmetric_subsets(sequence_subset):
+    """Return all 2-base rotational variants of a sequence that form symmetric equivalents."""
     return list(set([sequence_subset[i*2:] + sequence_subset[:i*2] for i in range(4)]))
 
 def rotationally_symmetric_subset_categories(sequence_subsets):
+    """Group sequence subsets by rotational symmetry, assigning each group a unique index."""
     sequence_subsets = list(sequence_subsets)
     index = 0
     subset_category_dict = {}
@@ -40,6 +51,7 @@ def rotationally_symmetric_subset_categories(sequence_subsets):
     return subset_category_dict
 
 def rotationally_symmetric_subset_groups():
+    """Partition all basepaired subsets into groups by rotational symmetry."""
     sequence_subsets = all_basepaired_subsets()
     sequence_subsets = list(sequence_subsets)
     index = 0
@@ -53,6 +65,7 @@ def rotationally_symmetric_subset_groups():
 
 
 def sequence_subset_with_comparable_structure(sequence_subset):
+    """Generate all structurally equivalent sequences through rotations and base swaps."""
     # sequence_subset = sequence_subset[7] + sequence_subset[:7]
     sequence_subsets = []
     for i in range(4):
@@ -70,6 +83,7 @@ def sequence_subset_with_comparable_structure(sequence_subset):
 
 
 def sequence_subset_structure_category():
+    """Categorize all basepaired subsets by their structural equivalence class."""
     subset_category_dict = {}
     sequence_subsets = basepaired_subsets()
 
@@ -84,6 +98,7 @@ def sequence_subset_structure_category():
 
 
 def unique_subset_structures():
+    """Return one representative from each unique structural equivalence class."""
     unique_subset_category_dict = {}
     for key, value in sequence_subset_structure_category().items():
         if value not in unique_subset_category_dict.values():

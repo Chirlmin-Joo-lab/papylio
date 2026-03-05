@@ -1,3 +1,9 @@
+"""Trace extraction utilities.
+
+Provides helpers to create Gaussian masks, extract per-molecule intensity traces
+from movies, and perform simple illumination correction estimations.
+"""
+
 import PIL.ImageFilter
 import numpy as np
 import xarray as xr
@@ -6,6 +12,22 @@ import dask_image.ndfilters
 import scipy.ndimage
 
 def make_gaussian_mask(size, offsets, sigma=1.291):
+    """Create normalized 2D Gaussian masks for subpixel offsets.
+
+    Parameters
+    ----------
+    size : int
+        Size of the square mask (pixels)
+    offsets : xarray.DataArray
+        Per-peak subpixel offsets with dims ('molecule','channel','y','x') or similar
+    sigma : float, optional
+        Gaussian sigma used for the mask (default: 1.291)
+
+    Returns
+    -------
+    xarray.DataArray
+        Gaussian masks normalized so that the masked PSF preserves photon counts
+    """
     # TODO: Explain calculation in docstring
     # TODO: Check that offsets have dim "x" and "y" instead of b"x" and b"y"
     # It is to keep the photon number the same after applying the mask.
@@ -24,6 +46,28 @@ def make_gaussian_mask(size, offsets, sigma=1.291):
     return masks
 
 def extract_traces(movie, coordinates, background=None, mask_size=1.291, neighbourhood_size=11, correct_illumination=False):
+    """Extract per-molecule intensity time traces from a Movie given coordinates.
+
+    Parameters
+    ----------
+    movie : papylio.movie.Movie
+        Movie object providing frame access
+    coordinates : xarray.DataArray
+        Coordinates with dims ('molecule','channel','y','x') or similar
+    background : xarray.DataArray or None
+        Optional background image or per-frame background to subtract
+    mask_size : float
+        Sigma of Gaussian mask used for weighted extraction
+    neighbourhood_size : int
+        Size of the ROI (pixels) around each coordinate to sum
+    correct_illumination : bool
+        If True, attempt basic illumination correction per frame
+
+    Returns
+    -------
+    xarray.DataArray
+        Intensity array with dims ('molecule','channel','frame')
+    """
     # go through all images, extract donor and acceptor signal
     # TODO: Process the movie in chunks
     # TODO: Make sure the corretions are not reloaded for each chunk,
@@ -138,6 +182,22 @@ def extract_traces(movie, coordinates, background=None, mask_size=1.291, neighbo
 #     return intensity_in_frame
 
 def extract_intensity_from_frame(frame, oneD_indices, twoD_gaussians):  # extract traces
+    """Compute weighted intensities for all peaks from a single frame.
+
+    Parameters
+    ----------
+    frame : xarray.DataArray
+        2D frame image with dims ('y','x')
+    oneD_indices : xarray.DataArray
+        Precomputed flattened indices into the frame for each ROI
+    twoD_gaussians : xarray.DataArray
+        Gaussian masks matching the ROIs (molecule, channel, y, x)
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (molecule, channel) with summed weighted intensities
+    """
     intensities = frame.values.take(oneD_indices.values).reshape(twoD_gaussians.shape)
     # intensities = intensities - background.values[:,:,None,None]
     weighted_intensities = intensities * twoD_gaussians.values
@@ -145,10 +205,32 @@ def extract_intensity_from_frame(frame, oneD_indices, twoD_gaussians):  # extrac
     return intensity_in_frame
 
 def weighed_background(background, twoD_gaussians):
+    """Compute weighted background intensity for each ROI using gaussian masks.
+
+    Parameters
+    ----------
+    background : xarray.DataArray
+        Background image (illumination or per-frame) with dims ('illumination','channel','y','x')
+    twoD_gaussians : xarray.DataArray
+        Masks with dims ('molecule','channel','y','x')
+
+    Returns
+    -------
+    np.ndarray
+        Weighted background intensity per molecule/channel/frame
+    """
     weighed_background_intensity = background.values[:, :, :, None, None] * twoD_gaussians.values[None, :, :, :, :]
     return weighed_background_intensity.sum(axis=(3, 4))
 
 class IlluminationCorrection:
+    """Simple accumulator to estimate and provide per-frame illumination correction.
+
+    Usage:
+        ic = IlluminationCorrection(number_of_frames)
+        for i, frame in enumerate(frames):
+            ic.add_frame(i, frame)
+        correction = ic.illumination_correction
+    """
     # In time
     def __init__(self, number_of_frames, filter_function=scipy.ndimage.minimum_filter, **kwargs):
         self.filter_function = filter_function
@@ -156,11 +238,13 @@ class IlluminationCorrection:
         self._illumination_correction = np.empty(number_of_frames)
 
     def add_frame(self, index, frame):
+        """Add frame intensities to illumination correction accumulator."""
         filtered_frame = self.filter_function(np.array(frame), **self.filter_kwargs)
         self._illumination_correction[index] = filtered_frame.sum()
 
     @property
     def illumination_correction(self):
+        """Return normalized illumination correction factors."""
         correction = self._illumination_correction.max() / self._illumination_correction
         return xr.DataArray(correction, dims=('frame',), name='illumination_correction')
 

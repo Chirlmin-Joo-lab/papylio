@@ -1,3 +1,5 @@
+"""Sequencing data parsing and management from SAM and FASTQ files."""
+
 import numpy as np
 from pathlib import Path
 import h5py
@@ -60,7 +62,7 @@ from papylio.plugins.sequencing.plotting import plot_cluster_locations_per_tile
 
 # Update class with new sam analysis function below
 class SequencingData:
-
+    """Container for sequencing data with methods for analysis, visualization, and statistical summaries."""
     reagent_kit_info = {'v2':       {'number_of_tiles': 14, 'number_of_surfaces': 2},
                         'v2_micro': {'number_of_tiles':  4, 'number_of_surfaces': 2},
                         'v2_nano':  {'number_of_tiles':  2, 'number_of_surfaces': 1},
@@ -399,6 +401,7 @@ class SequencingData:
         self.dataset.reset_index('sequence').to_netcdf(filepath, engine='netcdf4', mode='w')
 
 class Tile:
+    """Represents a single sequencing tile with its identifier and cluster coordinates."""
     def __init__(self, number, coordinates):
         self.name = str(number)
         self.number = number
@@ -410,6 +413,7 @@ class Tile:
 
 
 def read_sam(sam_filepath, add_aligned_sequence=False, extract_sequence_subset=False, read_name='read1'):
+    """Parse SAM file and return dataframe with sequencing alignment data."""
     sam_filepath = Path(sam_filepath)
 
     # Check number of header lines:
@@ -443,6 +447,7 @@ def read_sam(sam_filepath, add_aligned_sequence=False, extract_sequence_subset=F
 
 
 def read_sam_header(sam_filepath):
+    """Extract and parse SAM file header records (HD, SQ, RG, PG, CO lines)."""
     header_dict = {'HD': [], 'SQ': [], 'RG': [], 'PG':[], 'CO':[]}
     with Path(sam_filepath).open('r') as file:
         number_of_header_lines = 0
@@ -469,16 +474,20 @@ def read_sam_header(sam_filepath):
 #     return count
 
 def number_of_lines(filepath):
+    """Count total number of lines in a file."""
     return sum(1 for line in tqdm.tqdm(filepath.open('r')))
 
 def number_of_sequence_alignments(sam_filepath):
+    """Count number of non-header alignment records in SAM file."""
     return sum(1 if line[0] != '@' else 0 for line in tqdm.tqdm(sam_filepath.open('r')))
 
 def bitwise_flag(flag, bit):
+    """Extract specific bit from SAM flag integer."""
     flag = np.array(flag)
     return (flag & (2**bit)).astype(bool)
 
 def number_of_primary_sequence_alignments(sam_filepath):
+    """Count number of primary (non-supplementary, non-secondary) alignments in SAM file."""
     sam_filepath = Path(sam_filepath)
     compiled_regex = re.compile('(?<=\t)\d*(?=\t)')
     is_primary_alignment_list = []
@@ -494,6 +503,7 @@ def number_of_primary_sequence_alignments(sam_filepath):
 
 def parse_sam(sam_filepath, read_name='read1', remove_duplicates=True, add_aligned_sequence=False, extract_sequence_subset=False,
               chunksize=10000, write_csv=False, write_nc=True, write_filepath=None):
+    """Parse SAM file in chunks and write alignment data to NetCDF format."""
     sam_filepath = Path(sam_filepath)
 
     # Check number of header lines:
@@ -645,6 +655,7 @@ def parse_sam(sam_filepath, read_name='read1', remove_duplicates=True, add_align
 
 
 def fastq_data(fastq_filepath, read_name):
+    """Parse FASTQ file and return xarray Dataset with sequence and quality information."""
     tile_list = []
     x_list = []
     y_list = []
@@ -671,6 +682,7 @@ def fastq_data(fastq_filepath, read_name):
 
 
 def fastq_generator(fastq_filepath, chunksize):
+    """Generator yielding chunks of FASTQ records as dictionaries."""
     expr = re.compile('[:@ \n]')
     data = {'instrument': [], 'run': [], 'flowcell': [], 'lane': [],
             'tile': [], 'x': [], 'y': [], 'sequence': [], 'quality': []} # Perhaps better to use a numpy struct array
@@ -718,6 +730,7 @@ def fastq_generator(fastq_filepath, chunksize):
 
 
 def create_string_variable_in_nc_file(nc_file, variable_name, size=None, **kwargs):
+    """Create a string variable in NetCDF file with proper encoding for UTF-8."""
     kwargs['dimensions'] += (variable_name + '_size',)
     # if not 'chunksizes' in kwargs.keys():
     #     kwargs['chunksizes'] = (10000, 1)
@@ -731,6 +744,7 @@ def create_string_variable_in_nc_file(nc_file, variable_name, size=None, **kwarg
 
 
 def add_sequence_data_to_dataset(nc_filepath, fastq_filepath, read_name, chunksize=10000):
+    """Add sequence and quality data from FASTQ to existing NetCDF sequencing dataset."""
     with netCDF4.Dataset(nc_filepath, 'a') as nc_file:
         nc_file['lane'][-1] = nc_file['lane'][-1]
         # To prevent that unlimited sequence dim is resized after reopening
@@ -803,6 +817,7 @@ def add_sequence_data_to_dataset(nc_filepath, fastq_filepath, read_name, chunksi
         #index1_quality.loc[dict(sequence=(int(tile), int(x), int(y)))] = fq_file.readline().strip()
 
 def get_aligned_sequence(read_sequence, read_quality, cigar_string, position, reference_range=None):
+    """Compute aligned sequence and quality from CIGAR string, accounting for indels."""
     if reference_range is None:
         reference_range = (0, len(read_sequence))
     output_length = reference_range[1]-reference_range[0]
@@ -851,6 +866,7 @@ def get_aligned_sequence(read_sequence, read_quality, cigar_string, position, re
     return aligned_sequence, aligned_quality
 
 def get_aligned_sequence_from_row(df_row, read_name, reference_range=None):
+    """Extract and align sequence/quality from a dataframe row."""
     sequence = df_row[read_name+'_sequence']
     quality = df_row[read_name+'_quality']
     cigar_string = df_row['cigar_string']
@@ -889,6 +905,7 @@ def get_aligned_sequence_from_row(df_row, read_name, reference_range=None):
 
 
 def extract_positions(series, indices):
+    """Extract and concatenate specific positions from sequences in a pandas Series."""
     for i, index in enumerate(indices):
         if i == 0:
             combined = series.str.get(index)
@@ -899,7 +916,7 @@ def extract_positions(series, indices):
 
 def make_sequencing_dataset(file_path, index1_file_path=None, remove_duplicates=True, add_aligned_sequence=True,
                             extract_sequence_subset=False, chunksize=10000):
-
+    """Convert SAM alignment file to NetCDF sequencing dataset with optional processing."""
     file_path = Path(file_path)
 
     nc_file_path = file_path.with_name('sequencing_data.nc')
@@ -926,6 +943,7 @@ import re
 import tqdm
 
 def determine_read_end_position(cigar_string, reference_start_postion, reference_length):
+    """Determine query end position from CIGAR string and reference boundaries."""
     cigar_string_split = [(int(s[:-1]), s[-1]) for s in re.findall(r'[0-9]*[MIDNSHP=X]', cigar_string)]
     reference_index = reference_start_postion
     read_index = 0
@@ -939,6 +957,7 @@ def determine_read_end_position(cigar_string, reference_start_postion, reference
     return reference_length
 
 def determine_read_end_positions(sequencing_data, reference_length, chunk_size=10000):
+    """Compute end positions for all reads in sequencing dataset processing in chunks."""
     end_positions = np.zeros(len(sequencing_data)).astype('int16')
     for j in tqdm.tqdm(list(range(0,len(sequencing_data),chunk_size))):
         ds = sequencing_data.dataset.isel(sequence=slice(j, j+chunk_size))
@@ -950,6 +969,7 @@ def determine_read_end_positions(sequencing_data, reference_length, chunk_size=1
 
 
 def sequence_correspondence(sequences, references, minimum_match=None):
+    """Match sequences to reference barcodes, returning best matches and match scores."""
     reference_names = np.array(list(references.keys()))
     reference_barcodes = np.array(list(references.values()))
     length = len(sequences[0])
