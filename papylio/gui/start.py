@@ -15,7 +15,6 @@ def start_gui():
     from papylio.gui.main import MainWindow
     window = MainWindow()
     window.show()
-
     app.exec_()
 
 

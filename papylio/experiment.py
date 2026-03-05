@@ -28,6 +28,7 @@ from matplotlib import use
 use('Qt5Agg')
 ###################################################
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt  # Provides a MATLAB-like plotting framework
 import xarray as xr
 from collections import UserDict
@@ -272,7 +273,7 @@ class Experiment:
         If false, then files are detected, but not imported.
     """
     # TODO: Add presets for specific microscopes
-    def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None, perform_logging=True):
+    def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None, perform_logging=True, use_colorblind_friendly_colors=True):
         """Init method for the Experiment class
 
         Loads config file if it locates one in the main directory, otherwise it exports the default config file to the main directory.
@@ -298,6 +299,8 @@ class Experiment:
         self.files = FileCollection()
         self.import_all = import_all
         self.perform_logging = perform_logging
+
+        set_default_matplotlib_colors(use_colorblind_friendly_colors)
 
         self._channels = np.atleast_1d(np.array(channels))
         self._number_of_channels = len(channels)
@@ -877,3 +880,14 @@ class Experiment:
                 nms = -1
             df.loc[n] = nms
         df.to_excel(self.main_path.joinpath('number_of_molecules'))
+
+def set_default_matplotlib_colors(colorblind_friendly=True):
+    if colorblind_friendly:
+        # Replace default green and red colors with colorblind colors
+        mcolors._colors_full_map['green'] = mcolors._colors_full_map['g'] = '#1EC509'
+        mcolors._colors_full_map['red'] = mcolors._colors_full_map['r'] = '#DA0031'
+        mcolors._colors_full_map['blue'] = mcolors._colors_full_map['b'] = '#0043FF'
+    else:
+        mcolors._colors_full_map['green'] = mcolors._colors_full_map['g'] = '#1f77b4'
+        mcolors._colors_full_map['red'] = mcolors._colors_full_map['r'] = '#FF0000'
+        mcolors._colors_full_map['blue'] = mcolors._colors_full_map['b'] = '#0000FF'

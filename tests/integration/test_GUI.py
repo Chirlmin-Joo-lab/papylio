@@ -36,6 +36,11 @@ def file_hj(experiment_hj):
 def test_trace_plot(file_hj):
     file_hj.show_traces()
 
+def test_trace_plot_arguments_v0p9(file_hj):
+    file_hj.show_traces(plot_variables=['intensity_total', 'intensity', 'FRET', 'classification'],
+                        ylims=[(0, 35000), (0, 35000), (0, 1), (-2.5,1.5)],
+                        colours=[('k'), ('g', 'r'), ('b'), ('k')], selected=False, height=5)
+
 def test_trace_plot_two_illuminations(file_hj):
     ds = file_hj.dataset
     ds.illumination[:] = [0, ] * 100 + [1, ] * 200 + [0, ] * 100
