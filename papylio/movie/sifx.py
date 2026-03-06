@@ -1,3 +1,8 @@
+"""SIFX file reader for Andor/MetaMorph SIFX format.
+
+Provides a reader that handles .sifx spool folder structures and extracts frames and metadata.
+"""
+
 import os
 import time
 import numpy as np
@@ -8,10 +13,31 @@ from papylio.movie.movie import Movie
 
 
 class SifxMovie(Movie):
+    """Movie class for reading Andor SIFX spooled files.
+
+    Handles loading and processing of Andor SIFX format data from spooled
+    acquisition mode. Parses complex header format and reads raw frame data
+    from binary spool files with various binning modes.
+
+    References
+    ----------
+    Based on https://github.com/lightingghost/sifreader/blob/master/sifreader/sifreader.py
+    """
     extensions = ['.sifx']
 
     # Based on https://github.com/lightingghost/sifreader/blob/master/sifreader/sifreader.py
     def __init__(self, arg, *args, **kwargs):
+        """Initialize SifxMovie instance.
+
+        Parameters
+        ----------
+        arg : str or Path
+            Path to the SIFX file or spooled files directory
+        *args
+            Additional positional arguments passed to Movie parent class
+        **kwargs
+            Additional keyword arguments passed to Movie parent class
+        """
         super().__init__(arg, *args, **kwargs)
         
         self.folderpath = self.filepath.parent
@@ -28,12 +54,25 @@ class SifxMovie(Movie):
         # self._initialized = True
 
     def find_filelist(self):
+        """Locate all spool.dat files in the spooled directory.
+
+        Scans the parent directory for all .spool.dat files and sorts them
+        in numerical order based on the filename prefix.
+        """
         self.filelist=[p.relative_to(self.filepath.parent) for p in self.filepath.parent.glob('*spool.dat')]
         
         #  correct numerical image name
         self.filelist.sort(key=lambda x: str(x)[9::-1])
        
     def __repr__(self):
+        """Return detailed string representation of SIFX file metadata.
+
+        Returns
+        -------
+        str
+            Formatted string with extensive camera and acquisition parameters
+            from the SIFX header
+        """
         info = (('Original Filename', self.original_filename),
                 ('Date', self.date),
                 ('Camera Model', self.model),
@@ -63,6 +102,11 @@ class SifxMovie(Movie):
         return res
 
     def _read_header(self):
+        """Read and parse SIFX file header.
+
+        Extracts camera parameters, acquisition settings, image dimensions,
+        binning mode, and file structure information from the Andor SIFX header.
+        """
         f = open(self.filepath, 'rb')
         headerlen = 32
     #    spool = 0
@@ -164,6 +208,28 @@ class SifxMovie(Movie):
     
        
     def _read_frame(self, frame_number):
+        """Read a single frame from spooled binary data.
+
+        Handles different binning modes (2x2 and others) by unpacking the
+        raw binary data according to Andor SIFX format specifications.
+        Applies rotation and reshaping to match camera orientation.
+
+        Parameters
+        ----------
+        frame_number : int
+            Index of frame to read
+
+        Returns
+        -------
+        np.ndarray
+            Single frame image array with rotation applied
+
+        Notes
+        -----
+        - 2x2 binning: 4 bytes per pixel
+        - Other binning: 3 bytes per 2x2 pixel group (compressed format)
+        - Image is rotated 90 degrees counterclockwise
+        """
         if (self.xbin == 2) and (self.ybin == 2):
              count=self.height*self.width*4
              #name should follow from A.filelist
@@ -201,6 +267,23 @@ class SifxMovie(Movie):
         return im
 
     def _read_frames(self, indices):
+        """Read multiple frames from spooled data.
+
+        Parameters
+        ----------
+        indices : list or np.ndarray
+            Indices of frames to read
+
+        Returns
+        -------
+        np.ndarray
+            Requested frames stacked along first dimension
+
+        Notes
+        -----
+        - Currently implemented by calling _read_frame iteratively
+        - Could be optimized for better performance
+        """
         # Can probably be implemented more efficiently
         return np.stack([self._read_frame(i) for i in indices])
 

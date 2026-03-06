@@ -1,3 +1,9 @@
+"""Trace correction helpers and a small GUI for interactively tuning corrections.
+
+Includes `trace_correction` for deterministic corrections and `TraceCorrectionWindow`
+for manual tuning and visualization of resulting metrics such as FRET and stoichiometry.
+"""
+
 import sys
 import time
 
@@ -27,6 +33,28 @@ import numpy as np
 
 def trace_correction(intensity, background_correction=None, alpha_correction=None,
                      gamma_correction=None):
+    """Apply a set of simple, deterministic corrections to intensity traces.
+
+    This helper applies background subtraction, gamma scaling and alpha mixing
+    between channels to correct raw intensity traces prior to calculating FRET
+    and stoichiometry.
+
+    Parameters
+    ----------
+    intensity : xarray.DataArray
+        Intensity array with dims ('molecule','channel','frame') or similar
+    background_correction : tuple or list, optional
+        Per-channel background to subtract (bg_green, bg_red)
+    alpha_correction : float, optional
+        Cross-talk correction parameter (default: None)
+    gamma_correction : float, optional
+        Relative detection efficiency multiplier applied to channel 0
+
+    Returns
+    -------
+    xarray.DataArray
+        Corrected intensity array
+    """
     intensity = intensity.copy()
     if background_correction is not None:
         intensity[dict(channel=0)] -= background_correction[0]
@@ -52,6 +80,12 @@ def trace_correction(intensity, background_correction=None, alpha_correction=Non
 
 
 class TraceCorrectionWindow(QWidget):
+    """Interactive GUI widget for tuning trace corrections and visualizing results.
+
+    Provides sliders and input fields to adjust background subtraction, gamma scaling,
+    and alpha (cross-talk) corrections, displaying real-time updates of FRET,
+    stoichiometry, and intensity distributions.
+    """
     def __init__(self, intensity_raw, show=True):
         from papylio.experiment import get_QApplication
         app = get_QApplication()
@@ -180,19 +214,58 @@ class TraceCorrectionWindow(QWidget):
 
     @property
     def intensity(self):
+        """Apply trace corrections and return the corrected intensity data.
+
+        The following corrections are applied in order:
+        - Background subtraction (per-channel)
+        - Gamma correction (scaling)
+        - Alpha correction (cross-talk adjustment)
+
+        Returns
+        -------
+        xarray.DataArray
+            Corrected intensity data
+        """
         return trace_correction(self.intensity_raw, (self.background_correction_green, self.background_correction_red),
                                 self.alpha_correction, self.gamma_correction)
 
     @property
     def intensity_total(self):
+        """Calculate and return the total intensity (sum of all channels).
+
+        This property selects only the frames where the illumination is equal to 0
+        (usually the donor only) and calculates the total intensity.
+
+        Returns
+        -------
+        xarray.DataArray
+            Total intensity data
+        """
         return calculate_intensity_total(self.intensity).sel(frame=self.intensity.illumination==0)
 
     @property
     def FRET(self):
+        """Calculate and return the FRET efficiency.
+
+        This property selects only the frames where the illumination is equal to 0
+        (usually the donor only) and calculates the FRET efficiency.
+
+        Returns
+        -------
+        xarray.DataArray
+            FRET efficiency data
+        """
         return calculate_FRET(self.intensity).sel(frame=self.intensity.illumination==0)
 
     @property
     def stoichiometry(self):
+        """Calculate and return the stoichiometry.
+
+        Returns
+        -------
+        xarray.DataArray
+            Stoichiometry data
+        """
         return calculate_stoichiometry(self.intensity)
 
     # def histogram_FRET_intensity_total(self):
@@ -204,6 +277,15 @@ class TraceCorrectionWindow(QWidget):
     #     return H.T, xcenters, ycenters
 
     def setCorrectionsFromTextBoxes(self):
+        """Set correction values from the text boxes and update the canvas.
+
+        This method is called when the user finishes editing a correction value in
+        the UI. It updates the corresponding attribute and refreshes the plots.
+
+        Returns
+        -------
+        None
+        """
         for correction, line_edit in self.text_boxes.items():
             setattr(self, correction, float(line_edit.text()))
             print(float(line_edit.text()))
@@ -211,7 +293,15 @@ class TraceCorrectionWindow(QWidget):
         self.update_canvas()
 
     def plot_histogram_intensity_green_intensity_red(self):
-        print(self.background_correction_green, self.background_correction_red, self.alpha_correction, self.gamma_correction)
+        """Plot the 2D histogram of green vs. red intensity.
+
+        This method updates the plot showing the relationship between green and red
+        intensities after applying the trace corrections.
+
+        Returns
+        -------
+        None
+        """
 
         axis = self.axis_G_R
 
@@ -232,7 +322,15 @@ class TraceCorrectionWindow(QWidget):
 
 
     def plot_histogram_FRET_intensity_total(self):
-        print(self.background_correction_green, self.background_correction_red, self.alpha_correction, self.gamma_correction)
+        """Plot the 2D histogram of FRET efficiency vs. total intensity.
+
+        This method updates the plot showing the relationship between FRET efficiency
+        and total intensity after applying the trace corrections.
+
+        Returns
+        -------
+        None
+        """
 
         axis = self.axis_E_T
 
@@ -251,6 +349,15 @@ class TraceCorrectionWindow(QWidget):
 
 
     def plot_histogram_FRET_stoichiometry(self):
+        """Plot the 2D histogram of FRET efficiency vs. stoichiometry.
+
+        This method updates the plot showing the relationship between FRET efficiency
+        and stoichiometry after applying the trace corrections.
+
+        Returns
+        -------
+        None
+        """
 
         axis = self.axis_E_S
 
@@ -269,6 +376,15 @@ class TraceCorrectionWindow(QWidget):
 
 
     def update_canvas(self):
+        """Update the plots on the canvas.
+
+        This method is called to refresh the plots after any changes are made, such
+        as updating the correction values or loading new data.
+
+        Returns
+        -------
+        None
+        """
         self.plot_histogram_intensity_green_intensity_red()
         self.plot_histogram_FRET_intensity_total()
         if self.axis_E_S is not None:

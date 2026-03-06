@@ -1,24 +1,47 @@
+"""Coordinate detection and optimization for single-molecule localization.
+
+Provides utilities for filtering coordinates based on margins, refining positions
+using 2D Gaussian fitting, and removing coordinates based on intensity criteria.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.spatial import cKDTree
 
+# def coordinates_within_margin_selection(coordinates,  image = None, bounds = None, margin=10):
+#     if coordinates.size == 0:
+#         return np.array([])
+#
+#     if image is not None:
+#         bounds = np.array([[0,0], [image.shape[1],image.shape[0]]])
+#
+#     criteria = np.array([(coordinates[:, 0] > (bounds[0,0] + margin)),
+#                          (coordinates[:, 0] < (bounds[1,0] - margin)),
+#                          (coordinates[:, 1] > (bounds[0,1] + margin)),
+#                          (coordinates[:, 1] < (bounds[1,1] - margin))
+#                          ])
+#
+#     return criteria.all(axis=0)
+
 def coordinates_within_margin_selection(coordinates,  image = None, bounds = None, margin=10):
-    if coordinates.size == 0:
-        return np.array([])
+    """Return boolean mask selecting coordinates inside bounds with a margin.
 
-    if image is not None:
-        bounds = np.array([[0,0], [image.shape[1],image.shape[0]]])
+    Parameters
+    ----------
+    coordinates : np.ndarray
+        Array of shape (N, 2) with x,y coordinates
+    image : np.ndarray, optional
+        If provided, bounds are inferred from image shape as [[0,0],[width,height]]
+    bounds : array-like, optional
+        [[x_min,y_min],[x_max,y_max]] coordinate bounds
+    margin : int or tuple, optional
+        Margin to keep from edges; if int, used for both x and y
 
-    criteria = np.array([(coordinates[:, 0] > (bounds[0,0] + margin)),
-                         (coordinates[:, 0] < (bounds[1,0] - margin)),
-                         (coordinates[:, 1] > (bounds[0,1] + margin)),
-                         (coordinates[:, 1] < (bounds[1,1] - margin))
-                         ])
-
-    return criteria.all(axis=0)
-
-def coordinates_within_margin_selection(coordinates,  image = None, bounds = None, margin=10):
+    Returns
+    -------
+    np.ndarray
+        Boolean mask of length N indicating whether each coordinate is within the margin
+    """
     if coordinates.size == 0:
         return np.array([])
 
@@ -38,6 +61,26 @@ def coordinates_within_margin_selection(coordinates,  image = None, bounds = Non
 
 
 def coordinates_within_margin(coordinates, image=None, bounds=None, margin=10):
+    """Filter coordinates to those within a specified margin from image/bounds.
+
+    Convenience wrapper that returns the selected coordinate rows instead of a mask.
+
+    Parameters
+    ----------
+    coordinates : np.ndarray
+        Array of (N,2) coordinates
+    image : np.ndarray, optional
+        Image used to infer bounds if bounds is None
+    bounds : array-like, optional
+        Explicit bounds as [[x_min,y_min],[x_max,y_max]]
+    margin : int or tuple, optional
+        Margin to apply
+
+    Returns
+    -------
+    np.ndarray
+        Subset of coordinates inside bounds minus margin
+    """
     criteria = coordinates_within_margin_selection(coordinates,  image=image, bounds=bounds, margin=margin)
     if criteria.size == 0:
         return np.array([])
@@ -46,12 +89,51 @@ def coordinates_within_margin(coordinates, image=None, bounds=None, margin=10):
 
 
 def circle(r):
+    """Return a binary mask of a discrete circle of radius r.
+
+    The returned array has shape (2*r+1, 2*r+1) with ones for pixels whose
+    center lies within +/-0.5 of the ideal circle radius.
+
+    Parameters
+    ----------
+    r : int
+        Radius in pixels
+
+    Returns
+    -------
+    np.ndarray
+        Binary mask of the circle
+    """
     d = 2*r + 1
     rx, ry = d/2, d/2
     x, y = np.indices((d, d))
     return (np.abs(np.hypot(r - x, r - y)-r) < 0.5).astype(int)
 
+
 def coordinates_without_intensity_at_radius(coordinates, image, radius, cutoff, fraction_of_peak_max = 0.25):
+    """Return coordinates whose intensity at a given radius is below a threshold.
+
+    Useful to filter out peaks that have substantial signal in an annulus (likely
+    overlapping peaks or structured background).
+
+    Parameters
+    ----------
+    coordinates : np.ndarray
+        Array of (N,2) coordinates (x,y)
+    image : np.ndarray
+        2D image array
+    radius : int
+        Annulus radius in pixels to inspect
+    cutoff : float or 'image_median'
+        Baseline intensity; if 'image_median' uses median(image)
+    fraction_of_peak_max : float, optional
+        Fraction of local peak amplitude used in thresholding (default 0.25)
+
+    Returns
+    -------
+    np.ndarray
+        Filtered coordinates satisfying the low-annulus-intensity condition
+    """
     if cutoff == 'image_median': cutoff = np.median(image)
     circle_matrix = circle(radius)
     new_coordinates = []
@@ -70,19 +152,70 @@ def coordinates_without_intensity_at_radius(coordinates, image, radius, cutoff, 
 
     return np.array(new_coordinates)
 
+
 def crop(image, center, width):
+    """Crop a square patch of given width centered on a subpixel center.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D image array
+    center : array-like
+        (x,y) center coordinates (can be float)
+    width : int
+        Width (and height) of the square patch (must be odd to be symmetric)
+
+    Returns
+    -------
+    np.ndarray
+        Cropped image patch
+    """
     center = np.round(center).astype(int)
     return image[(center[1]-width//2):(center[1]+width//2+1),(center[0]-width//2):(center[0]+width//2+1)]
+
 
 # def twoD_gaussian(M, offset, amplitude, x0, y0, sigma_x, sigma_y):
 #     x, y = M
 #     return offset + amplitude * np.exp(- ((x-x0)/(2*sigma_x))**2 - ((y-y0)/(2*sigma_y))**2)
 
 def twoD_gaussian(M, offset, amplitude, x0, y0, sigma):
+    """Isotropic 2D Gaussian model used for local peak fitting.
+
+    Parameters
+    ----------
+    M : tuple of arrays
+        (X, Y) meshgrid arrays
+    offset : float
+        Constant background offset
+    amplitude : float
+        Peak amplitude above offset
+    x0, y0 : float
+        Peak center coordinates (in patch-local coords)
+    sigma : float
+        Isotropic standard deviation
+
+    Returns
+    -------
+    np.ndarray
+        Flattened Gaussian evaluated over the meshgrid
+    """
     x, y = M
     return offset + amplitude * np.exp(- ((x-x0)**2+(y-y0)**2)/(2*sigma**2))
 
+
 def fit_twoD_gaussian(Z):
+    """Fit an isotropic 2D Gaussian to a small image patch.
+
+    Parameters
+    ----------
+    Z : np.ndarray
+        2D image patch to fit (height x width)
+
+    Returns
+    -------
+    np.ndarray
+        Fitted parameters [offset, amplitude, x0, y0, sigma]
+    """
     height, width = Z.shape
     x, y = np.arange(width)-width//2, np.arange(height)-height//2
     X, Y = np.meshgrid(x, y)
@@ -96,7 +229,26 @@ def fit_twoD_gaussian(Z):
     # The offset can potentially be used for background subtraction
     return popt
 
+
 def coordinates_after_gaussian_fit(coordinates, image, gaussian_width = 9, return_fit_parameters=False):
+    """Refine coordinate positions by fitting a 2D Gaussian to local patches.
+
+    Parameters
+    ----------
+    coordinates : np.ndarray
+        Array of (N,2) initial coordinates
+    image : np.ndarray
+        2D image array
+    gaussian_width : int, optional
+        Size of patch used for fitting (default: 9)
+    return_fit_parameters : bool, optional
+        If True, also return fitted parameter arrays
+
+    Returns
+    -------
+    np.ndarray or (np.ndarray, np.ndarray)
+        Refined coordinates (and optionally fit parameters)
+    """
     # TODO: fix standard deviation to the psf size, this may improve correct peak localization when two peaks are close.
     new_coordinates = []
     fit_parameters = []
@@ -124,6 +276,7 @@ def coordinates_after_gaussian_fit(coordinates, image, gaussian_width = 9, retur
         return np.array(new_coordinates), np.array(fit_parameters)
     else:
         return np.array(new_coordinates)
+
 
 
 def merge_nearby_coordinates(coordinates, distance_threshold=2, plot=False):
@@ -236,10 +389,12 @@ def combine_overlapping_sets(old_list_of_sets):
 
 
 def set_of_tuples_from_array(array):
+    """Convert an Nx2 array to a set of (x,y) tuples."""
     return set([tuple(a) for a in array])
 
 
 def array_from_set_of_tuples(set_of_tuples):
+    """Convert a set of (x,y) tuples to an Nx2 numpy array."""
     return np.array([t for t in set_of_tuples])
 
 

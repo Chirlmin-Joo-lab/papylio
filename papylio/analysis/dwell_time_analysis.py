@@ -1,3 +1,10 @@
+"""Dwell-time distribution analysis and fitting utilities.
+
+Provides classes and functions to model distributions of dwell times (e.g., mixtures
+of exponentials), perform maximum likelihood estimation, compute BIC/AIC, and
+visualize fits and residuals for single-molecule dwell-time analysis.
+"""
+
 import numpy as np
 import scipy.optimize
 import matplotlib.pyplot as plt

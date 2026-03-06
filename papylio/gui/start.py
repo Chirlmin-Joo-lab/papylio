@@ -1,3 +1,8 @@
+"""Entry point for launching the Papylio GUI.
+
+Provides a convenience function to start the GUI application with default options.
+"""
+
 from PySide2.QtWidgets import QApplication
 import sys
 
@@ -9,6 +14,7 @@ from multiprocessing import Process, freeze_support
 # sys.stderr = open("C:/temp/stderr.log", "w")
 
 def start_gui():
+    """Starts the Papylio GUI application."""
     freeze_support()
 
     app = QApplication(sys.argv)

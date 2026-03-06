@@ -57,9 +57,26 @@ from nd2reader import ND2Reader
 # import pickle
 
 class Configuration(UserDict):
+    """Configuration class for managing YAML configuration files.
+
+    Extends UserDict to provide dictionary-like access to configuration settings
+    stored in YAML format. Supports automatic reloading when the configuration
+    file is modified on disk.
+    """
     # Ruamel yaml parser may be better for preserving comments
     # https://sourceforge.net/projects/ruamel-yaml/
     def __init__(self, filepath):
+        """Initialize Configuration object.
+
+        Loads configuration from the specified YAML file, or loads the default
+        configuration if the file does not exist. The default configuration is
+        saved to the specified filepath.
+
+        Parameters
+        ----------
+        filepath : str or pathlib.Path
+            Path to the configuration YAML file
+        """
         self.reload_block = 0
         self.filepath = Path(filepath)
         self.previous_file_modification_time = 0
@@ -76,32 +93,94 @@ class Configuration(UserDict):
 
     @property
     def data(self):
+        """dict : Configuration data dictionary.
+
+        Automatically reloads configuration from file if it has been modified
+        and reloading is enabled.
+        """
         self.load()
         return self._data
 
     @data.setter
     def data(self, data):
+        """Set configuration data dictionary.
+
+        Parameters
+        ----------
+        data : dict
+            Configuration data to set
+        """
         self._data = data
 
     @property
     def file_modification_time(self):
+        """float : File modification timestamp (read-only)"""
         return self.filepath.stat().st_mtime
 
+    @property
+    def reload(self):
+        """bool : Whether automatic reloading is enabled (read-only).
+
+        Returns True when not inside a context manager, False otherwise.
+        """
+        return self.reload_block == 0
+
     def __enter__(self):
+        """Context manager entry point.
+
+        Loads configuration and increments reload block counter to prevent
+        automatic reloading during the context.
+
+        Returns
+        -------
+        Configuration
+            Returns self for use in 'with' statements
+        """
         self.load()
         self.reload_block += 1
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit point.
+
+        Decrements reload block counter to re-enable automatic reloading.
+
+        Parameters
+        ----------
+        exc_type : type
+            Exception type if an exception occurred
+        exc_val : Exception
+            Exception value if an exception occurred
+        exc_tb : traceback
+            Exception traceback if an exception occurred
+        """
         self.reload_block -= 1
 
-    @property
-    def reload(self):
-        return self.reload_block == 0
-
     def __getitem__(self, item):
+        """Get configuration item using dictionary-like access.
+
+        Parameters
+        ----------
+        item : str
+            Configuration key
+
+        Returns
+        -------
+        Any
+            Configuration value
+        """
         return self.data[item]
 
     def load(self, filepath=None):
+        """Load configuration from YAML file.
+
+        Reloads configuration from file only if the reload block counter is 0
+        (i.e., not in a context manager) and the file has been modified.
+
+        Parameters
+        ----------
+        filepath : str or pathlib.Path, optional
+            Path to load from. If None, uses the default filepath
+        """
         if self.reload:
             file_modification_time = self.file_modification_time
             if file_modification_time != self.previous_file_modification_time:
@@ -112,11 +191,26 @@ class Configuration(UserDict):
                 self.previous_file_modification_time = file_modification_time
 
     def save(self):
+        """Save configuration to YAML file.
+
+        Writes the current configuration data to the YAML file specified
+        in the filepath attribute.
+        """
         with self.filepath.open('w') as yml_file:
             yaml.dump(self._data, yml_file, sort_keys=False)
 
 # from PyQt5.QtWidgets import QFileDialog
 def get_QApplication():
+    """Get or create a PySide2 QApplication instance.
+
+    Returns the existing QApplication instance if one exists, otherwise
+    creates and returns a new one.
+
+    Returns
+    -------
+    PySide2.QtWidgets.QApplication
+        The QApplication instance
+    """
     from PySide2 import QtWidgets
     app = QtWidgets.QApplication.instance()
     if app is None:
@@ -125,6 +219,21 @@ def get_QApplication():
     return app
 
 def get_path(main_window):
+    """Open a file dialog to select a directory.
+
+    Opens a platform-native directory selection dialog for the user to choose
+    a folder. Returns the selected path or None if cancelled.
+
+    Parameters
+    ----------
+    main_window : PySide2.QtWidgets.QMainWindow, optional
+        Parent window for the dialog. If None, a new QMainWindow is created
+
+    Returns
+    -------
+    str
+        Absolute path to selected directory, or empty string if cancelled
+    """
     # if not 'app' in globals().keys():
     #     global app
     #     app = wx.App(None)
@@ -221,6 +330,17 @@ class Experiment:
         print('\nInitialize experiment: \n' + str(self.main_path))
 
     def __getstate__(self):
+        """Prepare object for pickling by excluding non-serializable attributes.
+
+        Returns a dictionary of the object's state excluding files and other
+        attributes that cannot be properly serialized. This is used for
+        parallelization and object persistence.
+
+        Returns
+        -------
+        dict
+            Dictionary with object state minus excluded keys
+        """
         d = self.__dict__.copy()
         # d.pop('files')
         d['files'] = []
@@ -230,9 +350,23 @@ class Experiment:
         return d
 
     def __setstate__(self, dict):
+        """Restore object state from pickled state dictionary.
+
+        Parameters
+        ----------
+        dict : dict
+            State dictionary from __getstate__
+        """
         self.__dict__.update(dict)
 
     def __repr__(self):
+        """Return string representation of the Experiment object.
+
+        Returns
+        -------
+        str
+            String representation in format 'Experiment(name)'
+        """
         return (f'{self.__class__.__name__}({self.name})')
 
     @property
@@ -245,6 +379,16 @@ class Experiment:
 
     @channels.setter
     def channels(self, channels):
+        """Set channels used in the experiment.
+
+        Automatically updates the number of channels and channel pairs when
+        channels are modified.
+
+        Parameters
+        ----------
+        channels : list or array-like
+            Channel identifiers (typically strings like 'g', 'r')
+        """
         self._channels = np.atleast_1d(np.array(channels))
         self._number_of_channels = len(channels)
         self._pairs = [[c1, c2] for i1, c1 in enumerate(channels) for i2, c2 in enumerate(channels) if i2 > i1]
@@ -281,22 +425,34 @@ class Experiment:
 
     @property
     def mapping_file(self):
+        """File : Mapping file object from the experiment, if one exists.
+
+        Returns the first file marked as a mapping file. Returns None if no
+        mapping file is found.
+        """
         for file in self.files:
             if file.is_mapping_file:
                 return file
 
     @property
     def analysis_path(self):
+        """pathlib.Path : Path to the Analysis folder.
+
+        Creates the Analysis folder in the main experiment directory if it
+        does not exist, then returns the path.
+        """
         analysis_path = self.main_path.joinpath('Analysis')
         analysis_path.mkdir(parents=True, exist_ok=True)
         return analysis_path
 
     @property
     def file_paths(self):
+        """list of pathlib.Path : List of relative file paths for all files in experiment"""
         return [file.relativeFilePath for file in self.files]
 
     @property
     def nc_file_paths(self):
+        """list of pathlib.Path : List of relative NetCDF file paths for all files in experiment"""
         return [file.relativeFilePath.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
 
     def find_file_paths_and_extensions(self, paths):
@@ -477,6 +633,27 @@ class Experiment:
 
     def determine_flatfield_and_darkfield_corrections(self, files, method='BaSiC', illumination_index=0, frame_index=0,
                                                       estimate_darkfield=True, **kwargs):
+        """Determine and save flatfield and darkfield corrections for image shading.
+
+        Calculates spatial shading corrections using the specified method and saves
+        them as TIFF files in the main experiment directory. Automatically loads the
+        corrections into the experiment.
+
+        Parameters
+        ----------
+        files : FileCollection
+            Collection of files to use for determining corrections
+        method : str, optional
+            Correction method to use (default: 'BaSiC')
+        illumination_index : int, optional
+            Index of the illumination pattern to correct (default: 0)
+        frame_index : int, optional
+            Frame index to use for correction calculation (default: 0)
+        estimate_darkfield : bool, optional
+            If True, also estimate and save darkfield correction (default: True)
+        **kwargs
+            Additional keyword arguments passed to spatial_shading_correction
+        """
         from papylio.movie.basic_shading_correction import spatial_shading_correction
 
         darkfield, flatfield = spatial_shading_correction(files.movie, method=method,
@@ -490,6 +667,12 @@ class Experiment:
         self.load_flatfield_correction()
 
     def load_flatfield_correction(self):
+        """Load flatfield correction images from disk.
+
+        Searches for flatfield correction TIFF files in the main experiment directory.
+        If found, loads them and adds them to the common image corrections dataset.
+        Updates all movie objects with the loaded corrections.
+        """
         file_paths = list(self.main_path.glob('flatfield*'))
         if file_paths:
             movie = self.files[0].movie
@@ -514,6 +697,12 @@ class Experiment:
         self.add_common_image_corrections_to_movies()
 
     def load_darkfield_correction(self):
+        """Load darkfield correction images from disk.
+
+        Searches for darkfield correction TIFF files in the main experiment directory.
+        If found, loads them and adds them to the common image corrections dataset.
+        Updates all movie objects with the loaded corrections.
+        """
         file_paths = list(self.main_path.glob('darkfield*'))
         if file_paths:
             movie = self.files[0].movie
@@ -539,6 +728,11 @@ class Experiment:
         self.add_common_image_corrections_to_movies()
 
     def add_common_image_corrections_to_movies(self):
+        """Apply common image corrections to all movie objects.
+
+        Sets the common image corrections (flatfield, darkfield) to all movie
+        objects in the experiment so they can be applied during image processing.
+        """
         self.files.movie._common_corrections = self.common_image_corrections
 
     # def show_flatfield_and_darkfield_corrections(self, name='', save=True):
@@ -626,9 +820,28 @@ class Experiment:
             input("Press enter to continue")
 
     def print_files(self):
+        """Print a summary of all files in the experiment.
+
+        Outputs a formatted representation of all files currently loaded
+        in the experiment.
+        """
         self.files.print()
 
     def plot_trace(self, files=None, query={}, **kwargs):
+        """Plot molecule traces with interactive visualization.
+
+        Opens an interactive window to visualize and inspect molecule traces
+        from NetCDF files. Allows filtering of molecules using a query.
+
+        Parameters
+        ----------
+        files : FileCollection, optional
+            Files to plot traces from. If None, uses all files in experiment
+        query : dict, optional
+            Query dictionary to filter molecules (default: {})
+        **kwargs
+            Additional keyword arguments passed to TracePlotWindow
+        """
         # from papylio.trace_plot import TraceAnalysisFrame
 
         if files is None:
@@ -652,6 +865,12 @@ class Experiment:
             TracePlotWindow(dataset=ds_sel, save_path=None, **kwargs)
 
     def export_number_of_molecules_per_file(self):
+        """Export the number of molecules in each file to an Excel spreadsheet.
+
+        Creates an Excel file containing a summary of the number of molecules
+        detected in each file of the experiment. Missing files are marked with -1.
+        The file is saved as 'number_of_molecules.xlsx' in the main experiment directory.
+        """
         df = pd.DataFrame(columns=['Number of molecules'])
         for i, file in enumerate(self.files):
             n = str(file.relativeFilePath)

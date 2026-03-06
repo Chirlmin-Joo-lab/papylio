@@ -1,3 +1,8 @@
+"""Peak finding utilities for image-based molecule localization.
+
+Includes multiple methods for detecting spot-like features: adaptive thresholding,
+local maxima, relative local maxima, and contour-based centroid estimation.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -5,7 +10,25 @@ import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 import math
 
+
 def find_peaks(image=None, method='local-maximum', **kwargs):
+    """Dispatch to a peak-finding method and return coordinates as Nx2 array.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D image to search for peaks
+    method : str
+        Method name: 'AKAZE','absolute-threshold','adaptive-threshold','local-maximum',
+        'local-maximum-auto','relative-local-maximum'
+    **kwargs : dict
+        Additional method-specific keyword arguments
+
+    Returns
+    -------
+    np.ndarray
+        Array of shape (N,2) with (x,y) coordinates of detected peaks
+    """
     if method == 'AKAZE':
         coordinates = analyze(image, **kwargs)[2]
     elif method == 'absolute-threshold':
@@ -23,12 +46,31 @@ def find_peaks(image=None, method='local-maximum', **kwargs):
     return coordinates
 
 def find_peaks_absolute_threshold(image, threshold = None, minimum_area = 5, maximum_area = 15):
+    """Find connected components above a fixed absolute threshold and return centroids.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D image
+    threshold : float, optional
+        Pixel intensity threshold; if None uses midpoint of min/max
+    minimum_area : int
+        Minimum contour area to keep
+    maximum_area : int
+        Maximum contour area to keep
+
+    Returns
+    -------
+    np.ndarray
+        Array of centroid coordinates (x,y)
+    """
     if threshold is None: threshold = (np.max(image) + np.min(image)) / 2
     image_thresholded = image > threshold
     coordinates = coordinates_from_contours(image_thresholded, minimum_area, maximum_area)
     return coordinates
 
 def find_peaks_adaptive_threshold(image, minimum_area = 5, maximum_area = 15):
+    """Adaptive local-thresholding followed by contour centroid extraction."""
     # This may be needed if we go from a 16-bit image to an 8 bit image
     # if bounds is None:
     #     lower_bound = np.min(image)
@@ -183,6 +225,32 @@ def find_peaks_relative_local_maximum(image,
                                       filter_neighbourhood_size_min=10,
                                       filter_sigma_min=25,
                                       filter_neighbourhood_size_max=5):
+    """Detect peaks based on local intensity relative to a smoothed background.
+
+    Computes a local minimum image, smooths it with a Gaussian, then finds
+    local maxima in the ratio image (image / smoothed_min). Peaks where the
+    relative maximum is below `minimum_times_background` are discarded.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D image
+    minimum_times_background : float
+        Minimum allowable ratio between local max and local background
+    maximum_times_background : float
+        Maximum allowable ratio (currently unused)
+    filter_neighbourhood_size_min : int
+        Neighborhood size for the minimum filter
+    filter_sigma_min : float
+        Gaussian sigma used to smooth the minimum image
+    filter_neighbourhood_size_max : int
+        Neighborhood size for the maximum filter
+
+    Returns
+    -------
+    np.ndarray
+        Array of (x,y) coordinates for detected peaks
+    """
 
     image_min = filters.minimum_filter(image, filter_neighbourhood_size_min)
     image_min_gaussian = filters.gaussian_filter(image_min, sigma=filter_sigma_min)
@@ -202,6 +270,7 @@ def find_peaks_relative_local_maximum(image,
     return coordinates
 
 def coordinates_from_contours(image_thresholded, minimum_area=5, maximum_area=15):
+    """Extract centroids from binary mask using OpenCV contours and moment centroids."""
     contours, hierarchy = cv2.findContours(image_thresholded.astype(np.uint8),
                                            cv2.RETR_EXTERNAL,
                                            cv2.CHAIN_APPROX_NONE)
@@ -366,4 +435,3 @@ if __name__ == '__main__':
 
     plt.imshow(image)
     plt.scatter(coordinates[:,0],coordinates[:,1],color='r')
-

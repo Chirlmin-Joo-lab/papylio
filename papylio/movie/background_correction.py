@@ -1,3 +1,8 @@
+"""Background correction algorithms for microscopy images.
+
+Implements various methods for determining and removing background signals
+from image stacks, including temporal and spatial background estimation.
+"""
 import numpy as np
 import scipy.optimize
 import scipy.ndimage
@@ -6,6 +11,32 @@ import tqdm
 from papylio.movie.shading_correction import get_photobleach
 
 def determine_temporal_background_correction(frames, method, flatfield=None, darkfield=None):
+    """Determine background correction across multiple frames.
+
+    Computes temporal background correction using the specified method,
+    optionally applying flatfield and darkfield corrections.
+
+    Parameters
+    ----------
+    frames : np.ndarray
+        Stack of image frames, typically of shape (T, H, W) or (T, C, H, W)
+    method : str
+        Method for background correction. Options include 'BaSiC', 'BaSiC_crop'
+    flatfield : np.ndarray, optional
+        Flatfield correction image to apply (default: None)
+    darkfield : np.ndarray, optional
+        Darkfield correction image to apply (default: None)
+
+    Returns
+    -------
+    np.ndarray
+        Flattened background correction values
+
+    Raises
+    ------
+    NotImplementedError
+        If method 'BaSiC_crop' is specified
+    """
     if method == 'BaSiC':
         channel_dimensions = frames.shape[-2:][::-1]  # size should be given in (x,y) for get_photobleach
         size = (channel_dimensions / np.max(channel_dimensions) * 256).astype(int)
@@ -21,6 +52,35 @@ def determine_temporal_background_correction(frames, method, flatfield=None, dar
 
 
 def determine_single_value_background_correction(frame, method, flatfield=None, darkfield=None):
+    """Determine a single background correction value for a frame.
+
+    Calculates a scalar background value for a given frame using the specified
+    method, with optional flatfield and darkfield corrections.
+
+    Parameters
+    ----------
+    frame : np.ndarray
+        Single image frame to analyze
+    method : str
+        Method for background correction. Options include 'BaSiC', 'BaSiC_crop',
+        'mean', 'median', 'fit_background_peak', or methods containing 'filter'
+    flatfield : np.ndarray, optional
+        Flatfield correction image (default: None)
+    darkfield : np.ndarray, optional
+        Darkfield correction image (default: None)
+
+    Returns
+    -------
+    float
+        Scalar background correction value
+
+    Raises
+    ------
+    NotImplementedError
+        If method 'BaSiC_crop' is specified
+    ValueError
+        If method is not recognized
+    """
     frame_corrected = frame
     if darkfield is not None:
         frame_corrected = frame - darkfield
@@ -49,6 +109,42 @@ def determine_single_value_background_correction(frame, method, flatfield=None, 
 
 
 def determine_spatial_background_correction(frame, method, flatfield=None, darkfield=None, **kwargs):
+    """Determine spatial background correction for a frame.
+
+    Computes a spatially-varying background correction using morphological
+    or filtering operations. Useful for correcting vignetting and uneven
+    illumination patterns.
+
+    Parameters
+    ----------
+    frame : np.ndarray
+        Image frame to analyze
+    method : str
+        Filtering method. Options include 'gaussian_filter', 'minimum_filter',
+        'median_filter'
+    flatfield : np.ndarray, optional
+        Flatfield correction to apply (default: None)
+    darkfield : np.ndarray, optional
+        Darkfield correction to apply (default: None)
+    **kwargs
+        Additional keyword arguments passed to the scipy filter function
+
+    Returns
+    -------
+    np.ndarray
+        Spatially-varying background correction array
+
+    Raises
+    ------
+    ValueError
+        If method is not recognized
+
+    Notes
+    -----
+    - Gaussian filter: sigma=0.5, mode='wrap' (default)
+    - Minimum filter: size=15, mode='wrap' (default)
+    - Median filter: size=30, mode='wrap' (default)
+    """
     # TODO: improve edge between donor&acceptor channel
     if method == 'gaussian_filter':
         scipy_filter = scipy.ndimage.gaussian_filter
@@ -74,10 +170,57 @@ def determine_spatial_background_correction(frame, method, flatfield=None, darkf
 
     return correction
 
+
 def gauss_function(x, a, x0, sigma):
+    """Gaussian function for curve fitting.
+
+    Standard 1D Gaussian (normal distribution) function used for fitting
+    background intensity distributions.
+
+    Parameters
+    ----------
+    x : float or np.ndarray
+        Independent variable(s)
+    a : float
+        Amplitude (peak height)
+    x0 : float
+        Mean (center)
+    sigma : float
+        Standard deviation (width)
+
+    Returns
+    -------
+    float or np.ndarray
+        Gaussian function value(s)
+    """
     return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
 def gaussian_maximum_fit(frame, width_around_peak_fitted=200):
+    """Find background value by fitting Gaussian to histogram peak.
+
+    Analyzes the intensity histogram of a frame and fits a Gaussian function
+    to the brightest peak, returning the peak position as the background value.
+    This method is robust for finding background in typical microscopy images.
+
+    Parameters
+    ----------
+    frame : np.ndarray
+        Image frame to analyze
+    width_around_peak_fitted : int, optional
+        Initial window width (in intensity units) for fitting around the peak.
+        Doubles if fit fails. (default: 200)
+
+    Returns
+    -------
+    float
+        Intensity value of the fitted Gaussian peak (background estimate)
+
+    Notes
+    -----
+    - Uses 0.999 quantile as upper limit to exclude outliers
+    - 500 histogram bins are used by default
+    - Automatically expands fitting window if convergence fails
+    """
     # count, edges = np.histogram(frame.flatten(), bins=width_around_peak_fitted)
     # max_bin_center = edges[count.argmax():count.argmax()+2].mean()
 
@@ -193,6 +336,39 @@ import skimage
 import matplotlib.pyplot as plt
 
 def rollingball(*args): # Matlab[im_out,im_bg]=rollingball(im_in,size_ball,im_bg)
+    """Rolling ball background subtraction algorithm.
+
+    Implements background subtraction using the rolling ball algorithm as
+    described in Sternberg's "Biomedical Image Processing" (IEEE Computer, 1983).
+    This is particularly effective for removing uneven illumination.
+
+    Parameters
+    ----------
+    im_in : np.ndarray
+        Input image array
+    size_ball : int, optional
+        Radius of the rolling ball in pixels (default: 30)
+    im_bg : np.ndarray, optional
+        Pre-computed background image to use (default: None, computes from opening)
+
+    Returns
+    -------
+    im_out : np.ndarray
+        Background-subtracted image (values clipped to >= 0)
+    im_bg : np.ndarray
+        Computed or provided background image
+
+    Notes
+    -----
+    - Uses skimage morphological opening operation
+    - The rolling ball is created from a 3D sphere, taking only upper hemisphere
+    - Background intensity is flattened to 2D weighted disc
+    - Negative values after subtraction are clipped to 0
+
+    References
+    ----------
+    .. [1] http://imagejdocu.tudor.lu/doku.php?id=gui:process:subtract_background
+    """
     varargin = args
     im_in=varargin[0]
     if len(varargin)==1:

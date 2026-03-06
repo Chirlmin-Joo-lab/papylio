@@ -1,3 +1,8 @@
+"""Enhanced geometric hashing implementation for 3D point matching.
+
+Builds on 2D geometric hashing for robust matching with improved handling of transformations.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.path as pth
@@ -14,6 +19,7 @@ import time
 
 
 class GeometricHashTable:
+    """Enhanced geometric hash table for 3D point set matching with improved transformation handling."""
     def __init__(self, destinations=None, source_vertices=None, initial_source_transformation=AffineTransform(),
                  number_of_source_bases=20, number_of_destination_bases='all', load=False):
         # self.tile = tile

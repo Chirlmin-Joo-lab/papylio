@@ -1,3 +1,8 @@
+"""Logging and metadata functions for documenting analysis operations.
+
+Provides utilities for capturing function arguments, recording timestamps,
+and adding configuration metadata to data arrays for reproducibility.
+"""
 import inspect
 import json
 import functools
@@ -5,6 +10,20 @@ from datetime import datetime
 import papylio
 
 def function_arguments(function, function_locals):
+    """Extract function arguments from local variables.
+
+    Parameters
+    ----------
+    function : callable
+        Function whose arguments to extract
+    function_locals : dict
+        Local variables dictionary (typically from locals())
+
+    Returns
+    -------
+    dict
+        Dictionary of parameter names to values
+    """
     signature_values = inspect.signature(function).parameters.values()
     all_argument_values = {
         parameter.name:
@@ -18,13 +37,55 @@ def function_arguments(function, function_locals):
     return all_argument_values
 
 def function_arguments_json(function, function_locals):
+    """Serialize function arguments to JSON string.
+
+    Parameters
+    ----------
+    function : callable
+        Function whose arguments to serialize
+    function_locals : dict
+        Local variables dictionary (typically from locals())
+
+    Returns
+    -------
+    str
+        JSON-serialized function arguments
+    """
     return json.dumps(function_arguments(function, function_locals))
 
 def get_current_datetime():
+    """Get current date and time as formatted string.
+
+    Returns
+    -------
+    str
+        Current datetime in format 'YYYY-MM-DD HH:MM:SS'
+    """
     current_datetime = datetime.now()
     return current_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
 def add_configuration_to_dataarray(dataarray, function=None, function_locals=None, units=None):
+    """Add metadata and configuration to a data array.
+
+    Adds version, timestamp, and optionally function arguments and units
+    to the data array's attributes for documentation and reproducibility.
+
+    Parameters
+    ----------
+    dataarray : xr.DataArray
+        Data array to annotate
+    function : callable, optional
+        Function that generated the data (default: None)
+    function_locals : dict, optional
+        Local variables from the generating function (default: None)
+    units : str, optional
+        Unit of measurement for the data (default: None)
+
+    Returns
+    -------
+    xr.DataArray
+        Data array with added metadata
+    """
     dataarray.attrs['version'] = papylio.__version__
     if function is not None:
         dataarray.attrs['configuration'] = function_arguments_json(function, function_locals)

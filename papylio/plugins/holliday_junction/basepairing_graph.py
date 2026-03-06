@@ -1,3 +1,9 @@
+"""Helpers for visualizing basepairing relationships in short DNA sequences.
+
+Functions to compute basepair compatibility matrices and plot them as chord-like
+connectivity diagrams for analysis and visualization in the Holliday junction plugin.
+"""
+
 import itertools
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,6 +11,10 @@ import xarray as xr
 import seaborn as sns
 sns.stripplot
 def basepairing(sequences):
+    """Compute pairwise canonical basepair indicators for each sequence.
+
+    Returns an array marking positions that can form AT/TA/CG/GC pairs.
+    """
     s = sequences.astype('U').view('U1').reshape(-1, 8)
     s1 = xr.DataArray(s, coords=[('sequence', sequences), ('nucleotide_1', range(8))])
     s2 = xr.DataArray(s, coords=[('sequence', sequences), ('nucleotide_2', range(8))])
@@ -15,6 +25,22 @@ def basepairing(sequences):
 
 
 def plot_basepairing(basepairing, title='', ax=None, save_path=None, max_linewidth=10):
+    """Plot averaged basepairing strength as connecting lines around a circle.
+
+    Parameters
+    ----------
+    basepairing : xarray.DataArray
+        Array with dims ('sequence','nucleotide_1','nucleotide_2') indicating basepairing.
+    title : str
+        Plot title
+    ax : matplotlib.axes.Axes or None
+        Axis to draw into (creates a new figure if None)
+    save_path : Path or None
+        Optional directory to save the figure
+    max_linewidth : float
+        Scaling factor for line thickness
+    """
+
     data = basepairing.mean('sequence')
 
     n = 8
@@ -49,6 +75,7 @@ def plot_basepairing(basepairing, title='', ax=None, save_path=None, max_linewid
 
 
 def plot_basepairing_individual(sequences, name='', rows=5, columns=10, titles=None, save_path=None, max_linewidth=5):
+    """Plot basepairing diagrams for each sequence in a grid layout."""
     fig, axes = plt.subplots(rows, columns, figsize=(columns*2.5, rows*2.5))#, tight_layout=True)
     fig.subplots_adjust(hspace=0.3, wspace=0.3, left=0.02, right=0.98, bottom=0.02, top=0.95)
     axes = axes.flatten()
@@ -67,6 +94,7 @@ def plot_basepairing_individual(sequences, name='', rows=5, columns=10, titles=N
 
 
 def basepairing_possible(sequences):
+    """Return basepairing indicator (alias)."""
     bp = basepairing(sequences)
     return basepairing
 
