@@ -120,7 +120,7 @@ class File:
         self.add_extensions(extensions, load=self.experiment.import_all)
 
         self.perform_logging = perform_logging
-        self._logger = self._create_logger()
+        self.__logger = None
         self._log('info', f"Initialized {self} with Papylio v{papylio.__version__}")
 
     def __repr__(self):
@@ -131,12 +131,14 @@ class File:
     def _log_filepath(self):
         return self.absoluteFilePath.with_suffix(".log")
 
-    def _create_logger(self):
+    @property
+    def _logger(self):
         """Create a dedicated logger per File instance."""
-        logger_name = f"FileLogger.{self.relativeFilePath}"
-        logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.INFO)
-        return logger
+        if self.__logger is None:
+            logger_name = f"FileLogger.{self.relativeFilePath}"
+            self.__logger = logging.getLogger(logger_name)
+            self.__logger.setLevel(logging.INFO)
+        return self.__logger
 
     def _log(self, log_type, message):
         if self.perform_logging:
