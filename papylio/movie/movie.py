@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import tifffile
 import numpy as np
+from matchpoint import MatchPoint
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import xarray as xr
@@ -157,11 +158,17 @@ class Movie:
         else:
             image_info['apply_corrections'] = False
 
+        overlay_result = re.search('_overlay', filename)
+        if overlay_result is None:
+            image_info['overlay_channels'] = False
+        else:
+            image_info['overlay_channels'] = True
+
         return image_info
 
     @classmethod
     def image_info_to_filename(cls, filename, fov_index=None, projection_type=None, frame_range=None,
-                               illumination=None, apply_corrections=None):
+                               illumination=None, apply_corrections=None, overlay_channels=False):
         # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
         if fov_index is not None:
             # filename += f'_fov{self.fov_info["fov_chosen"]:03d}'
@@ -183,6 +190,9 @@ class Movie:
 
         if apply_corrections is False:
             filename += '_raw'
+
+        if overlay_channels:
+            filename += '_overlay'
 
         return filename
 
@@ -234,6 +244,8 @@ class Movie:
         self.channel_arrangement = [[[0, 1]]]
         # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
         # self.channel_arrangement = xr.DataArray([[[0,1]]], dims=('frame','y','x'))
+
+        self.channel_mappings = [MatchPoint(),]*(self.number_of_channels-1)
 
         self.illumination_arrangement = [0]  # First level: frames, second level: illumination
         # self.illumination_arrangement = xr.DataArray([[True, False]], dims=('frame', 'illumination'), coords={'illumination': [0,1]}) # TODO: np.array([0]) >> list of list It would be good to have a default illumination_arrangement of np.array([0]), i.e. illumination 0 all the time?
@@ -533,7 +545,7 @@ class Movie:
             # Perhaps remove the outermost layer from channel_configuration
             # Or add this to separate and flatten channels
 
-        frames = self.separate_channels(frames)
+        frames = self.separate_channels(frames, self.channel_rows, self.channel_columns)
         # frames = np.stack([channel.crop_images(images) for channel in self.channels]
 
         if apply_corrections:  # and self.correct_images
@@ -555,7 +567,8 @@ class Movie:
     def channel_columns(self):
         return len(self.channel_arrangement[0, 0])
 
-    def separate_channels(self, frames):
+    @staticmethod
+    def separate_channels(frames, channel_rows, channel_columns):
         # if frames.ndim == 2:
         #     frames = frames[None, :, :]
         # return expand_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2))
@@ -563,7 +576,7 @@ class Movie:
         return xr.apply_ufunc(
             expand_axes, frames, input_core_dims=[['y', 'x']], output_core_dims=[['channel', 'y', 'x']],
             exclude_dims=set(['y', 'x']),
-            kwargs={"expand_into": (self.channel_rows, self.channel_columns), "from_axes": (-2, -1),
+            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
                     "to_axes": (frames.ndim,) * 2, "new_axes_positions": [-3]}
         )
         # return xr.apply_ufunc(
@@ -576,7 +589,8 @@ class Movie:
         # new = split_along_axes(frames.values, (channel_rows, channel_columns), from_axes=(1, 2))
         # return xr.DataArray(new, dims=['frame','y','x','channel'])
 
-    def flatten_channels(self, frames):
+    @staticmethod
+    def flatten_channels(frames, channel_rows=None, channel_columns=None):
         # return split_along_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), inverse=True)
         # return split_along_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), inverse=True)
         # if frames.shape[-3]//channel_columns//channel_rows == 1:
@@ -587,7 +601,7 @@ class Movie:
         return xr.apply_ufunc(
             expand_axes, frames, input_core_dims=[['channel', 'y', 'x']], output_core_dims=[['y', 'x']],
             exclude_dims=set(['x', 'y']),
-            kwargs={"expand_into": (self.channel_rows, self.channel_columns), "from_axes": (-2, -1),
+            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
                     "to_axes": (-3, -3),
                     "inverse": True, "squeeze": True}
         )
@@ -672,7 +686,7 @@ class Movie:
             #     tifffile.imwrite(self.writepath.joinPath(f'{self.name}_fr{frame_number}.tif'), image,  photometric='minisblack')
 
     def make_projection_image(self, projection_type='average', frame_range=(0,20), apply_corrections=True, illumination=None, write=False,
-                              return_image=True, flatten_channels=True, intensity_range=None, color_map='gray'):
+                              return_image=True, flatten_channels=True, intensity_range=None, color_map='gray', overlay_channels=False):
         """ Construct a projection image
         Determine a projection image for a number_of_frames starting at start_frame.
         i.e. [start_frame, start_frame + number_of_frames)
@@ -712,7 +726,7 @@ class Movie:
         frame_indices = frame_indices[self.illumination_index_per_frame.values[frame_indices] == illumination_index]
 
         # Calculate sum of frames and find mean
-        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float32'))
+        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float32'), self.channel_rows, self.channel_columns)
 
         frame_indices_subsets = np.array_split(frame_indices, len(frame_indices) // self.chunk_size + 1)
 
@@ -741,11 +755,19 @@ class Movie:
                     image = np.maximum(image, frames.max(axis=0))
             # sys.stdout.write(f'\r   Processed frames {frame_indices[0]}-{frame_indices[-1]}\n')
 
+        if overlay_channels:
+            for i in self.channel_indices[1:].values:
+                image[i, :, :] = self.channel_mappings[i-1].transform_image(image[i, :, :], inverse=True)
+            image = image.sum(axis=0)
+
         if write:
             filename = Movie.image_info_to_filename(self.name, fov_index=self.fov_index, projection_type=projection_type,
-                                                    frame_range=frame_range, illumination=illumination_index, apply_corrections=apply_corrections)
+                                                    frame_range=frame_range, illumination=illumination_index, apply_corrections=apply_corrections, overlay_channels=overlay_channels)
             filepath = self.writepath.joinpath(filename)
-            write_image = self.flatten_channels(image)
+            if len(image.shape) == 3: # i.e. there is still a channel dimension
+                write_image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
+            else:
+                write_image = image
             if write in [True, 'tif']:
                 if hasattr(self, 'pixel_size'):
                     resolution = 1/self.pixel_size
@@ -765,8 +787,8 @@ class Movie:
                 plt.imsave(filepath.with_suffix('.png'), write_image, vmin=intensity_range[0], vmax=intensity_range[1], cmap=color_map)
 
         if return_image:
-            if flatten_channels:
-                return self.flatten_channels(image)
+            if flatten_channels and len(image.shape) == 3:
+                return self.flatten_channels(image, self.channel_rows, self.channel_columns)
             else:
                 return image
 
