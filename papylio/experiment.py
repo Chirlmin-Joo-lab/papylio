@@ -97,7 +97,7 @@ class Experiment:
         self.import_all = import_all
         self.perform_logging = perform_logging
 
-        self.excluded_extensions = ['pdf', 'dat', 'db', 'py', 'yml', 'png', 'pdf', 'xlsx', 'md']
+        self.excluded_extensions = ['pdf', 'dat', 'db', 'py', 'yml', 'png', 'pdf', 'xlsx', 'md', 'txt']
         self.excluded_names = ['_ave', '_max', '_corrections', '_dwells', '_dwell_analysis',
                                'darkfield', 'flatfield', '_sequencing_data', '_sequencing_match']
         self.excluded_paths = ['Analysis', 'Sequencing data', 'Results']
@@ -412,7 +412,7 @@ class Experiment:
                 illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 flatfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
-                    movie.separate_channels(flatfield)
+                    movie.separate_channels(flatfield, movie.channel_rows, movie.channel_columns)
 
             self.common_image_corrections['flatfield_correction'] = flatfield_correction
         else:
@@ -437,7 +437,7 @@ class Experiment:
                 # illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 darkfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
-                    movie.separate_channels(darkfield)
+                    movie.separate_channels(darkfield, movie.channel_rows, movie.channel_columns)
 
             self.common_image_corrections['darkfield_correction'] = darkfield_correction
         else:
