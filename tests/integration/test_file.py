@@ -83,8 +83,8 @@ def test_find_molecules_empty_dataset(file):
 
 def test_extract_traces(file):
     file.find_coordinates()
-    file.extract_traces()
-    file.extract_traces(mask_size=None, neighbourhood_size=None,
+    file.extract_traces(mask_size='TIR-T')
+    file.extract_traces(mask_size='TIR-T', neighbourhood_size=None,
                         background_correction=(-150,-30),
                         alpha_correction=0.075,
                         gamma_correction=1.2)
