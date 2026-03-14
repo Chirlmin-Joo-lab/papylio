@@ -106,7 +106,7 @@ def test_show_traces(file_output):
 def test_save_dataset_selected(file_output_with_selected):
     file_output_with_selected.save_dataset_selected()
     import xarray as xr
-    ds = xr.load_dataset(file_output_with_selected.absoluteFilePath.parent / (file_output_with_selected.name + '_selected.nc'))
+    ds = xr.load_dataset(file_output_with_selected.absolute_filepath.parent / (file_output_with_selected.name + '_selected.nc'))
     indices_selected = np.nonzero(ds.molecule_in_file.values)[0]
     assert (indices_selected == np.array([0,5,33])).all().item()
 
