@@ -666,7 +666,7 @@ class Movie:
         if channel_names in [None, 'all']:
             return self.channels
 
-        if not isinstance(channel_names, list):
+        if not isinstance(channel_names, list) and not isinstance(channel_names, tuple):
             channel_names = [channel_names]
 
         return [self.get_channel_from_name(channel_name) for channel_name in channel_names]

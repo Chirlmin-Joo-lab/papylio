@@ -87,7 +87,9 @@ class File:
         self.movie = None
         self.mapping = None
 
-        self.rotation = 0
+        self._rotation = 0
+
+        self.mappings = [self.mapping] # TODO make dependent on number of channels
 
         # I think it will be easier if we have import functions for specific data instead of specific files.
         # For example. the sifx, pma and tif files can better be handled in the Movie class. Here we then just have a method import_movie.
@@ -191,6 +193,16 @@ class File:
 
     @property
     @return_none_when_executed_by_pycharm
+    def rotation(self):
+        return self._rotation
+
+    @rotation.setter
+    def rotation(self, rotation):
+        self.movie.rot90 = rotation
+        self._rotation = rotation
+
+    @property
+    @return_none_when_executed_by_pycharm
     def number_of_channels(self):
         return self.experiment.number_of_channels
 
@@ -231,9 +243,17 @@ class File:
             # Perhaps make it part of Movie
             # Perhaps make a get_projection_image a class method of Movie
             # return self.movie.separate_channels(tifffile.imread(image_file_path))
-            return tifffile.imread(image_file_path)
+            #TODO: Save channel_rows and channel_columns in dataset and retrieve them
+
+            if kwargs.get('overlay_channels', False):
+                channel_columns = 1
+            else:
+                channel_columns = 2
+            image = Movie.separate_channels(tifffile.imread(image_file_path), 1, channel_columns)
         else:
-            return self.movie.make_projection_image(frame_range=frame_range, **kwargs, write=True, flatten_channels=True)
+            image = self.movie.make_projection_image(frame_range=frame_range, **kwargs, write=True, flatten_channels=False)
+
+        return image
 
     @property
     @return_none_when_executed_by_pycharm
@@ -249,24 +269,19 @@ class File:
         return xr.DataArray(coordinates_stage, coords=coordinates.coords)
 
     def set_coordinates_of_channel(self, coordinates, channel):
-        # TODO: make this usable for more than two channels
-        # TODO: Make this work for xarray DataArrays
-        channel_index = self.movie.get_channel_number(channel)  # Or possibly make it self.channels
-        if channel_index == 0:
-            coordinates_in_main_channel = coordinates
-        elif channel_index == 1:
-            coordinates_in_main_channel = self.mapping.transform_coordinates(coordinates, inverse=True)
-        else:
-            raise NotImplementedError('File.set_coordinates_of_channel not implemented for more than two channels')
+        if not isinstance(coordinates, xr.DataArray):
+            coordinates = xr.DataArray(coordinates, dims=('molecule', 'dimension'))
+        channel_index = self.movie.get_channel_indices_from_names(channel)[0]
+        if channel_index > 0:
+            coordinates = self.mappings[channel_index-1].transform_coordinates(coordinates, inverse=True)
 
-        # for channel in self.channels or for mapping in self.mappings
-        coordinates_list = [coordinates_in_main_channel]
-        for i in range(1, self.number_of_channels):
-            if self.number_of_channels > 2:
-                raise NotImplementedError('File.set_coordinates_of_channel not implemented for more than two channels')
-            coordinates_in_other_channel = self.mapping.transform_coordinates(coordinates_in_main_channel, direction='Donor2Acceptor')
-            coordinates_list.append(coordinates_in_other_channel)
-        coordinates = np.hstack(coordinates_list).reshape((-1, 2))
+        # coordinates = np.repeat(coordinates[:, np.newaxis, :], self.number_of_channels, axis=1)
+        coordinates = coordinates.expand_dims(channel=np.arange(self.number_of_channels), axis=1).copy()
+
+        for i in range(self.number_of_channels)[1:]:
+            coordinates[:,i,:] = self.mapping.transform_coordinates(coordinates[:,i,:], inverse=False)
+
+        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.channels[0].boundaries, margin=0)
 
         self.coordinates = coordinates
 
@@ -499,256 +514,48 @@ class File:
         tifffile.imwrite(self.experiment.main_path / 'darkfield.tif', image, imagej=True)
         self.experiment.load_darkfield_correction()
 
-    def find_coordinates(self, channels=('donor',), method='by_channel', peak_finding=None, projection_image=None,
-                         sliding_window=None, coordinate_optimization=None):
-        '''
-        This function finds and sets the locations of all molecules within the movie's images.
+    def find_coordinates(self, channels=('donor', 'acceptor'),
+                         projection_image_configuration=None, sliding_window=None,
+                         peak_finding_configuration=None, margin=10, fit_peaks=True, remove_peaks_with_close_neighbors=None):
 
-        Main part of the work is done within 'find_molecules_utils.py'(imported as findMols)
+        if projection_image_configuration is None:
+            projection_image_configuration = dict()
 
-        findMols.find_unique_molecules(), will loop through frames of the movie:
-        1. creates an average image or maximum projection (for every N frames)
-        2. finds the peaks in the new image (wraps around built-in method)
-        3. keeps only the unique positions/pixels of peak locations ()
-             3B allows to select only 'FRET pairs': intensity peak is seen in both donor/acceptor
-        4. Finally, correct for an uncertainty in exact location due to photon shot noise etc. to remove 'functional duplicates'
-        5. generate the coordinates array that is compatible with the Molecule() properties:
-            [ [array1: donor coordinates],[array2: acceptor coordinates]  ]
-            First array has all the coordinates (either found directly or inferred) of the donors:
-            donor_coordinates = [[x1,y1],[x2,y2], etc.]
-            Similar for acceptor coordinates
+        if peak_finding_configuration is None:
+            peak_finding_configuration = dict()
 
+        if len(channels) > 1:
+            projection_image_configuration['overlay_channels'] = True
 
+        # TODO: copy relevant info from movie into dataset
+        self.movie.read_header()
 
-        configurations to be set by user:
-        (within the find_coordinates section of the configuration file)
-        --------------------------------
-        channel : choose 'd'/'donor' or 'a'/'acceptor' for using only one of the two channels. alternatively
-                  choose 'total_intensity' to use the sum of donor and acceptor signals
-                  choose 'FRET pair' to only keep peak intensities found in both channels
-                  choose 'both channels' to keep all peaks found in the entire image
+        # TODO: Perhaps it is best to always return an image with a channel dimension (when overlay_channels this can be one)
+        image = self.get_projection_image(**projection_image_configuration)
+        channel_index = self.movie.get_channel_indices_from_names(channels)[0]
+        if len(image.shape) == 3:
+            image = image[channel_index]
 
-        method:  choose 'average_image' or 'maximum_projection_image' to
-                         set type of image used to find peak intensities.
+        print(f' Finding molecules in {self}')
 
-        uncertainty_pixels: set number of pixels within which two peak intensities
-                            should be considered to correspond to the same molecule
+        coordinates = find_peaks(image=image, **peak_finding_configuration)  # .astype(int)))
 
-        img_per_N_pixels: use the image type of 'method' for every N frames of the movie (sliding window).
-                         If no sliding window is used, the first N frames are used (a 'single window')
+        # TODO: Check that it goes well if there are no coordinates left
+        if margin:
+            coordinates = coordinates_within_margin(coordinates, image, margin=margin)
 
-        use_sliding_window: type 'True' or 'False' to activate sliding window
+        # TODO: Make gaussian width configurable or derive from psf size
+        if fit_peaks:
+            coordinates = coordinates_after_gaussian_fit(coordinates, image, gaussian_width=3)
 
+        # TODO: Make radius, cutoff and fraction_of_peak_max configurable or derive from psf size
+        # TODO: Make sure this handles empty arrays well
+        if remove_peaks_with_close_neighbors:
+            coordinates = coordinates_without_intensity_at_radius(coordinates, image, radius=3,
+                                                                  cutoff='image_median', fraction_of_peak_max=0.25)
 
-        Additional configurations to be set
-        (within 'peak_finding' section of configuration file)
-        ------------------------------------
-        ADD DESCRIPTIONS HERE!!!
-        '''
-
-        # TODO: Split method into multiple functions
-
-        if sliding_window is None:
-            sliding_window = {'use_sliding_window': False, 'frame_increment': 20, 'minimal_point_separation': 2}
-
-        if peak_finding is None:
-            peak_finding = {'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10, 'filter_neighbourhood_size_max': 5}
-
-        if projection_image is None:
-            projection_image = {'projection_type': 'average', 'frame_range': [0, 20], 'illumination': 0}
-
-        if coordinate_optimization is None:
-            coordinate_optimization = {'coordinates_within_margin':  {'margin': 10},
-                                       'coordinates_after_gaussian_fit':  {'gaussian_width': 3}}
-
-        # --- Get settings from configuration file ----
-        peak_finding_configuration = peak_finding
-        projection_type = projection_image['projection_type']
-        frame_range = projection_image['frame_range']
-        illumination = projection_image['illumination']
-
-        use_sliding_window = sliding_window['use_sliding_window']
-        minimal_point_separation = sliding_window['minimal_point_separation']
-
-        # --- set illumination configuration
-        #  An integer number for choosing one of the laser lines (the order of it first appeared)
-        #  ex. Two laser lines (532 and 640) in Alex mode starting with 532 excitation: 0 for green and 1 for red
-        #  None for simple average of the frames regardless of the order of illumination profile.
-
-        # --- make the windows
-        # (if no sliding windows, just a single window is made to make it compatible with next bit of code) ----
-        frame_ranges = [frame_range]
-        if use_sliding_window:
-            start_frames = (frame_ranges[0][0], self.movie.number_of_frames, sliding_window['frame_increment'])
-            window_size = frame_ranges[0][1] - frame_ranges[0][0]
-            frame_ranges = frame_ranges + [window_size, window_size, 0] * np.arange(start_frames)[:, None]
-
-        # coordinates = set()
-        if method == 'by_channel':
-            coordinate_sets = [set() for channel in channels]
-        elif method in ('average_channels', 'sum_channels'):
-            # SHK: following two lines are not needed for average/sum channels
-            # if len(channels) < 2:
-            #     raise ValueError('No channels to overlay')
-            # END SHK
-            coordinate_sets = [set()]
-
-        # coordinates_sets = dict([(channel, set()) for channel in channels])
-        # coordinate_sets = [set() for channel in channels]
-
-        # --- Loop over all frames and find unique set of molecules ----
-        for frame_range in frame_ranges:
-
-            # --- allowed to apply sliding window to either the max projection OR the averages ----
-            image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range,
-                                              illumination=illumination)
-
-            # image = self.average_image()
-            self.movie.read_header()
-
-            # Do we need a separate image?
-            # # --- we output the "sum of these images" ----
-            # find_coords_img += image
-
-            if method == 'by_channel':
-                # coordinates_per_channel = dict([(channel, set()) for channel in channels])
-                channel_images = [self.movie.get_channel(image=image, channel=channel) for channel in channels]
-
-            elif method in ('average_channels', 'sum_channels'):
-                # Possibly we can move making the overlayed image to the Movie class.
-                # TODO: make this usable for any number of channels
-                donor_image = self.movie.get_channel(image=image, channel='d')
-                # acceptor_image = self.movie.get_channel(image=image, channel='a')
-                image_transformed = self.mapping.transform_image(image, direction='Acceptor2Donor')
-                acceptor_image_transformed = self.movie.get_channel(image=image_transformed, channel='d')
-
-                if method == 'average_channels':
-                    channel_images = [(donor_image + acceptor_image_transformed) / 2]
-                elif method == 'sum_channels':
-                    channel_images = [(donor_image + acceptor_image_transformed)]
-                channels = [
-                    'd']  # When number of channels can be > 2 this should probably be the channel with the lowest number
-
-                # TODO: Make this a separate plotting function, possibly in Movie
-                # plt.imshow(np.stack([donor_image.astype('uint8'),
-                #                      acceptor_image_transformed.astype('uint8'),
-                #                      np.zeros((self.movie.height,
-                #                                self.movie.width // 2)).astype('uint8')],
-                #                     axis=-1))
-            else:
-                raise ValueError(f'"{method}" is not a valid method.')
-
-            print(f' Finding molecules in {self}')
-            for i, channel_image in enumerate(channel_images):
-                channel_coordinates = find_peaks(image=channel_image, **peak_finding_configuration)  # .astype(int)))
-
-                # ---- optimize / fine-tune the coordinate positions ----
-                coordinate_optimization_functions = \
-                    {'coordinates_within_margin': coordinates_within_margin,
-                     'coordinates_after_gaussian_fit': coordinates_after_gaussian_fit,
-                     'coordinates_without_intensity_at_radius': coordinates_without_intensity_at_radius}
-                for f, kwargs in coordinate_optimization.items():
-                    if len(channel_coordinates) == 0:
-                        break
-                    channel_coordinates = coordinate_optimization_functions[f](channel_coordinates, channel_image,
-                                                                               **kwargs)
-
-                channel_coordinates = set_of_tuples_from_array(channel_coordinates)
-
-                coordinate_sets[i].update(channel_coordinates)
-
-        # Check whether points are found
-        for coordinate_set in coordinate_sets:
-            if len(coordinate_set) == 0:
-                # Reset current .nc file
-                self._init_dataset(0)  # SHK: Creating a dummy dataset tp avoid errors in the downstream analysis
-                # This actually creates an empty dataset.
-                coordinates = xr.DataArray(np.empty((0, 2, 2)), dims=('molecule', 'channel', 'dimension'),
-                                           coords={'channel': [0, 1], 'dimension': [b'x', b'y']}, name='coordinates')
-                coordinates.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='a')
-                print('no peaks found')
-                return
-
-        # --- correct for photon shot noise / stage drift ---
-        # Not sure whether to put this in front of combine_coordinate_sets/detect_FRET_pairs or behind [IS: 12-08-2020]
-        # I think before, as you would do it either for each window, or for the combined windows.
-        # Transforming the coordinate sets for each window will be time consuming and changes the distance_threshold.
-        # And you would like to combine the channel sets on the merged coordinates.
-        for i in range(len(coordinate_sets)):
-            # --- turn into array ---
-            coordinate_sets[i] = array_from_set_of_tuples(coordinate_sets[i])
-
-            if use_sliding_window:  # Do we actually need to put this if statement here [IS: 31-08-2020]
-                # If not, in default configuration take minimal_point_separation outside sliding_window
-                coordinate_sets[i] = merge_nearby_coordinates(coordinate_sets[i],
-                                                              distance_threshold=minimal_point_separation)
-
-            # Map coordinates to main channel in movie
-            # TODO: make this usable for any number of channels
-
-            coordinate_sets[i] = coordinate_sets[i] + self.movie.get_channel_from_name(channels[i]).boundaries[0]
-            if channels[i] in ['a', 'acceptor']:
-                # if i > 0: #i.e. if channel is not main channel # this didn't work when selecting only the acceptor channel
-                # Maybe we can do this earlier, right after point detection, then we need only a single coordinate_set
-                coordinate_sets[i] = self.mapping.transform_coordinates(coordinate_sets[i],
-                                                                        direction='Acceptor2Donor')
-
-        # TODO: make this usable for any number of channels
-        if len(coordinate_sets) == 1:
-            coordinates = coordinate_sets[0]
-        elif len(coordinate_sets) > 1:
-            raise NotImplementedError('Assessing found coordinates in multiple channels does not work properly yet')
-            # TODO: Make this function.
-            #  This can easily be done by creating a cKDtree for each coordinate set and
-            #  by finding the points close to each other
-            coordinates = combine_coordinate_sets(coordinate_sets, method='and')  # the old detect_FRET_pairs
-
-        # TODO: make this usable for more than two channels
-        # TODO: Use set_coordinates_of_channel
-        coordinates_in_main_channel = coordinates
-        coordinates_list = [coordinates]
-        for i in range(self.movie.number_of_channels)[
-            1:]:  # This for loop will only be useful once we make this usable for more than two channels
-            if self.movie.number_of_channels > 2:
-                raise NotImplementedError()
-            coordinates_in_other_channel = self.mapping.transform_coordinates(coordinates_in_main_channel,
-                                                                              direction='Donor2Acceptor')
-            coordinates_list.append(coordinates_in_other_channel)
-
-        coordinates = np.hstack(coordinates_list)
-
-        coordinates_selections = [
-            coordinates_within_margin_selection(coordinates, bounds=self.movie.channels[i].boundaries,
-                                                **coordinate_optimization['coordinates_within_margin'])
-            for i, coordinates in enumerate(coordinates_list)]
-        selection = np.vstack(coordinates_selections).all(axis=0)
-        coordinates = coordinates[selection]
-
-        coordinates = coordinates.reshape((-1, 2))
-
-        # should also have incorporated check coordinatesDA_within_margin from MD_check_boundaries
-        # --- finally, we set the coordinates of the molecules ---
-        # self.coordinates = coordinates
-
-        peaks = xr.DataArray(coordinates, dims=("peak", 'dimension'),
-                             coords={'peak': range(len(coordinates)), 'dimension': [b'x', b'y']}, name='coordinates')
-
-        coordinates = split_dimension(peaks, 'peak', ('molecule', 'channel'),
-                                      (-1, self.movie.number_of_channels)).reset_index('molecule', drop=True)
-        # file = str(self.relativeFilePath)
-        # #coordinates = split_dimension(coordinates, 'molecule', ('molecule_in_file', 'file'), (-1, 1), (-1, [file]), to='multiindex')
-        # coordinates = coordinates.reset_index('molecule').rename(molecule_='molecule_in_file')
-        # self.experiment.dataset.drop_sel(file=str(self.relativeFilePath), errors='ignore')
-
-        sys.stdout.write('\r')
-        print(f'   {coordinates.molecule.size} molecules found')
-
-        # Because split_dimension doesn't keep the channels in case of an empty array.
-        if len(coordinates) == 0:
-            coordinates = xr.DataArray(np.empty((0, 2, 2)), dims=('molecule', 'channel', 'dimension'),
-                                       coords={'channel': [0, 1], 'dimension': [b'x', b'y']}, name='coordinates')
-
-        # if len(coordinates) !=0:
+        coordinates = xr.DataArray(coordinates, dims=('molecule', 'dimension'),
+                                   coords={'dimension': [b'x', b'y']}, name='coordinates')
 
         add_configuration_to_dataarray(coordinates, File.find_coordinates, locals(), units='pixel')
 
@@ -760,9 +567,7 @@ class File:
                     item = getattr(self.movie, item_name)
                 coordinates.attrs[item_name] = item
 
-        self.coordinates = coordinates
-
-        # self.molecules.export_pks_file(self.relativeFilePath.with_suffix('.pks'))
+        self.set_coordinates_of_channel(coordinates, channel=channel_index)
 
     def determine_psf_size(self, method='gaussian_fit', projection_type='average', frame_range=(0,20), channel_index=0, illumination_index=0,
                            peak_finding_kwargs={'minimum_intensity_difference': 150}, maximum_radius=5):
@@ -1767,15 +1572,16 @@ class File:
         return axes
 
 
-    def show_image(self, projection_type='average', frame_range=[0, 20], illumination=0, figure=None, unit='pixel', **kwargs):
+    def show_image(self, projection_type='average', frame_range=[0, 20], illumination=0, axis=None, unit='pixel', load=True, **kwargs):
         # TODO: Show two channels separately and connect axes
 
-        if figure is None:
-            figure = plt.figure()
-        axis = figure.gca()
+        if axis is None:
+            figure, axis = plt.subplots()
+        else:
+            figure = axis.figure
 
-        image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range, illumination=illumination, **kwargs)
-        # Choose method to plot
+        image = self.get_projection_image(load=load, projection_type=projection_type, frame_range=frame_range,
+                                          illumination=illumination)
         if projection_type == 'average':
             axis.set_title('Average image')
         elif projection_type == 'maximum':

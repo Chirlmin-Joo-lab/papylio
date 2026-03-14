@@ -7,7 +7,9 @@ import json
 @pytest.fixture
 def experiment(shared_datadir):
     from papylio import Experiment
-    return Experiment(shared_datadir / 'BN_TIRF')
+    experiment = Experiment(shared_datadir / 'BN_TIRF')
+    experiment.files.rotation = -1
+    return experiment
 
 @pytest.fixture
 def file(experiment):
@@ -75,6 +77,9 @@ def test_parallel_processing(experiment):
 
 def test_find_molecules(file):
     file.find_coordinates()
+
+def test_find_molecules_empty_dataset(file):
+    file.find_coordinates(margin=500)
 
 def test_extract_traces(file):
     file.find_coordinates()
