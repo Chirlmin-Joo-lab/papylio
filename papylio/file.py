@@ -78,7 +78,7 @@ class File:
                                 '.mapping': self.import_mapping_file,
                                 '.pks': self.import_pks_file,
                                 '.traces': self.import_traces_file,
-                                '.nc': self.noneFunction
+                                '.nc': self.none_function
                                 }
 
         if extensions is None:
@@ -153,28 +153,15 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def number_of_channels(self):
-        #TODO this needs to be independt from Experiment and should probably be set.
+        #TODO this needs to be independent from Experiment and should probably be set.
         return self.experiment.number_of_channels
 
-    @property
-    @return_none_when_executed_by_pycharm
-    def selected_molecules(self):
-        return self.molecule[self.selected]
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def number_of_selected_molecules(self):
-        return len(self.selected_molecules)
-
-    # @property
     def projection_image(self, **kwargs):
         return self.get_projection_image(**kwargs)
 
-    # @property
     def average_image(self, **kwargs):
         return self.get_projection_image(projection_type='average', **kwargs)
 
-    # @property
     def maximum_projection_image(self, **kwargs):
         return self.get_projection_image(projection_type='maximum', **kwargs)
 
@@ -186,20 +173,17 @@ class File:
             frame_range = (frame_range[0], self.movie.number_of_frames)
             warnings.warn(f'Frame range exceeds available frames, used frame range {frame_range} instead')
         image_filename = Movie.image_info_to_filename(self.name, frame_range=frame_range, **kwargs)
-        image_file_path = self.absolute_filepath.with_name(image_filename).with_suffix('.tif')
+        image_filepath = self.absolute_filepath.with_name(image_filename).with_suffix('.tif')
 
-        if load and image_file_path.is_file():
-            # TODO: Make independent of movie, so that we can also load this without movie present
-            # Perhaps make it part of Movie
-            # Perhaps make a get_projection_image a class method of Movie
-            # return self.movie.separate_channels(tifffile.imread(image_file_path))
+        if load and image_filepath.is_file():
+            #TODO: Perhaps make a get_projection_image a class method of Movie
             #TODO: Save channel_rows and channel_columns in dataset and retrieve them
 
             if kwargs.get('overlay_channels', False):
                 channel_columns = 1
             else:
                 channel_columns = 2
-            image = Movie.separate_channels(tifffile.imread(image_file_path), 1, channel_columns)
+            image = Movie.separate_channels(tifffile.imread(image_filepath), 1, channel_columns)
         else:
             image = self.movie.make_projection_image(frame_range=frame_range, **kwargs, write=True, flatten_channels=False)
 
@@ -214,7 +198,6 @@ class File:
     @return_none_when_executed_by_pycharm
     def coordinates_stage(self):
         coordinates = self.coordinates.sel(channel=0)
-        # coordinates = coordinates.stack(temp=('molecule', 'channel')).T
         coordinates_stage = self.movie.pixel_to_stage_coordinates_transformation(coordinates)
         return xr.DataArray(coordinates_stage, coords=coordinates.coords)
 
@@ -225,20 +208,16 @@ class File:
         if channel_index > 0:
             coordinates = self.mappings[channel_index-1].transform_coordinates(coordinates, inverse=True)
 
-        # coordinates = np.repeat(coordinates[:, np.newaxis, :], self.number_of_channels, axis=1)
         coordinates = coordinates.expand_dims(channel=np.arange(self.number_of_channels), axis=1).copy()
 
         for i in range(self.number_of_channels)[1:]:
             coordinates[:,i,:] = self.mapping.transform_coordinates(coordinates[:,i,:], inverse=False)
 
         coordinates = coordinates_within_margin(coordinates, bounds=self.movie.channels[0].boundaries, margin=0)
-
         self.coordinates = coordinates
 
     def coordinates_from_channel(self, channel):
-        if type(channel) is str:
-            channel = {'d': 0, 'a': 1, 'g':0, 'r':1}[channel]
-
+        channel = self.movie.get_channel_from_name(channel).index
         return self.coordinates.sel(channel=channel)
 
     def __getstate__(self):
@@ -260,7 +239,6 @@ class File:
                     pass
         else:
             return super().__getattribute__(item)
-        # raise AttributeError(f'Attribute {item} not found')
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
@@ -271,7 +249,6 @@ class File:
             external = all(frame.frame.f_locals.get("self") is not self for frame in stack[1:])
             if external:
                 self._log('info', f"Set attribute {name} = {value!r}")
-
 
     def get_data(self, key):
         with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
@@ -313,7 +290,6 @@ class File:
         selected.attrs['configuration'] = json.dumps([])
         selected.attrs['selection_configurations'] = json.dumps({})
 
-        # dataset = selected.reset_index('molecule').rename(_molecule='molecule_in_file').to_dataset()
         dataset = selected.to_dataset().assign_coords(molecule_in_file=('molecule', selected.molecule.values))
         dataset = dataset.reset_index('molecule', drop=True)
         dataset = dataset.assign_coords({'file': ('molecule', [str(self.relative_filepath).encode()] * number_of_molecules)})
@@ -321,8 +297,6 @@ class File:
         dataset.attrs['channel_arrangement'] = json.dumps(self.movie.channel_arrangement.tolist())
         dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
         self.extensions.add('.nc')
-
-        # # pd.MultiIndex.from_tuples([], names=['molecule_in_file', 'file'])),
 
     def find_extensions(self):
         file_names = [file.name for file in self.experiment.main_path.joinpath(self.relativePath).glob(self.name + '*')]
@@ -346,12 +320,12 @@ class File:
             extensions = [extensions]
         for extension in set(extensions)-self.extensions:
             if load:
-                self.importFunctions.get(extension, self.noneFunction)(extension)
+                self.importFunctions.get(extension, self.none_function)(extension)
             if extension in self.importFunctions.keys():
                 self.extensions.add(extension)
         # or self.extensions = self.extensions | extensions
 
-    def noneFunction(self, *args, **kwargs):
+    def none_function(self, *args, **kwargs):
         return
 
     def import_movie(self, extension):
@@ -373,6 +347,7 @@ class File:
         # self.number_of_frames = self.movie.number_of_frames
 
     def import_coeff_file(self, extension):
+        # TODO: Move this to the MatchPoint class
         from skimage.transform import AffineTransform
         if self.mapping is None: # the following only works for 'linear'transformation_type
             file_content=np.genfromtxt(str(self.absolute_filepath) + '.coeff')
@@ -402,10 +377,6 @@ class File:
             self.mapping.file = self
             self.mapping.source_name = 'Donor'
             self.mapping.destination_name = 'Acceptor'
-
-    def export_coeff_file(self):
-        warnings.warn('The export_coeff_file method will be depricated, use export_mapping instead')
-        self.export_mapping(filetype='classic')
 
     def export_mapping(self, filetype='yml'):
         self.mapping.save(self.absolute_filepath, filetype)
@@ -451,10 +422,6 @@ class File:
         self.mapping.file = self
         self.mapping.source_name = 'Donor'
         self.mapping.destination_name = 'Acceptor'
-
-    def export_map_file(self):
-        warnings.warn('The export_map_file method will be depricated, use export_mapping instead')
-        self.export_mapping(filetype='classic')
 
     def import_mapping_file(self, extension):
         self.mapping = mp.MatchPoint.load(self.absolute_filepath.with_suffix(extension))
@@ -599,12 +566,13 @@ class File:
     def extract_traces(self, mask_size, neighbourhood_size=11, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
         if self.number_of_molecules == 0:
-            print('   no traces available!!')
+            print('No molecules found, perform `find_coordinates` first')
             return
 
-        if self.movie is None: raise FileNotFoundError('No movie file was found')
+        if self.movie is None:
+            raise FileNotFoundError('No movie file was found')
 
-        print(f'  Extracting traces in {self}')
+        print(f'Extracting traces in {self}')
 
         if mask_size == 'TIR-T' or mask_size == 'TIR-V':
             mask_size = 1.291
@@ -625,7 +593,6 @@ class File:
         if self.movie.time is not None: # hasattr(self.movie, 'time')
             intensity = intensity.assign_coords(time=self.movie.time)
 
-        # if self.movie.illumination is not None:
         intensity = intensity.assign_coords(illumination=self.movie.illumination_index_per_frame)
 
         intensity.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
@@ -685,6 +652,7 @@ class File:
         return traces
 
     def plot_hmm_rates(self, name=None):
+        # TODO: Check this out and what we want to do with it.
         if name is None:
             name = self.name
         dataset = self.dataset
@@ -760,60 +728,9 @@ class File:
         export_traces_file(traces, self.absolute_filepath.with_suffix('.traces'))
         self.extensions.add('.traces')
 
-
-    # def addMolecule(self):
-    #     index = len(self.molecules) # this is the molecule number
-    #     self.molecules.append(Molecule(self))
-    #     self.molecules[-1].index = index
-
-    def savetoExcel(self, filename=None, save=True):
-        if filename is None:
-            filename = f'{self.absolute_filepath}_steps_data.xlsx'
-
-        # Find the molecules for which steps were selected
-        molecules_with_data = [mol for mol in self.molecules if mol.steps is not None]
-
-
-        # Concatenate all steps dataframes that are not None
-        mol_data = [mol.steps for mol in molecules_with_data]
-        if not mol_data:
-            print(f'no data to save for {self.name}')
-            return
-        keys = [f'mol {mol.index + 1}' for mol in molecules_with_data]
-
-        steps_data = pd.concat(mol_data, keys=keys, sort=False)
-        # drop duplicate columns
-        steps_data = steps_data.loc[:,~steps_data.columns.duplicated()]
-        if save:
-            print("data saved in: " + filename)
-            writer = pd.ExcelWriter(filename)
-            steps_data.to_excel(writer, self.name)
-            writer.save()
-        return steps_data
-
-    def autoThreshold(self, trace_name, threshold=100, max_steps=20,
-                      only_selected=False, kon_str='000000000'):
-        nam = trace_name
-        for mol in self.molecules:
-
-            trace = mol.I(0)*int((nam == 'green')) + \
-                    mol.I(1)*int((nam == 'red')) +\
-                     mol.E()*int((nam == 'E'))  # Here no offset corrections are applied yet
-
-            d = mol.find_steps(trace)
-            frames = d['frames']
-            times = frames*self.exposure_time
-            times = np.sort(times)
-            mol.steps = pd.DataFrame({'time': times, 'trace': nam,
-                                  'state': 1, 'method': 'thres',
-                                'thres': threshold, 'kon': kon_str})
-        filename = self.name+'_steps_data.xlsx'
-        data = self.savetoExcel(filename)
-        return data
-
     def perform_mapping(self, method='icp', distance_threshold=3, transformation_type='polynomial',
                         initial_translation='width/2', peak_finding=None, coordinate_optimization=None):
-
+        #TODO: Update this for the new image style and for multiple mappings
         if peak_finding is None:
             peak_finding = {'donor': {'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10,
                                       'filter_neighbourhood_size_max': 5},
@@ -905,7 +822,7 @@ class File:
         else:
             figure = axis.figure
         self.show_average_image(figure=figure)
-        self.mapping.show_mapping_transformation(axis=axis, show_source=True)
+        self.mapping.show(axis=axis, show_source=True)
 
         if save:
             axis.axis('off')
@@ -918,25 +835,16 @@ class File:
     def copy_coordinates_to_selected_files(self):
         for file in self.experiment.selectedFiles:
             if file is not self:
-                file._init_dataset(len(self.molecule))
-                self.coordinates.to_netcdf(file.absolute_filepath.with_suffix('.nc'), engine='netcdf4')
+                file.coordinates = self.coordinates
 
     def use_mapping_for_all_files(self):
         print(f"\n{self} used as mapping")
         self.is_mapping_file = True
-        #mapping = self.movie.use_for_mapping()
         for file in self.experiment.files:
             if file is not self:
                 file.mapping = self.mapping
                 file.is_mapping_file = False
 
-    # def get_variable(self, variable, selected=False, frame_range=None, average=False):
-    #     if variable in ['intensity','FRET','intensity_total']:
-    #         da = getattr(self, 'get_'+variable)
-    #     else:
-    #         with xr.open_dataset(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4') as dataset:
-    #             da = dataset[variable].load()
-    #
     def get_variable(self, variable, selected=False, frame_range=None, average=False, return_none_if_nonexistent=False):
         # TODO: make it possible to also select the channel (or perform other selections), e.g. by passing 'intensity_c0'.
         """
@@ -990,10 +898,10 @@ class File:
     def selections(self):
         with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
             return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
-                               if key.startswith('selection_')}).load() # .to_array(dim='selection')
-        # return xr.concat([value for key, value in self.dataset.data_vars.items() if key.startswith('filter')], dim='filter')
+                               if key.startswith('selection_')}).load()
 
     def create_selection(self, variable, channel, aggregator, operator, threshold, name=None):
+        # TODO: Make this more general like classification
         data_array = getattr(self, variable)
 
         if 'channel' in data_array.dims:
@@ -1051,8 +959,6 @@ class File:
     def clear_selections(self):
         dataset = self.dataset
         dataset = dataset.drop_vars([name for name in dataset.data_vars.keys() if name.startswith('selection_')])
-        # for name, da in dataset.data_vars.items():
-        #     da.encoding['dtype'] = da.dtype
         encoding = {
             var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
         }
@@ -1116,8 +1022,6 @@ class File:
         if not 'classification' in self.data_vars:
             self.apply_classifications()
         classification = self.__getattr__('classification')
-        # if 'classification_configurations' not in classification.attrs:
-        #     classification.attrs['classification_configurations'] = None
         return classification
 
     @property
@@ -1125,8 +1029,7 @@ class File:
     def classifications(self):
         with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
             return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
-                               if key.startswith('classification_')}).load()  # .to_array(dim='selection')
-        # return xr.concat([value for key, value in self.dataset.data_vars.items() if key.startswith('filter')], dim='filter')
+                               if key.startswith('classification_')}).load()
 
     @property
     @return_none_when_executed_by_pycharm
@@ -1195,6 +1098,7 @@ class File:
 
     def classify_hmm(self, variable, seed=0, n_states=2, threshold_state_mean=None,
                      level='molecule'):  # , use_selection=True, use_classification=True):
+        #TODO: Depricate this
         self.create_classification(name='hmm', classification_type='hmm', variable=variable,
                                    classification_kwargs=dict(seed=seed, n_states=n_states,
                                 threshold_state_mean=threshold_state_mean, level=level))
@@ -1363,6 +1267,7 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def dwell_analysis(self):
+        # TODO: Consider whether to save the dwell_analysis in an excel file instead of an nc file.
         # return pd.read_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
         return xr.load_dataset(self.absolute_filepath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'), engine='netcdf4')
 
@@ -1378,11 +1283,6 @@ class File:
         n, c = np.unique(self.get_variable('number_of_states', selected=selected), return_counts=True)
         if states is None:
             states = n
-        # else:
-        #     if states is None:
-        #         states = np.array([0])
-        #     n = states
-        #     c = np.array([0] * len(states))
 
         state_count = xr.DataArray(0, dims=('name','number_of_states'), coords={'name': [self.name], 'number_of_states': states})
         state_count.loc[dict(number_of_states=n)] = c
@@ -1394,27 +1294,6 @@ class File:
         state_fraction = state_count / state_count.sum('number_of_states')
         state_fraction.name = 'state_fraction'
         return state_fraction
-
-    #
-    # def get_FRET(self, **kwargs):
-    #     return self.get_variable('FRET', **kwargs)
-    #
-    # def get_intensity(self, **kwargs):
-    #     intensity = self.get_variable('intensity', **kwargs)
-    #     if hasattr(self, 'background_correction') and self.background_correction is not None:
-    #         intensity[dict(channel=0)] -= self.background_correction[0]
-    #         intensity[dict(channel=1)] -= self.background_correction[1]
-    #     if hasattr(self, 'alpha_correction') and self.alpha_correction is not None:
-    #         intensity[dict(channel=0)] += self.alpha_correction * intensity[dict(channel=0)]
-    #         intensity[dict(channel=1)] -= self.alpha_correction * intensity[dict(channel=0)]
-    #     # if hasattr(self, 'delta_correction') and self.delta_correction is not None:
-    #     #     intensity[dict(channel=0)] *= self.delta_correction
-    #     if hasattr(self, 'gamma_correction') and self.gamma_correction is not None:
-    #         intensity[dict(channel=0)] *= self.gamma_correction
-    #     # if hasattr(self, 'beta_correction') and self.beta_correction is not None:
-    #     #     intensity[dict(channel=0)] *= self.beta_correction
-    #
-    #     return intensity
 
     def determine_trace_correction(self):
         from papylio.trace_correction import TraceCorrectionWindow
@@ -1552,11 +1431,15 @@ class File:
         return figure, axis
 
     def show_average_image(self, figure=None, **kwargs):
+        # TODO: Deprecate this at some point
         self.show_image(projection_type='average', figure=figure, **kwargs)
 
-    def show_coordinates(self, figure=None, annotate=False, unit='pixel', **kwargs):
-        if not figure:
-            figure = plt.figure()
+    def show_coordinates(self, axis=None, annotate=False, unit='pixel', **kwargs):
+        # TODO: Consider making this a QWidget
+        if axis is None:
+            figure, axis = plt.subplots()
+        else:
+            figure = axis.figure
 
         if self.coordinates is not None:
             axis = figure.gca()
@@ -1616,13 +1499,9 @@ class File:
 
             plt.show()
 
-    def show_coordinates_in_image(self, figure=None, **kwargs):
-        #TODO: change figure to axis
-        if not figure:
-            figure = plt.figure()
-
-        self.show_image(figure=figure, **kwargs)
-        self.show_coordinates(figure=figure)
+    def show_coordinates_in_image(self, axis=None, **kwargs):
+        figure, axis = self.show_image(axis=axis, **kwargs)
+        self.show_coordinates(axis=axis)
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
     def show_traces(self, plot_variables=['intensity', 'FRET'], ylims=[(0, 35000), (0, 1)], colours=[('g', 'r'), ('b')],
@@ -1672,7 +1551,6 @@ def calculate_intensity_total(intensity):
     intensity_total.name = 'intensity_total'
     intensity_total.attrs = intensity.attrs
     return intensity_total
-
 
 def calculate_FRET(intensity):
     # TODO: Make suitable for mutliple colours
