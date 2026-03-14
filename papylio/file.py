@@ -1,17 +1,9 @@
-if __name__ == '__main__':
-    import sys
-    from pathlib import Path
-    p = Path(__file__).parents[1]
-    sys.path.insert(0, str(p))
-
-from pathlib import Path # For efficient path manipulation
-import numpy as np #scientific computing with Python
+from pathlib import Path
+import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt #Provides a MATLAB-like plotting framework
-import skimage.io as io
+import matplotlib.pyplot as plt
 import ast
 import xarray as xr
-import skimage as ski
 import warnings
 import sys
 import re
@@ -21,11 +13,9 @@ import tifffile
 import netCDF4
 import json
 import papylio
-# from papylio.molecule import Molecule
-from papylio.movie.movie import Movie
-from papylio.movie.tif import TifMovie
-from papylio.plotting import histogram
 import matchpoint as mp
+from papylio.movie.movie import Movie
+from papylio.plotting import histogram
 from papylio.peak_finding import find_peaks
 from papylio.coordinate_optimization import  coordinates_within_margin, \
                                                     coordinates_after_gaussian_fit, \
@@ -35,46 +25,24 @@ from papylio.coordinate_optimization import  coordinates_within_margin, \
                                                     coordinates_within_margin_selection
 from papylio.trace_extraction import extract_traces
 from papylio.log_functions import add_configuration_to_dataarray
-# from matchpoint.coordinate_transformations import translate, transform # MD: we don't want to use this anymore I think, it is only linear
-                                                                           # IS: We do! But we just need to make them usable with the nonlinear mapping
-from papylio.background_subtraction import extract_background
 from papylio.analysis.hidden_markov_modelling import classify_hmm
-# from papylio.plugin_manager import PluginManager
-# from papylio.plugin_manager import PluginMetaClass
 from papylio.plugin_manager import plugins
-# from papylio.trace_plot import TraceAnalysisFrame
 from papylio.analysis.dwell_time_extraction import dwell_times_from_classification
 from papylio.analysis.dwell_time_analysis import analyze_dwells, plot_dwell_time_histogram, plot_dwell_analysis
 from papylio.decorators import return_none_when_executed_by_pycharm
 
 @plugins
 class File:
-    # plugins = []
-    # _plugin_mixin_class = None
-    #
-    # @classmethod
-    # def add_plugin(cls, plugin_class):
-    #     cls.plugins.append(plugin_class)
-    #     cls._plugin_mixin_class = type(cls.__name__, (cls,) + tuple(cls.plugins), {})
-    #
-    # def __new__(cls, *args, **kwargs):
-    #     if not cls._plugin_mixin_class:
-    #         return super().__new__(cls)
-    #     else:
-    #         return super().__new__(cls._plugin_mixin_class)
-
-    def __init__(self, relativeFilePath, extensions=None, experiment=None, perform_logging=True):
+    def __init__(self, relative_filepath, extensions=None, experiment=None, perform_logging=True):
         self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
                                   'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
 
-        relativeFilePath = Path(relativeFilePath)
+        relative_filepath = Path(relative_filepath)
         self.experiment = experiment
 
-        self.relativePath = relativeFilePath.parent
-        self.name = relativeFilePath.name
+        self.relativePath = relative_filepath.parent
+        self.name = relative_filepath.name
         self.extensions = set()
-
-        # self.molecules = Molecules()
 
         self.exposure_time = None  # Found from log file or should be inputted
 
@@ -112,8 +80,6 @@ class File:
                                 '.traces': self.import_traces_file,
                                 '.nc': self.noneFunction
                                 }
-
-        # print(self)
 
         if extensions is None:
             extensions = self.find_extensions()
