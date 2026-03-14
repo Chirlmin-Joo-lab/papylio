@@ -3,46 +3,26 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.spatial import cKDTree
 
-def coordinates_within_margin_selection(coordinates,  image = None, bounds = None, margin=10):
-    if coordinates.size == 0:
-        return np.array([])
-
-    if image is not None:
-        bounds = np.array([[0,0], [image.shape[1],image.shape[0]]])
-
-    criteria = np.array([(coordinates[:, 0] > (bounds[0,0] + margin)),
-                         (coordinates[:, 0] < (bounds[1,0] - margin)),
-                         (coordinates[:, 1] > (bounds[0,1] + margin)),
-                         (coordinates[:, 1] < (bounds[1,1] - margin))
-                         ])
-
-    return criteria.all(axis=0)
-
-def coordinates_within_margin_selection(coordinates,  image = None, bounds = None, margin=10):
-    if coordinates.size == 0:
-        return np.array([])
-
+def coordinates_within_margin_selection(coordinates,  image=None, bounds = None, margin=10):
+    #TODO: remove requirement for image
     if image is not None:
         bounds = np.array([[0,0], [image.shape[1],image.shape[0]]])
 
     if isinstance(margin, int):
         margin = np.array([margin, margin])
 
-    criteria = np.array([(coordinates[:, 0] > (bounds[0, 0] + margin[0])),
-                         (coordinates[:, 0] < (bounds[1, 0] - margin[0])),
-                         (coordinates[:, 1] > (bounds[0, 1] + margin[1])),
-                         (coordinates[:, 1] < (bounds[1, 1] - margin[1]))
-                         ])
+    criteria = np.stack([(coordinates[..., 0] > (bounds[0, 0] + margin[0])),
+                          (coordinates[..., 0] < (bounds[1, 0] - margin[0])),
+                          (coordinates[..., 1] > (bounds[0, 1] + margin[1])),
+                          (coordinates[..., 1] < (bounds[1, 1] - margin[1]))
+                         ], axis=-1)
 
-    return criteria.all(axis=0)
+    return criteria.all(axis=tuple(range(1,criteria.ndim))).astype(bool)
 
 
 def coordinates_within_margin(coordinates, image=None, bounds=None, margin=10):
     criteria = coordinates_within_margin_selection(coordinates,  image=image, bounds=bounds, margin=margin)
-    if criteria.size == 0:
-        return np.array([])
-    else:
-        return coordinates[criteria]
+    return coordinates[criteria]
 
 
 def circle(r):
