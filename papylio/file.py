@@ -66,6 +66,8 @@ class File:
     #         return super().__new__(cls._plugin_mixin_class)
 
     def __init__(self, relativeFilePath, extensions=None, experiment=None, perform_logging=True):
+        self.perform_logging = False # It is set to False temporarily until the end of __init__.
+
         self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
                                   'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
 
@@ -80,7 +82,7 @@ class File:
 
         self.exposure_time = None  # Found from log file or should be inputted
 
-        self.log_details = None  # a string with the contents of the log file
+        # self.log_details = None  # a string with the contents of the log file
         self.number_of_frames = None
 
         self.isSelected = False
@@ -120,7 +122,7 @@ class File:
         self.add_extensions(extensions, load=self.experiment.import_all)
 
         self.perform_logging = perform_logging
-        self._logger = self._create_logger()
+        self.__logger = None
         self._log('info', f"Initialized {self} with Papylio v{papylio.__version__}")
 
     def __repr__(self):
@@ -131,12 +133,14 @@ class File:
     def _log_filepath(self):
         return self.absoluteFilePath.with_suffix(".log")
 
-    def _create_logger(self):
+    @property
+    def _logger(self):
         """Create a dedicated logger per File instance."""
-        logger_name = f"FileLogger.{self.relativeFilePath}"
-        logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.INFO)
-        return logger
+        if self.__logger is None:
+            logger_name = f"FileLogger.{self.relativeFilePath}"
+            self.__logger = logging.getLogger(logger_name)
+            self.__logger.setLevel(logging.INFO)
+        return self.__logger
 
     def _log(self, log_type, message):
         if self.perform_logging:
@@ -322,12 +326,20 @@ class File:
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
-        # Skip logger itself
-        if name != "_logger" and hasattr(self, "_logger"):
-            # Check if the assignment comes from outside this instance
-            stack = inspect.stack()
-            external = all(frame.frame.f_locals.get("self") is not self for frame in stack[1:])
-            if external:
+        # # Skip logger itself
+        # if name != "_logger" and self.perform_logging:
+        #     # Check if the assignment comes from outside this instance
+        #     stack = inspect.stack()
+        #     external = all(frame.frame.f_locals.get("self") is not self for frame in stack[1:])
+        #     if external:
+        #         self._log('info', f"Set attribute {name} = {value!r}")
+
+        if name.startswith("_") or name == "perform_logging":
+            return
+        if self.__dict__.get("perform_logging"):  # avoids descriptor overhead
+            caller = sys._getframe(1).f_locals.get("self")
+            # if not isinstance(caller, File):
+            if caller is not self:
                 self._log('info', f"Set attribute {name} = {value!r}")
 
 
@@ -364,6 +376,13 @@ class File:
                 return dataset.attrs
         else:
             return {}
+
+    def get_dataset_attribute(self, attribute_name):
+        dataset_filepath = self.absoluteFilePath.with_suffix('.nc')
+        if dataset_filepath.exists():
+            with netCDF4.Dataset(dataset_filepath) as dataset:
+                return dataset.getncattr(attribute_name) if attribute_name in dataset.ncattrs() else None
+        return None
 
     # def get_coordinates(self, selected=False):
     #     if selected:
@@ -428,9 +447,9 @@ class File:
         if isinstance(extensions, str):
             extensions = [extensions]
         for extension in set(extensions)-self.extensions:
-            if load:
-                self.importFunctions.get(extension, self.noneFunction)(extension)
             if extension in self.importFunctions.keys():
+                if load:
+                    self.importFunctions.get(extension, self.noneFunction)(extension)
                 self.extensions.add(extension)
         # or self.extensions = self.extensions | extensions
 
@@ -451,10 +470,11 @@ class File:
 
         rot90 = self.configuration['movie']['rot90']
         self.movie = Movie(filepath, rot90)
-        if 'channel_arrangement' in self.dataset_attributes.keys():
-            channel_arangement_text_string=self.dataset_attributes['channel_arrangement']
-            self.movie.channel_arrangement = ast.literal_eval(channel_arangement_text_string)
-        # self.number_of_frames = self.movie.number_of_frames
+        # TODO: Find a solution for this, loading these attributes is relatively slow (for 500 times it takes a second)
+        # channel_arrangement_text_string = self.get_dataset_attribute('channel_arrangement')
+        # if channel_arrangement_text_string is not None:
+        #     self.movie.channel_arrangement = ast.literal_eval(channel_arrangement_text_string)
+        ## self.number_of_frames = self.movie.number_of_frames
 
     def import_coeff_file(self, extension):
         from skimage.transform import AffineTransform
@@ -1333,14 +1353,17 @@ class File:
                 file._init_dataset(len(self.molecule))
                 self.coordinates.to_netcdf(file.absoluteFilePath.with_suffix('.nc'), engine='netcdf4')
 
-    def use_mapping_for_all_files(self):
+    def use_mapping_for_all_files(self, perform_logging=True):
         print(f"\n{self} used as mapping")
         self.is_mapping_file = True
         #mapping = self.movie.use_for_mapping()
         for file in self.experiment.files:
             if file is not self:
+                perform_logging_file = file.perform_logging
+                file.perform_logging = perform_logging
                 file.mapping = self.mapping
                 file.is_mapping_file = False
+                file.perform_logging = perform_logging_file
 
     # def get_variable(self, variable, selected=False, frame_range=None, average=False):
     #     if variable in ['intensity','FRET','intensity_total']:
