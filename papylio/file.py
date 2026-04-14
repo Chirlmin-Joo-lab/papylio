@@ -30,9 +30,12 @@ from papylio.plugin_manager import plugins
 from papylio.analysis.dwell_time_extraction import dwell_times_from_classification
 from papylio.analysis.dwell_time_analysis import analyze_dwells, plot_dwell_time_histogram, plot_dwell_analysis
 from papylio.decorators import return_none_when_executed_by_pycharm
+from papylio.helper_functions import get_default_parameters
 
 @plugins
 class File:
+    unit_mapping = mp.MatchPoint()
+
     def __init__(self, relative_filepath, extensions=None, experiment=None, perform_logging=True):
         self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
                                   'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
@@ -50,14 +53,15 @@ class File:
         self.number_of_frames = None
 
         self.isSelected = False
-        self.is_mapping_file = False
+        # self.is_mapping_file = False
 
         self.movie = None
-        self.mapping = None
+        # self.mapping = None
 
         self._rotation = 0
 
-        self.mappings = [self.mapping] # TODO make dependent on number of channels
+        self._mappings = None
+        self.mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
 
         # I think it will be easier if we have import functions for specific data instead of specific files.
         # For example. the sifx, pma and tif files can better be handled in the Movie class. Here we then just have a method import_movie.
@@ -73,9 +77,9 @@ class File:
                                 '.TIF': self.import_movie,
                                 '.TIFF': self.import_movie,
                                 '.bin': self.import_movie,
-                                '.coeff': self.import_coeff_file,
-                                '.map': self.import_map_file,
-                                '.mapping': self.import_mapping_file,
+                                # '.coeff': self.import_coeff_file,
+                                # '.map': self.import_map_file,
+                                # '.mapping': self.import_mapping_file,
                                 '.pks': self.import_pks_file,
                                 '.traces': self.import_traces_file,
                                 '.nc': self.none_function
@@ -165,27 +169,14 @@ class File:
     def maximum_projection_image(self, **kwargs):
         return self.get_projection_image(projection_type='maximum', **kwargs)
 
-    def get_projection_image(self, load=True, frame_range=(0,20), **kwargs):
-        # TODO: Make this independent of Movie, probably we want to copy all Movie metadata to the nc file.
-        if frame_range[1] is None:
-            frame_range = (frame_range[0], self.movie.number_of_frames)
-        elif frame_range[1] > self.movie.number_of_frames:
-            frame_range = (frame_range[0], self.movie.number_of_frames)
-            warnings.warn(f'Frame range exceeds available frames, used frame range {frame_range} instead')
-        image_filename = Movie.image_info_to_filename(self.name, frame_range=frame_range, **kwargs)
-        image_filepath = self.absolute_filepath.with_name(image_filename).with_suffix('.tif')
-
-        if load and image_filepath.is_file():
-            #TODO: Perhaps make a get_projection_image a class method of Movie
-            #TODO: Save channel_rows and channel_columns in dataset and retrieve them
-
-            if kwargs.get('overlay_channels', False):
-                channel_columns = 1
-            else:
-                channel_columns = 2
-            image = Movie.separate_channels(tifffile.imread(image_filepath), 1, channel_columns)
+    def get_projection_image(self, load=True, **projection_image_configuration):
+        if load:
+            image = Movie.load_projection_image(self.absolute_filepath, **projection_image_configuration)
         else:
-            image = self.movie.make_projection_image(frame_range=frame_range, **kwargs, write=True, flatten_channels=False)
+            image = None
+
+        if image is None:
+            image = self.movie.save_projection_image(**projection_image_configuration)
 
         return image
 
@@ -211,7 +202,7 @@ class File:
         coordinates = coordinates.expand_dims(channel=np.arange(self.number_of_channels), axis=1).copy()
 
         for i in range(self.number_of_channels)[1:]:
-            coordinates[:,i,:] = self.mapping.transform_coordinates(coordinates[:,i,:], inverse=False)
+            coordinates[:,i,:] = self.mappings[i-1].transform_coordinates(coordinates[:,i,:], inverse=False)
 
         coordinates = coordinates_within_margin(coordinates, bounds=self.movie.channels[0].boundaries, margin=0)
         self.coordinates = coordinates
@@ -342,8 +333,8 @@ class File:
 
         self.movie = Movie(filepath, self.rotation)
         if 'channel_arrangement' in self.dataset_attributes.keys():
-            channel_arangement_text_string=self.dataset_attributes['channel_arrangement']
-            self.movie.channel_arrangement = ast.literal_eval(channel_arangement_text_string)
+            channel_arrangement_text_string=self.dataset_attributes['channel_arrangement']
+            self.movie.channel_arrangement = ast.literal_eval(channel_arrangement_text_string)
         # self.number_of_frames = self.movie.number_of_frames
 
     def import_coeff_file(self, extension):
@@ -378,8 +369,10 @@ class File:
             self.mapping.source_name = 'Donor'
             self.mapping.destination_name = 'Acceptor'
 
-    def export_mapping(self, filetype='yml'):
-        self.mapping.save(self.absolute_filepath, filetype)
+    def export_mapping(self, filetype='nc'):
+        for i, mapping in enumerate(self.mappings):
+            filename = f'channel_mapping_c{i+1}_' + mapping.source_name + '_to_' + mapping.destination_name
+            mapping.save(self.experiment.main_path / filename, filetype)
 
     def import_map_file(self, extension):
         # TODO: Move this to the MatchPoint class
@@ -423,8 +416,8 @@ class File:
         self.mapping.source_name = 'Donor'
         self.mapping.destination_name = 'Acceptor'
 
-    def import_mapping_file(self, extension):
-        self.mapping = mp.MatchPoint.load(self.absolute_filepath.with_suffix(extension))
+    # def import_mapping_file(self, extension):
+    #     self.mapping = mp.MatchPoint.load(self.absolute_filepath.with_suffix(extension))
 
     def use_for_darkfield_correction(self):
         image = self.get_projection_image(projection_type='average', frame_range=(0, None), apply_corrections=False)
@@ -487,12 +480,12 @@ class File:
         self.set_coordinates_of_channel(coordinates, channel=channel_index)
 
     def determine_psf_size(self, method='gaussian_fit', projection_type='average', frame_range=(0,20), channel_index=0, illumination_index=0,
-                           peak_finding_kwargs={'minimum_intensity_difference': 150}, maximum_radius=5):
+                           peak_finding_configuration={'minimum_intensity_difference': 150}, maximum_radius=5):
         image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range,
                                           illumination=illumination_index)
         image = self.movie.get_channel(image, channel=channel_index)
 
-        coordinates = find_peaks(image=image, **peak_finding_kwargs)  # .astype(int)))
+        coordinates = find_peaks(image=image, **peak_finding_configuration)  # .astype(int)))
         coordinates_fit, parameters = coordinates_after_gaussian_fit(coordinates, image, gaussian_width=15, return_fit_parameters=True)
         # offset, amplitude, x0, y0, sigma_x, sigma_y
         sigmas = parameters[:, 4]
@@ -729,105 +722,105 @@ class File:
         self.extensions.add('.traces')
 
     def perform_mapping(self, method='icp', distance_threshold=3, transformation_type='polynomial',
-                        initial_translation='width/2', peak_finding=None, coordinate_optimization=None):
+                        projection_image_configuration=None, peak_finding_configuration=None,
+                        margin=10, fit_peaks=True, remove_peaks_with_close_neighbors=None):
         #TODO: Update this for the new image style and for multiple mappings
-        if peak_finding is None:
-            peak_finding = {'donor': {'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10,
-                                      'filter_neighbourhood_size_max': 5},
-                            'acceptor': {'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10,
-                                      'filter_neighbourhood_size_max': 5}}
 
-        if coordinate_optimization is None:
-            coordinate_optimization = {'coordinates_within_margin':  {'margin': 10},
-                                       'coordinates_after_gaussian_fit':  {'gaussian_width': 5}}
+        if projection_image_configuration is None:
+            projection_image_configuration = dict(frame_range=(0,20), projection_type='average')
 
-        image = self.average_image()
+        if peak_finding_configuration is None:
+            #TODO: Also make it possible to input just a dict, instead of a list of dicts
+            peak_finding_configuration =[{'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10,
+                                                      'filter_neighbourhood_size_max': 5}] * self.movie.number_of_channels
+
+        image = self.get_projection_image(**projection_image_configuration)
 
         print(transformation_type)
 
-        donor_image = self.movie.get_channel(image=image, channel='d')
-        acceptor_image = self.movie.get_channel(image=image, channel='a')
-        donor_coordinates = find_peaks(image=donor_image,
-                                       **peak_finding['donor'])
-        if donor_coordinates.size == 0: #should throw a error message to warm no acceptor molecules found
-            print('No donor molecules found')
-        acceptor_coordinates = find_peaks(image=acceptor_image,
-                                          **peak_finding['acceptor'])
-        if acceptor_coordinates.size == 0: #should throw a error message to warm no acceptor molecules found
-            print('No acceptor molecules found')
-        acceptor_coordinates = mp.coordinate_transformations.transform(acceptor_coordinates, translation=[image.shape[1]//2, 0])
-        # print(acceptor_coordinates.shape, donor_coordinates.shape)
-        print(f'Donor: {donor_coordinates.shape[0]}, Acceptor: {acceptor_coordinates.shape[0]}')
-        coordinates = np.append(donor_coordinates, acceptor_coordinates, axis=0)
+        coordinates_per_channel = []
+        for i, channel_image in enumerate(image):
+            coordinates = find_peaks(image=channel_image, **peak_finding_configuration[i])
 
-        # coordinate_optimization_functions = \
-        #     {'coordinates_within_margin': coordinates_within_margin,
-        #      'coordinates_after_gaussian_fit': coordinates_after_gaussian_fit,
-        #      'coordinates_without_intensity_at_radius': coordinates_without_intensity_at_radius}
-        #
-        # for f, kwargs in configuration['coordinate_optimization'].items():
-        #     coordinates = coordinate_optimization_functions[f](coordinates, image, **kwargs)
+            # TODO: Check that it goes well if there are no coordinates left
+            if margin:
+                coordinates = coordinates_within_margin(coordinates, image[i], margin=margin)
 
-        if 'coordinates_after_gaussian_fit' in coordinate_optimization:
-            gaussian_width = coordinate_optimization['coordinates_after_gaussian_fit']['gaussian_width']
-            coordinates = coordinates_after_gaussian_fit(coordinates, image, gaussian_width)
+            # TODO: Make gaussian width configurable or derive from psf size
+            if fit_peaks:
+                coordinates = coordinates_after_gaussian_fit(coordinates, image[i], gaussian_width=5)
 
-        if 'coordinates_without_intensity_at_radius' in coordinate_optimization:
-            coordinates = coordinates_without_intensity_at_radius(coordinates, image,
-                                                                  **coordinate_optimization['coordinates_without_intensity_at_radius'])
-                                                                  # radius=4,
-                                                                  # cutoff=np.median(image),
-                                                                  # fraction_of_peak_max=0.35) # was 0.25 in IDL code
+            # TODO: Make radius, cutoff and fraction_of_peak_max configurable or derive from psf size
+            # TODO: Make sure this handles empty arrays well
+            if remove_peaks_with_close_neighbors:
+                coordinates = coordinates_without_intensity_at_radius(coordinates, image[i], radius=3,
+                                                                      cutoff='image_median', fraction_of_peak_max=0.25)
 
-        if 'coordinates_within_margin' in coordinate_optimization:
-            margin = coordinate_optimization['coordinates_within_margin']['margin']
-        else:
-            margin = 0
+            if coordinates.size == 0:  # should throw a error message to warm no acceptor molecules found
+                raise ValueError(f'No molecules in channel {i}')
 
-        donor_coordinates = coordinates_within_margin(coordinates,
-                                                      bounds=self.movie.get_channel_from_name('d').boundaries, margin=margin)
-        acceptor_coordinates = coordinates_within_margin(coordinates,
-                                                         bounds=self.movie.get_channel_from_name('a').boundaries, margin=margin)
+            coordinates_per_channel.append(coordinates)
+            print(f'Found {coordinates.size} molecules in channel {i}')
 
         # TODO: put overlapping coordinates in file.coordinates for mapping file
         # Possibly do this with mapping.nearest_neighbour match
         # self.coordinates = np.hstack([donor_coordinates, acceptor_coordinates]).reshape((-1, 2))
 
-        if initial_translation == 'width/2':
-            initial_transformation = {'translation': [image.shape[1] // 2, 0]}
-        else:
-            initial_transformation = {'translation': initial_translation}
+        mappings = []
+        for i in range(1, len(coordinates_per_channel)):
+            mapping = mp.MatchPoint(source_name=self.movie.channels[0].name,
+                                    source=coordinates_per_channel[0],
+                                    destination_name=self.movie.channels[1].name,
+                                    destination=coordinates_per_channel[i],
+                                    method=method,
+                                    transformation_type=transformation_type,
+                                    initial_transformation=None)
+            mapping.perform_mapping(distance_threshold=distance_threshold)
+            mapping.source_channel_index = 0
+            mapping.destination_channel_index = i
+            mapping.file = str(self.relative_filepath)
+            mappings.append(mapping)
 
-        self.mapping = mp.MatchPoint(source_name='Donor',
-                                     source=donor_coordinates,
-                                     destination_name='Acceptor',
-                                     destination=acceptor_coordinates,
-                                     method=method,
-                                     transformation_type=transformation_type,
-                                     initial_transformation=initial_transformation)
-        self.mapping.perform_mapping(distance_threshold=distance_threshold)
-        self.mapping.file = self
+        self.mappings = mappings
 
         self.export_mapping()
 
-        self.show_mapping_in_image()
+        # self.show_mapping_in_image(projection_image_configuration=projection_image_configuration)
 
-        self.use_mapping_for_all_files()
+        self.experiment.load_mappings()
 
-    def show_mapping_in_image(self, axis=None, save=True):
-        if not hasattr(self, 'mapping') or self.mapping is None:
+    @property
+    def mappings(self):
+        return self._mappings
+
+    @mappings.setter
+    def mappings(self, mappings):
+        self._mappings = mappings
+        if self.movie is not None:
+            self.movie.channel_mappings = mappings
+
+    def show_mapping_in_image(self, axes=None, save=True, unit='pixel', projection_image_configuration=None, imshow_configuration=None):
+        if not hasattr(self, 'mappings') or self.mappings is None:
             raise RuntimeError('File does not contain a mapping.')
-        if axis is None:
-            figure, axis = plt.subplots()
-        else:
-            figure = axis.figure
-        self.show_average_image(figure=figure)
-        self.mapping.show(axis=axis, show_source=True)
+
+        if projection_image_configuration is None:
+            projection_image_configuration = dict(frame_range=(0, 20), projection_type='average')
+
+        #TODO: Update this after updating show_image
+        figure, axes = self.show_image(axes=axes, unit=unit, projection_image_configuration=projection_image_configuration)
+        for i, axis in enumerate(axes):
+            if i==0:
+                self.mappings[0].show(axis=axes[0], show_source=True, show_destination=False, show_transformed_coordinates=False)
+                axis.set_title('')
+            else:
+                self.mappings[i-1].show(axis=axis, show_source=False, show_destination=True)
+                axis.set_ylabel('')
+                axis.set_title(axis.get_title().replace('channel_mapping_',''))
 
         if save:
-            axis.axis('off')
-            axis.set_title('')
-            figure.set_size_inches(8, 8)
+            # axis.axis('off')
+            # axis.set_title('')
+            figure.set_size_inches(4*len(axes), 8)
             figure.savefig(self.relativePath / (self.name + '_mapping.png'), bbox_inches="tight", pad_inches=0, dpi=300)
 
         return figure, axis
@@ -837,13 +830,13 @@ class File:
             if file is not self:
                 file.coordinates = self.coordinates
 
-    def use_mapping_for_all_files(self):
-        print(f"\n{self} used as mapping")
-        self.is_mapping_file = True
-        for file in self.experiment.files:
-            if file is not self:
-                file.mapping = self.mapping
-                file.is_mapping_file = False
+    # def use_mapping_for_all_files(self):
+    #     print(f"\n{self} used as mapping")
+    #     self.is_mapping_file = True
+    #     for file in self.experiment.files:
+    #         if file is not self:
+    #             file.mappings = self.mappings
+    #             file.is_mapping_file = False
 
     def get_variable(self, variable, selected=False, frame_range=None, average=False, return_none_if_nonexistent=False):
         # TODO: make it possible to also select the channel (or perform other selections), e.g. by passing 'intensity_c0'.
@@ -1049,9 +1042,9 @@ class File:
                     classification_configurations[name] = None
         return classification_configurations
 
-    def create_classification(self, classification_type, variable, select=None, name=None, classification_kwargs=None, apply=None):
-        if classification_kwargs is None:
-            classification_kwargs = {}
+    def create_classification(self, classification_type, variable, select=None, name=None, classification_configuration=None, apply=None):
+        if classification_configuration is None:
+            classification_configuration = {}
         if isinstance(variable, str):
             traces = getattr(self, variable)
         else:
@@ -1063,26 +1056,26 @@ class File:
 
         if classification_type == 'threshold':
             from papylio.analysis.classification_simple import classify_threshold
-            ds = classify_threshold(traces, **classification_kwargs).to_dataset()
-            # TODO: perhaps replace the following line with some function that actually spits out the classification kwargs.
-            add_configuration_to_dataarray(ds.classification, classify_threshold, classification_kwargs)
+            ds = classify_threshold(traces, **classification_configuration).to_dataset()
+            # TODO: perhaps replace the following line with some function that actually spits out the classification configuration.
+            add_configuration_to_dataarray(ds.classification, classify_threshold, classification_configuration)
 
         elif classification_type in ['hmm', 'hidden_markov_model']:
             # ds = hmm_traces(self.FRET, n_components=2, covariance_type="full", n_iter=100) # Old
             classification = self.classification
             selected = self.selected
-            ds = classify_hmm(traces, classification, selected, **classification_kwargs)
+            ds = classify_hmm(traces, classification, selected, **classification_configuration)
             if 'configuration' in selected.attrs:
                 ds.classification.attrs['applied_selections'] = selected.attrs['configuration']
             if 'configuration' in classification.attrs:
                 ds.classification.attrs['applied_classifications'] = classification.attrs['configuration']
-            #TODO: perhaps replace the following line with some function that actually spits out the classification kwargs.
-            add_configuration_to_dataarray(ds.classification, classify_hmm, classification_kwargs)
+            #TODO: perhaps replace the following line with some function that actually spits out the classification configuration.
+            add_configuration_to_dataarray(ds.classification, classify_hmm, classification_configuration)
         # TODO: create classification to deactivate certain frames of the trace
         else:
             raise ValueError('Unknown classification type')
 
-        classification_kwargs = json.loads(ds.classification.attrs['configuration'])
+        classification_configuration = json.loads(ds.classification.attrs['configuration'])
         add_configuration_to_dataarray(ds.classification, File.create_classification, locals())
 
         if name is None:
@@ -1100,7 +1093,7 @@ class File:
                      level='molecule'):  # , use_selection=True, use_classification=True):
         #TODO: Depricate this
         self.create_classification(name='hmm', classification_type='hmm', variable=variable,
-                                   classification_kwargs=dict(seed=seed, n_states=n_states,
+                                   classification_configuration=dict(seed=seed, n_states=n_states,
                                 threshold_state_mean=threshold_state_mean, level=level))
 
     def apply_classifications(self, add_to_current=False, **classification_assignment):
@@ -1212,7 +1205,7 @@ class File:
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
-                       fit_dwell_times_kwargs={}, plot_dwell_analysis_kwargs={}, save_file_path=None):
+                       fit_dwell_times_configuration={}, plot_dwell_analysis_configuration={}, save_file_path=None):
 
         dwells = self.dwells
 
@@ -1224,7 +1217,7 @@ class File:
         #TODO: Add sampling interval to File and refer to it here?
         dwell_analysis = analyze_dwells(dwells, method=method, number_of_exponentials=number_of_exponentials,
                                         state_names=state_names, P_bounds=P_bounds, k_bounds=k_bounds,
-                                        sampling_interval=None, truncation=truncation, fit_dwell_times_kwargs=fit_dwell_times_kwargs)
+                                        sampling_interval=None, truncation=truncation, fit_dwell_times_config=fit_dwell_times_configuration)
 
         add_configuration_to_dataarray(dwell_analysis, File.analyze_dwells, locals())
 
@@ -1238,12 +1231,12 @@ class File:
         if save_file_path is None:
             self.dwell_analysis = dwell_analysis
             if plot:
-                self.plot_dwell_analysis(**plot_dwell_analysis_kwargs)
+                self.plot_dwell_analysis(**plot_dwell_analysis_configuration)
         else:
             dwell_analysis.to_netcdf(self.absolute_filepath.with_name(save_file_path).with_suffix('.nc'),
                                      engine='netcdf4', mode='w')
             if plot:
-                plot_dwell_analysis(dwell_analysis, dwells, **plot_dwell_analysis_kwargs)
+                plot_dwell_analysis(dwell_analysis, dwells, **plot_dwell_analysis_configuration)
 
         return dwell_analysis
 
@@ -1300,15 +1293,15 @@ class File:
         # TODO: Should work on intensity raw if intensity raw is there else on intensity.
         TraceCorrectionWindow(self.intensity)
 
-    def show_histogram(self, variable, selected=False, frame_range=None, average=False, axis=None, **hist_kwargs):
+    def show_histogram(self, variable, selected=False, frame_range=None, average=False, axis=None, **hist_configuration):
         # TODO: add save
         da = self.get_variable(variable, selected=selected, frame_range=frame_range, average=average)
-        figure, axis = histogram(da, axis=axis, **hist_kwargs)
+        figure, axis = histogram(da, axis=axis, **hist_configuration)
         axis.set_title(str(self.relative_filepath))
         return figure, axis
 
     def histogram_2D_FRET_intensity_total(self, selected=False, frame_range=None, average=False,
-                                       **marginal_hist2d_kwargs):
+                                       **marginal_hist2d_configuration):
         """
         Generates a 2D histogram plot of FRET vs. total intensity with optional marginal histograms.
 
@@ -1325,7 +1318,7 @@ class File:
             If True, the function averages the data over the specified frame range.
         axis : matplotlib.axes.Axes, optional (default=None)
             The axes object to plot on. If None, a new plot will be created.
-        **marginal_hist2d_kwargs : dict, optional
+        **marginal_hist2d_configuration : dict, optional
             Additional keyword arguments passed to the `marginal_hist2d` function for customizing the plot.
             Default arguments are used for the 2D histogram's range.
 
@@ -1343,17 +1336,17 @@ class File:
         FRET = self.get_variable('FRET', selected=selected, frame_range=frame_range, average=average)
         intensity_total = self.get_variable('intensity_total', selected=selected, frame_range=frame_range, average=average)
 
-        marginal_hist2d_kwargs_default = dict(range=((-0.05, 1.05), None))
-        marginal_hist2d_kwargs = {**marginal_hist2d_kwargs_default, **marginal_hist2d_kwargs}
+        marginal_hist2d_configuration_default = dict(range=((-0.05, 1.05), None))
+        marginal_hist2d_configuration = {**marginal_hist2d_configuration_default, **marginal_hist2d_configuration}
 
         from papylio.plotting import marginal_hist2d
-        figure, axes = marginal_hist2d(FRET, intensity_total, **marginal_hist2d_kwargs)
+        figure, axes = marginal_hist2d(FRET, intensity_total, **marginal_hist2d_configuration)
 
         return axes
 
 
     def histogram_2D_intensity_per_channel(self, selected=False, frame_range=None, average=False,
-                                           channel_x=0, channel_y=1, **marginal_hist2d_kwargs):
+                                           channel_x=0, channel_y=1, **marginal_hist2d_configuration):
         """
         Generates a 2D histogram plot of intensity between two specified channels, with optional marginal histograms.
 
@@ -1373,7 +1366,7 @@ class File:
             The index of the channel for the x-axis data.
         channel_y : int, optional (default=1)
             The index of the channel for the y-axis data.
-        **marginal_hist2d_kwargs : dict, optional
+        **marginal_hist2d_configuration : dict, optional
             Additional keyword arguments passed to the `marginal_hist2d` function to customize the plot.
             Defaults include no specific range for the histogram axes.
 
@@ -1392,116 +1385,135 @@ class File:
         intensity_y = self.get_variable('intensity', selected=selected, frame_range=frame_range, average=average).sel(channel=channel_y)
         intensity_y.name = intensity_y.name + f'_c{channel_y}'
 
-        marginal_hist2d_kwargs_default = dict(range=(None, None))
-        marginal_hist2d_kwargs = {**marginal_hist2d_kwargs_default, **marginal_hist2d_kwargs}
+        marginal_hist2d_configuration_default = dict(range=(None, None))
+        marginal_hist2d_configuration = {**marginal_hist2d_configuration_default, **marginal_hist2d_configuration}
 
         from papylio.plotting import marginal_hist2d
-        figure, axes = marginal_hist2d(intensity_x, intensity_y, **marginal_hist2d_kwargs)
+        figure, axes = marginal_hist2d(intensity_x, intensity_y, **marginal_hist2d_configuration)
 
         return axes
 
 
-    def show_image(self, projection_type='average', frame_range=[0, 20], illumination=0, axis=None, unit='pixel', load=True, **kwargs):
+    def show_image(self, axes=None, unit='pixel', projection_image_configuration=None, imshow_configuration=None):
         # TODO: Show two channels separately and connect axes
+        # Split configuration based on inspect??
 
-        if axis is None:
-            figure, axis = plt.subplots()
+        if projection_image_configuration is None:
+            projection_image_configuration = {}
+
+        if imshow_configuration is None:
+            imshow_configuration = {}
+
+        image = self.get_projection_image(**projection_image_configuration)
+
+        if axes is None:
+            figure, axes = plt.subplots(1, image.shape[0], sharex=True, sharey=True, layout='constrained')
         else:
-            figure = axis.figure
+            figure = axes[0].figure
+        figure.subplots_adjust(wspace=0, hspace=0)
 
-        image = self.get_projection_image(load=load, projection_type=projection_type, frame_range=frame_range,
-                                          illumination=illumination)
-        if projection_type == 'average':
-            axis.set_title('Average image')
-        elif projection_type == 'maximum':
-            axis.set_title('Maximum projection')
+        projection_image_configuration_defaults = get_default_parameters(Movie.make_projection_image)
+        projection_image_configuration = (projection_image_configuration_defaults | projection_image_configuration)
+        filename = Movie.image_info_to_filename(self.name, **projection_image_configuration)
+
+        if projection_image_configuration['projection_type'] == 'average':
+            figure.suptitle('Average image\n' + str(self.relativePath / filename))
+        elif projection_image_configuration['projection_type'] == 'maximum':
+            figure.suptitle('Maximum projection\n' + str(self.relativePath / filename))
 
         if unit == 'pixel':
             unit_string = ' (pixels)'
         elif unit == 'metric':
-            kwargs['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
+            imshow_configuration['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
             unit_string = f' ({self.movie.pixel_size_unit})'
         else:
             raise ValueError('Wrong unit value')
+        for i, (im, axis) in enumerate(zip(image, axes.flatten())):
+            axis.imshow(im, **imshow_configuration)
+            axis.set_title(f'Channel {i}')
+            axis.set_xlabel('x'+unit_string)
+            if i > 0:
+                axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
 
-        axis.imshow(image, **kwargs)
-        axis.set_title(self.relative_filepath)
-        axis.set_xlabel('x'+unit_string)
-        axis.set_ylabel('y'+unit_string)
-        return figure, axis
+        axes.flatten()[0].set_ylabel('y'+unit_string)
+        return figure, axes
 
-    def show_average_image(self, figure=None, **kwargs):
-        # TODO: Deprecate this at some point
-        self.show_image(projection_type='average', figure=figure, **kwargs)
-
-    def show_coordinates(self, axis=None, annotate=False, unit='pixel', **kwargs):
+    def show_coordinates(self, axes=None, annotate=False, unit='pixel', scatter_configuration=None):
         # TODO: Consider making this a QWidget
-        if axis is None:
-            figure, axis = plt.subplots()
+        if scatter_configuration is None:
+            scatter_configuration = {}
+
+        if self.coordinates is None:
+            return
+
+        if unit == 'pixel':
+            coordinates = self.coordinates
+        elif unit == 'metric':
+            coordinates = self.coordinates_metric
         else:
-            figure = axis.figure
+            raise ValueError('Unit can be either "pixel" or "metric"')
 
-        if self.coordinates is not None:
-            axis = figure.gca()
-            if unit == 'pixel':
-                coordinates = self.coordinates
-            elif unit == 'metric':
-                coordinates = self.coordinates_metric
-            else:
-                raise ValueError('Unit can be either "pixel" or "metric"')
+        if axes is None:
+            figure, axes = plt.subplots(1, len(coordinates.channel), sharex=True, sharey=True, layout='constrained')
+        else:
+            figure = axes[0].figure
+        figure.subplots_adjust(wspace=0, hspace=0)
 
-            coordinates = coordinates.stack({'peak': ('molecule', 'channel')}).T.values
-            sc_coordinates = axis.scatter(coordinates[:, 0], coordinates[:, 1], facecolors='none', edgecolors='red', **kwargs)
-            # marker='o'
+        PathCollections = []
+        for ((i, c), axis) in zip(coordinates.groupby('channel'), axes.flatten()):
+            pc = axis.scatter(*c.T, facecolors='none', edgecolors='red', **scatter_configuration)
+            PathCollections.append(pc)
 
-            selected_coordinates = self.coordinates.sel(molecule=self.selected.values).stack({'peak': ('molecule', 'channel')}).T.values
-            axis.scatter(selected_coordinates[:, 0], selected_coordinates[:, 1], facecolors='none', edgecolors='green', **kwargs)
+            selected_coordinates = c.sel(molecule=self.selected.values)
+            axis.scatter(*selected_coordinates.T, facecolors='none', edgecolors='green', **scatter_configuration)
 
-            if annotate:
-                annotation = axis.annotate("", xy=(0, 1.03), xycoords=axis.transAxes) # x in data units, y in axes fraction
-                annotation.set_visible(False)
+        if annotate:
+            annotation = axes[0].annotate("", xy=(0, 1.03), xycoords=axes[0].transAxes) # x in data units, y in axes fraction
+            annotation.set_visible(False)
 
-                #molecule_indices = np.repeat(np.arange(0, self.number_of_molecules), self.number_of_channels)
-                molecule_indices = np.repeat(self.molecule_in_file.values, self.number_of_channels)
-                # sequence_indices = np.repeat(self.sequence_indices, self.number_of_channels)
+            #molecule_indices = np.repeat(np.arange(0, self.number_of_molecules), self.number_of_channels)
+            molecule_indices = self.molecule_in_file.values #np.repeat(self.molecule_in_file.values, self.number_of_channels)
+            # sequence_indices = np.repeat(self.sequence_indices, self.number_of_channels)
 
-                def update_annotation(ind):
-                    # print(ind)
+            def update_annotation(ind):
+                # print(ind)
 
-                    # text = "Molecule number: {} \nSequence: {}".format(" ".join([str(indices[ind["ind"][0]])]),
-                    #                        " ".join([str(sequences[ind["ind"][0]].decode('UTF-8'))]))
-                    plot_index = ind["ind"]
-                    molecule_index = molecule_indices[plot_index]
-                    text = f'Molecule number: {", ".join(map(str, molecule_index))}'
+                # text = "Molecule number: {} \nSequence: {}".format(" ".join([str(indices[ind["ind"][0]])]),
+                #                        " ".join([str(sequences[ind["ind"][0]].decode('UTF-8'))]))
+                plot_index = ind["ind"]
+                molecule_index = molecule_indices[plot_index]
+                text = f'Molecule number: {", ".join(map(str, molecule_index))}'
 
-                    if hasattr(self, 'sequences'):
-                        sequence_names = [str(self.sequence_name[index]) for index in molecule_index]
-                        sequences = [str(self.sequence[index]) for index in molecule_index]
-                        text += f'\nSequence name: {", ".join(sequence_names)}'
-                        text += f'\nSequence: {", ".join(sequences)}'
+                if hasattr(self, 'sequences'):
+                    sequence_names = [str(self.sequence_name[index]) for index in molecule_index]
+                    sequences = [str(self.sequence[index]) for index in molecule_index]
+                    text += f'\nSequence name: {", ".join(sequence_names)}'
+                    text += f'\nSequence: {", ".join(sequences)}'
 
-                    annotation.set_text(text)
+                annotation.set_text(text)
 
-                def hover(event):
-                    vis = annotation.get_visible()
-                    if event.inaxes == axis:
-                        cont, ind = sc_coordinates.contains(event)
-                        if cont:
-                            update_annotation(ind)
-                            annotation.set_visible(True)
-                            figure.canvas.draw_idle()
-                        else:
-                            if vis:
-                                annotation.set_visible(False)
-                                figure.canvas.draw_idle()
+            def hover(event):
+                vis = annotation.get_visible()
+                # if event.inaxes == axis:
+                for pc in PathCollections:
+                    cont, ind = pc.contains(event)
+                    if cont:
+                        update_annotation(ind)
+                        annotation.set_visible(True)
+                        figure.canvas.draw_idle()
+                        return
+                else:
+                    if vis:
+                        annotation.set_visible(False)
+                        figure.canvas.draw_idle()
 
-                figure.canvas.mpl_connect("motion_notify_event", hover)
+            figure.canvas.mpl_connect("motion_notify_event", hover)
 
-            plt.show()
-
-    def show_coordinates_in_image(self, axis=None, **kwargs):
-        figure, axis = self.show_image(axis=axis, **kwargs)
-        self.show_coordinates(axis=axis)
+    def show_coordinates_in_image(self, axes=None, unit='pixel', annotate=False, projection_image_configuration=None,
+                                  imshow_configuration=None, scatter_configuration=None):
+        figure, axes = self.show_image(axes=axes, unit=unit, projection_image_configuration=projection_image_configuration,
+                                       imshow_configuration=imshow_configuration)
+        self.show_coordinates(axes=axes, annotate=annotate, unit=unit, scatter_configuration=scatter_configuration)
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
     def show_traces(self, plot_variables=['intensity', 'FRET'], ylims=[(0, 35000), (0, 1)], colours=[('g', 'r'), ('b')],

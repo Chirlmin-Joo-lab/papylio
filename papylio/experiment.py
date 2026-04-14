@@ -22,6 +22,7 @@ import xarray as xr
 from collections import UserDict
 import re
 import tifffile
+import matchpoint as mp
 
 from papylio.file import File
 from papylio.file_collection import FileCollection
@@ -120,10 +121,11 @@ class Experiment:
         self.load_flatfield_correction()
 
         # Find mapping file
-        for file in self.files:
-            if file.mapping is not None:
-                file.use_mapping_for_all_files()
-                break
+        # for file in self.files:
+        #     if file.mapping is not None:
+        #         file.use_mapping_for_all_files()
+        #         break
+        self.load_mappings()
 
         print('\nInitialize experiment: \n' + str(self.main_path))
 
@@ -186,11 +188,19 @@ class Experiment:
     #     """list of Molecule : List of selected molecules in all files"""
     #     return [molecule for file in self.files for molecule in file.selectedMolecules]
 
-    @property
-    def mapping_file(self):
-        for file in self.files:
-            if file.is_mapping_file:
-                return file
+    # @property
+    # def mapping_file(self):
+    #     for file in self.files:
+    #         if file.is_mapping_file:
+    #             return file
+
+    def load_mappings(self):
+        mappings = []
+        for filepath in self.main_path.glob('channel_mapping*.nc'):
+            mappings.append(mp.MatchPoint.load(filepath))
+        if len(mappings) == (self.number_of_channels-1):
+            for file in self.files:
+                file.mappings = mappings
 
     @property
     def analysis_path(self):

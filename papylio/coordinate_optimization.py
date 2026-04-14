@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.spatial import cKDTree
 
-def coordinates_within_margin_selection(coordinates,  image=None, bounds = None, margin=10):
+def coordinates_within_margin_selection(coordinates, image=None, bounds=None, margin=10):
     #TODO: remove requirement for image
     if image is not None:
         bounds = np.array([[0,0], [image.shape[1],image.shape[0]]])
