@@ -1,7 +1,27 @@
+"""Dwell time extraction utilities.
+
+Functions to extract dwell (state) durations from per-frame classifications,
+compute mean intensities per dwell, and adjust dwell states at trace edges.
+"""
 import numpy as np
 import xarray as xr
 
 def dwell_frames_from_classification(classification):
+    """Compute dwell segments from boolean classification array.
+
+    Parameters
+    ----------
+    classification : np.ndarray or xr.DataArray
+        Boolean array shaped (molecule, frame) indicating state at each frame
+
+    Returns
+    -------
+    tuple
+        (dwell_molecules, dwell_states, dwell_frames)
+        - dwell_molecules: indices of molecules for each dwell
+        - dwell_states: state value for each dwell
+        - dwell_frames: number of frames in each dwell
+    """
     # This assumes continuous monitoring with a specific cycle time.
     single_true_array = np.ones((classification.shape[0],1)).astype(bool)
     is_state_transition = np.hstack([single_true_array, classification[:,:-1] != classification[:,1:], single_true_array])
@@ -13,13 +33,35 @@ def dwell_frames_from_classification(classification):
     return dwell_molecules, dwell_states, dwell_frames
 
 def determine_dwell_means(traces_flattened, dwell_frames):
+    """Compute mean intensity per dwell from flattened traces.
+
+    Parameters
+    ----------
+    traces_flattened : np.ndarray
+        1D array of concatenated traces
+    dwell_frames : np.ndarray
+        Number of frames in each dwell (sums to len(traces_flattened))
+
+    Returns
+    -------
+    np.ndarray
+        Mean intensity value for each dwell
+    """
     mean_trace = np.mean(traces_flattened)
     values_cumsum = np.concatenate([[0], np.cumsum(traces_flattened-mean_trace)])
     oneD_indices = np.concatenate([[0],dwell_frames.cumsum()])
     dwell_means = np.diff(values_cumsum[oneD_indices]) / dwell_frames + mean_trace
     return dwell_means
 
+
 def set_states(dwell_molecules, dwell_states, at_trace_edges=True, around_negative_states=True, to_state=-2):
+    """Set dwell states to a sentinel value under certain conditions.
+
+    Marks dwells at trace start/end or adjacent to negative states (e.g. invalid)
+    with a provided sentinel value.
+
+    Returns modified dwell_states array.
+    """
     states_to_set = np.zeros(len(dwell_states), dtype=bool)
 
     switched_molecule = np.diff(dwell_molecules).astype(bool)
@@ -41,7 +83,26 @@ def set_states(dwell_molecules, dwell_states, at_trace_edges=True, around_negati
     return dwell_states
 
 
+
 def dwell_times_from_classification(classification, traces=None, cycle_time=None, inactivate_start_and_end_states=True):
+    """Produce an xarray Dataset of dwell times and metadata from classifications.
+
+    Parameters
+    ----------
+    classification : np.ndarray or xr.DataArray
+        Boolean or integer classification per molecule/frame
+    traces : xr.DataArray or np.ndarray, optional
+        Trace intensities used to compute dwell means (default: None)
+    cycle_time : float, optional
+        Frame period in seconds; used to compute durations (default: None)
+    inactivate_start_and_end_states : bool, optional
+        If True, mark start/end dwells as inactive sentinel state (default: True)
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset with dwell-level variables: molecule, state, frame_count, duration (if cycle_time provided), and mean intensity
+    """
     if isinstance(classification, xr.DataArray):
         molecule_coords = {n: c.values for n, c in classification.coords.items() if c.dims[0] == 'molecule' and len(c.dims) == 1}
         classification = classification.values
@@ -81,15 +142,4 @@ def dwell_times_from_classification(classification, traces=None, cycle_time=None
         ds['mean'+name] = ('dwell', dwell_means)
 
     return ds
-
-
-
-
-
-
-
-
-
-
-
 

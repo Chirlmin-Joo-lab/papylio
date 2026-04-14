@@ -55,6 +55,17 @@ from matplotlib.figure import Figure
 
 
 class TracePlotWindow(QWidget):
+    """Interactive window for browsing and annotating molecule traces.
+
+    Presents an interactive canvas with plotting controls, molecule selection,
+    and configuration for plotting variables such as intensity and FRET.
+
+    Key features:
+    - Navigation toolbar and molecule index controls
+    - Plot configuration panel for enabling/disabling variables and setting ranges
+    - Selection support (show all / only selected / only unselected)
+    """
+
     def __init__(self, dataset=None,
                  plot_settings=None,
                  width=14, height=None, dataset_path=None, save_path=None, parent=None,
@@ -166,10 +177,12 @@ class TracePlotWindow(QWidget):
         self.setFocus()
 
     def closeEvent(self, event: QCloseEvent):
+        """Handle window close event and save settings."""
         self.save_plot_settings()
         self.save_selection()
 
     def save_plot_settings(self):
+        """Save current plot configuration to file."""
         if self.dataset_path is not None:
             with netCDF4.Dataset(self.dataset_path, "a") as nc:
                 for variable, plot_settings in self.plot_configuration.plot_settings.items():
@@ -178,11 +191,13 @@ class TracePlotWindow(QWidget):
                         nc_variable.setncattr("plot_settings", json.dumps(plot_settings))
 
     def save_selection(self):
+        """Save current selection state to the netCDF file."""
         if self.dataset_path is not None:
             self.dataset.selected.astype('bool').to_netcdf(self.dataset_path, engine='netcdf4', mode='a')
 
     def deactivate_line_edit(self):
-            self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
+        """Clear focus from the molecule index line edit field."""
+        self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
 
     @property
     def dataset(self):
@@ -214,10 +229,12 @@ class TracePlotWindow(QWidget):
         self.set_selection()
 
     def on_selected_molecules_checkbox_state_change(self, selection_state):
+        """Handle changes to the selected molecules checkbox state."""
         self.selection_state = selection_state
         self.selected_molecules_checkbox.clearFocus()
 
     def set_selection(self):
+        """Update molecule indices to show based on current selection state."""
         if self.selection_state == 0:
             self.dataset_molecule_indices_to_show = self.dataset.molecule.sel(molecule=~self.dataset.selected).values
         elif self.selection_state == 1:
@@ -260,17 +277,21 @@ class TracePlotWindow(QWidget):
         return len(self.dataset_molecule_indices_to_show)
 
     def set_molecule_index_from_molecule_index_field(self):
+        """Parse molecule index from the text field and update the current molecule."""
         self.molecule_index = int(self.molecule_index_field.text())
 
     def next_molecule(self):
+        """Navigate to the next molecule in the current dataset."""
         if (self.molecule_index+1) < self.number_of_molecules_to_show:
             self.molecule_index += 1
 
     def previous_molecule(self):
+        """Navigate to the previous molecule in the current dataset."""
         if self.molecule_index > 0:
             self.molecule_index -= 1
 
     def update_current_molecule(self):
+        """Refresh the display for the current molecule."""
         self.molecule_index = self.molecule_index
 
     @property
@@ -282,6 +303,7 @@ class TracePlotWindow(QWidget):
         self.canvas.molecule = molecule
 
     def keyPressEvent(self, e):
+        """Handle keyboard events for navigation and selection."""
         key = e.key()
         if key == Qt.Key_Right: # Right arrow
             self.next_molecule()
@@ -307,6 +329,7 @@ class PlotConfigurationModel(QStandardItemModel):
     """
 
     def flags(self, index):
+        """Return item flags, allowing drag only for top-level items."""
         default_flags = super().flags(index)
 
         # Only top-level items can be dragged
@@ -317,9 +340,11 @@ class PlotConfigurationModel(QStandardItemModel):
             return default_flags & ~Qt.ItemIsDropEnabled & ~Qt.ItemIsDragEnabled
 
     def supportedDropActions(self):
+        """Return supported drop actions for drag-and-drop operations."""
         return Qt.MoveAction
 
     def dropMimeData(self, data, action, row, column, parent):
+        """Handle drop events, allowing only root-level drops."""
         # Only allow drops at root level
         if parent.isValid():
             return False
@@ -330,6 +355,13 @@ class PlotConfigurationModel(QStandardItemModel):
         return result
 
 class PlotConfiguration(QWidget):
+    """Configuration widget for trace plots.
+
+    Provides a tree-view UI to enable/disable trace variables, set plot ranges,
+    colors and per-illumination options. Updates the main canvas when
+    settings change.
+    """
+
     def __init__(self, parent, canvas, initial_plot_settings=None):
 
         super().__init__(parent=parent)
@@ -388,6 +420,7 @@ class PlotConfiguration(QWidget):
         self.parent().setFocus()
 
     def _enable_trace_variable(self, variable):
+        """Enable the specified trace variable in the model."""
         self.model.blockSignals(True)
         for row in range(self.model.rowCount()):
             item = self.model.item(row, 0)
@@ -396,6 +429,7 @@ class PlotConfiguration(QWidget):
         self.model.blockSignals(False)
 
     def _disable_trace_variable(self, variable):
+        """Disable the specified trace variable in the model."""
         self.model.blockSignals(True)
         for row in range(self.model.rowCount()):
             item = self.model.item(row, 0)
@@ -404,6 +438,7 @@ class PlotConfiguration(QWidget):
         self.model.blockSignals(False)
 
     def _disable_all_rows(self):
+        """Disable all rows in the model."""
         self.model.blockSignals(True)
         for row in range(self.model.rowCount()):
             item = self.model.item(row, 0)
@@ -411,11 +446,13 @@ class PlotConfiguration(QWidget):
         self.model.blockSignals(False)
 
     def _enable_dataset_variables(self):
+        """Enable only the trace variables available in the current dataset."""
         self._disable_all_rows()
         for var in self._trace_variables_dataset:
             self._enable_trace_variable(var)
 
     def _add_missing_plot_settings_from_dataset(self):
+        """Add default plot settings for variables not yet configured."""
         plot_settings = self.plot_settings
         for var in set(self._trace_variables_dataset).union(set(plot_settings.keys())):
             if var not in plot_settings:
@@ -476,17 +513,20 @@ class PlotConfiguration(QWidget):
         self.plot_settings = plot_settings_ordered
 
     def _apply_row_spanning_for_plot_variables(self):
+        """Apply row spanning for plot variables to display them properly."""
         for row in range(self.model.rowCount()):
             self.view.setFirstColumnSpanned(row, QModelIndex(), True)
         self.view.doItemsLayout()  # Important to refresh treeview, otherwise it is not stay up to date with the model.
 
     def _add_plot_settings_to_model(self):
+        """Add all plot settings to the model tree view."""
         for plot_variable, plot_settings_of_variable in self.plot_settings.items():
             self._add_plot_settings_of_variable_to_model(plot_variable, plot_settings_of_variable)
 
         self._apply_row_spanning_for_plot_variables()
 
     def _get_or_create_name_item(self, plot_variable):
+        """Get existing plot variable item or create a new one."""
         # Look for existing item
         for row in range(self.model.rowCount()):
             item = self.model.item(row, 0)
@@ -505,6 +545,7 @@ class PlotConfiguration(QWidget):
         return name_item
 
     def _add_plot_settings_of_variable_to_model(self, plot_variable, plot_settings):
+        """Add configuration items for a specific plot variable to the model."""
         self.model.blockSignals(True)
 
         name_item = self._get_or_create_name_item(plot_variable)
@@ -612,6 +653,7 @@ class PlotConfiguration(QWidget):
         self.model.blockSignals(False)
 
     def _on_item_change(self, item):
+        """Handle changes to plot configuration items and update settings."""
         if item.column() == 0:
             # self._update_order_from_model()
             variable_name = item.model().item(item.row(), 0).text()
@@ -650,6 +692,7 @@ class PlotConfiguration(QWidget):
         self.parent().setFocus()
 
     def _on_rows_changed(self):
+        """Handle reordering of rows after drag-and-drop operations."""
         self._apply_row_spanning_for_plot_variables()
         self._update_order_from_model()
 
@@ -680,6 +723,11 @@ from dataclasses import dataclass
 from matplotlib.artist import Artist
 @dataclass
 class TraceArtist:
+    """Container that groups line and histogram artists for a single plot variable.
+
+    Each TraceArtist holds references to matplotlib Artist objects that are
+    updated when the displayed molecule changes.
+    """
     plot_variable: str
     illumination: int
     axis_name: str
@@ -688,6 +736,7 @@ class TraceArtist:
     histogram_artists: Optional[list[Artist]] = None
 
     def update(self, plot_settings, ys):
+        """Update plot and histogram artists with new data."""
         for plot_artist, y in zip(self.plot_artists, ys):
             plot_artist.set_ydata(y)
 
@@ -698,6 +747,7 @@ class TraceArtist:
             # TODO: When you shift the view, change the y positions of the bars to the new view, if possible. use set_y
 
     def set_color(self, colors):
+        """Set colors for plot and histogram artists."""
         for plot_artist, color in zip(self.plot_artists, colors):
             plot_artist.set_color(color)
         for histogram_artist, color in zip(self.histogram_artists, colors):
@@ -705,6 +755,7 @@ class TraceArtist:
                 bar.set_facecolor(color)
 
     def show(self, show=True):
+        """Show or hide plot and histogram artists."""
         for plot_artist in self.plot_artists:
             plot_artist.set_alpha(int(show))
         for histogram_artist in self.histogram_artists:
@@ -713,6 +764,12 @@ class TraceArtist:
 
 
 class TracePlotCanvas(FigureCanvasQTAgg):
+    """Matplotlib canvas specialized for efficient trace updates.
+
+    Creates axes and artists for each enabled plot variable, manages per-molecule
+    updates, and uses a BlitManager for efficient redraws.
+    """
+
     # Kader om plot als geselecteerd
     # Autosave function
     def __init__(self, parent=None, width=14, height=7, dpi=100):
@@ -731,6 +788,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         self.histogram_axes = {}
 
     def _remove_blit_manager(self):
+        """Remove and disconnect the blit manager if present."""
         if hasattr(self, "bm"):
             try:
                 self.mpl_disconnect(self.bm.cid)
@@ -788,9 +846,11 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         return self._trace_artists
 
     def get_trace_artists_with_attribute(self, attribute_name, value):
+        """Get trace artists matching a specific attribute value."""
         return [trace_artist for trace_artist in self.trace_artists if getattr(trace_artist, attribute_name) == value]
 
     def get_axis_names_with_plot_variable(self, plot_variable):
+        """Get axis names for a specific plot variable."""
         trace_artists = self.get_trace_artists_with_attribute('plot_variable', plot_variable)
         axis_names = [trace_artist.axis_name for trace_artist in trace_artists]
         return axis_names
@@ -800,6 +860,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         return list(dict.fromkeys([trace_artist.axis_name for trace_artist in self.trace_artists])) # Same as np.unique
 
     def init_plots(self):
+        """Initialize plot axes and layout based on current plot settings."""
         # Remove current blitmanager
         self._remove_blit_manager()
 
@@ -868,6 +929,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         #self.figure, self.axes = mpl.figure.Figure().subplots(2,1)
 
     def init_plot_artists(self):
+        """Initialize plot and histogram artists for all trace variables."""
         self._remove_blit_manager()
         for i, trace_artist in enumerate(self.trace_artists):
             # self.plot_axes[plot_variable].cla()
@@ -917,6 +979,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         # self.show_artists(show=True, draw=True)
 
     def init_plot_artist(self, trace_artist, plot_settings, x, y):
+        """Initialize a single trace artist with plot and histogram artists."""
         axis = self.plot_axes[trace_artist.axis_name]
         if trace_artist.secondary:
             if self.twin_axes[trace_artist.axis_name] is None:
@@ -939,6 +1002,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         trace_artist.set_color(plot_settings['color'])
 
     def show_artists(self, show, draw=True):
+        """Show or hide all trace artists."""
         for trace_artist in self.trace_artists:
             trace_artist.show(show)
 
@@ -1021,6 +1085,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         self.bm.update()
 
     def set_plot_range(self, plot_variable, plot_range):
+        """Update the y-axis range for a specific plot variable."""
         if plot_variable not in self.plot_settings:
             return
 
@@ -1038,6 +1103,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         # self.bm.on_draw(None)
 
     def set_plot_color(self, plot_variable, colors):
+        """Update colors for a specific plot variable."""
         if plot_variable not in self.plot_settings:
             return
 
@@ -1048,6 +1114,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         self.draw()
 
     def save(self):
+        """Save the current plot figure to disk."""
         save_path = self.parent_window.save_path
         if save_path is not None:
             save_path.mkdir(parents=True, exist_ok=True)
@@ -1058,6 +1125,12 @@ class TracePlotCanvas(FigureCanvasQTAgg):
             raise ValueError('No save_path set')
 
 class BlitManager:
+    """Utility that handles efficient blitting updates for animated artists.
+
+    Restores a saved background and redraws only the animated artists to avoid
+    full figure redraws, improving UI responsiveness.
+    """
+
     def __init__(self, canvas, animated_artists=()):
         """
         Parameters
@@ -1231,6 +1304,7 @@ if __name__ == "__main__":
 #     def __init__(self):
 #         print('Bo')
 #         super().__init__()
+#
 
 
 
@@ -1424,3 +1498,5 @@ from papylio.plotting import histogram
 # app = wx.App(False)
 # frame = MyFrame(None, 'Small editor')
 # app.MainLoop()
+
+

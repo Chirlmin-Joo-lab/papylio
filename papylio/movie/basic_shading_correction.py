@@ -1,3 +1,10 @@
+"""Basic shading correction helpers for movie images.
+
+Contains lightweight utilities used to compute and apply simple shading/darkfield
+corrections to movie frames.
+"""
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -15,6 +22,47 @@ from papylio.movie.shading_correction import BaSiC
 def BaSiCfun(directory, output_directory, extension='.tif', estimate_darkfield=False, apply_correction=False,
              use_flatfield=None, use_darkfield=None, epsilon=1e-6, l_s=None, l_d=None,
              output_flatfield_filename=None, output_darkfield_filename=None, verbose=False):
+    """Run BaSiC shading correction on image stack.
+
+    Executes the BaSiC (Background and Shading Correction) algorithm for
+    correcting uneven illumination and background in microscopy images.
+    Can estimate or use provided flatfield and darkfield corrections.
+
+    Parameters
+    ----------
+    directory : str or Path
+        Directory containing image stack to process
+    output_directory : str or Path
+        Directory to save output corrected images and correction fields
+    extension : str, optional
+        Image file extension to process (default: '.tif')
+    estimate_darkfield : bool, optional
+        If True, estimate darkfield; if False use provided or skip (default: False)
+    apply_correction : bool, optional
+        If True, apply correction to images and save results (default: False)
+    use_flatfield : str or Path, optional
+        Path to pre-computed flatfield image to use (default: None)
+    use_darkfield : str or Path, optional
+        Path to pre-computed darkfield image to use (default: None)
+    epsilon : float, optional
+        Small value for numerical stability (default: 1e-6)
+    l_s : float, optional
+        Regularization parameter for flatfield (default: None, auto-set)
+    l_d : float, optional
+        Regularization parameter for darkfield (default: None, auto-set)
+    output_flatfield_filename : str or Path, optional
+        Custom path for saving flatfield correction (default: None)
+    output_darkfield_filename : str or Path, optional
+        Custom path for saving darkfield correction (default: None)
+    verbose : bool, optional
+        If True, print progress information (default: False)
+
+    Notes
+    -----
+    - Saves flatfield.tif and darkfield.tif to output_directory
+    - Output files are saved as float32 TIFF format
+    - If perform_estimation=False, still creates optimizer for corrections
+    """
     # Create the BaSiC shading correction object
     optimizer = BaSiC(directory, estimate_darkfield=estimate_darkfield, extension=extension, verbose=verbose)
 
@@ -65,6 +113,22 @@ def BaSiCfun(directory, output_directory, extension='.tif', estimate_darkfield=F
 
 
 def squeeze_channel_from_frames(frames):
+    """Reorganize channel dimension in frame xarray DataArray.
+
+    Converts channel-separated frames into spatially adjacent channels by
+    combining channels along x and y pixel dimensions. Useful for preparing
+    data for channel-specific processing.
+
+    Parameters
+    ----------
+    frames : xr.DataArray
+        Frame data with dimensions (frame, channel, x_pixel, y_pixel)
+
+    Returns
+    -------
+    xr.DataArray
+        Reorganized frames with channels combined into spatial dimensions
+    """
     return xr.combine_by_coords(
         [frames.sel(channel=channel).set_index(x='x_pixel', y='y_pixel') for channel in frames.channel])
 
@@ -78,6 +142,41 @@ def squeeze_channel_from_frames(frames):
     # test2.unstack('channel').stack(x_pixel=('channel_index_x','x'), y_pixel=('channel_index_y','y'))
 
 def spatial_shading_correction(movies, method='BaSiC', illumination_index=0, frame_index=0, estimate_darkfield=True, **kwargs):
+    """Compute spatial shading corrections for a collection of movies.
+
+    Applies BaSiC or averaging-based correction to estimate flatfield and
+    darkfield for specific illumination pattern, across multiple movies.
+
+    Parameters
+    ----------
+    movies : Collection of Movie
+        Movie objects or collection thereof to analyze
+    method : str, optional
+        Correction method: 'BaSiC' or 'average' (default: 'BaSiC')
+    illumination_index : int, optional
+        Index of illumination pattern to correct (default: 0)
+    frame_index : int, optional
+        Frame index within illumination group to use (default: 0)
+    estimate_darkfield : bool, optional
+        If True, estimate darkfield; otherwise use existing (default: True)
+    **kwargs
+        Additional keyword arguments passed to BaSiC optimizer
+
+    Returns
+    -------
+    darkfield : np.ndarray
+        Estimated darkfield correction array
+    flatfield : np.ndarray
+        Estimated flatfield correction array
+
+    Notes
+    -----
+    - Reads frames only from movies containing the specified illumination_index
+    - Uses first frame of each movie with the illumination pattern
+    - Processes each channel independently
+    - Output arrays match movie channel dimensions
+    - BaSiC method provides more sophisticated correction than averaging
+    """
     selected_movies = [movie for movie in movies if illumination_index in movie.illumination_indices_in_movie]
     frame_with_illumination = [np.where(movie.illumination_index_per_frame == illumination_index)[0][frame_index] for movie in selected_movies]
     # frames = xr.concat([movie.read_frames([frame], apply_corrections=False, xarray=True, flatten_channels=False)

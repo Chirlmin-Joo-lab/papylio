@@ -1,3 +1,8 @@
+"""Automatic step-finding utilities for time traces.
+
+Contains simple algorithms to detect step-like transitions in intensity traces
+and helper plotting utilities for visualizing detected steps.
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 from os import listdir
@@ -5,6 +10,25 @@ import os
 
 
 def stepfinder(trace, threshold=100, max_steps=20):
+    """Detect step-like increases and decreases in an intensity trace.
+
+    Parameters
+    ----------
+    trace : np.ndarray
+        1D array containing intensity values over time
+    threshold : float, optional
+        Minimum change in intensity to consider as a step (default: 100)
+    max_steps : int, optional
+        Maximum number of step pairs to accept (default: 20)
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+        - "frames": np.ndarray of integer frame indices where starts and stops were found
+        - "threshold": the threshold used
+        If detection fails or too many steps found, returns {'frames': np.array([])}
+    """
 
     start_frames = []
     if trace[0] > threshold and trace[1] > threshold:
@@ -75,6 +99,26 @@ def stepfinder(trace, threshold=100, max_steps=20):
 def plot_steps(trace="red", exposure_time=0.1, steps={},
                name="molecule_0", display_plot=False,
                save_plot=True, save_folder="./saved_plots"):
+
+    """Plot an intensity trace with optional step markers.
+
+    Parameters
+    ----------
+    trace : np.ndarray
+        Intensity trace to plot
+    exposure_time : float, optional
+        Time per frame in seconds (default: 0.1)
+    steps : dict, optional
+        Dictionary with 'start_times' and 'stop_times' sequences to mark on plot
+    name : str, optional
+        Figure name / filename when saving (default: 'molecule_0')
+    display_plot : bool, optional
+        If False, plotting is done offscreen (useful for batch runs) (default: False)
+    save_plot : bool, optional
+        If True, saves the figure to disk (default: True)
+    save_folder : str, optional
+        Folder to save plots in (default: './saved_plots')
+    """
 
     Nframes = trace.size
     time = np.linspace(0, Nframes*exposure_time, Nframes)

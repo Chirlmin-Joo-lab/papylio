@@ -1,3 +1,8 @@
+"""Main GUI application and image canvas widget.
+
+Defines the main application window and image canvas used by the Papylio GUI.
+"""
+
 import sys
 import PySide2
 import platform
@@ -213,6 +218,13 @@ from papylio.gui.classification_widget import ClassificationWidget
 
 
 class MainWindow(QMainWindow):
+    """Main application window.
+
+    This class defines the main window of the Papylio GUI, including the
+    file tree, image canvas, and various control widgets for
+    interacting with the data and configuring the experiment.
+    """
+
     # def __init__(self):
     #     super().__init__()
     #     # model = QFileSystemModel()
@@ -476,6 +488,13 @@ class MainWindow(QMainWindow):
 
 
 class ImageCanvas(FigureCanvas):
+    """Image canvas widget.
+
+    This class defines the canvas used to display images in the Papylio
+    GUI. It is responsible for rendering the image data and updating the
+    display when the underlying data changes.
+    """
+
     def __init__(self, parent=None, width=14, height=7, dpi=100):
         self.figure = mpl.figure.Figure(figsize=(width, height), dpi=dpi, constrained_layout=True)  # , figsize=(2, 2))
         super().__init__(self.figure)

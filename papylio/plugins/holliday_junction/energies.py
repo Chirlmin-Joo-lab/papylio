@@ -1,3 +1,9 @@
+"""Stacking energy lookup and utilities for Holliday junction sequences.
+
+Provides reference stacking energies from literature and helper functions to
+convert sequence subsets into stacking energy summaries used in junction scoring.
+"""
+
 import numpy as np
 import xarray as xr
 #
@@ -39,6 +45,7 @@ import xarray as xr
 
 
 def energy_dict_to_dataarray(energy_dict):
+    """Convert a dict of dinucleotide energies to an xarray.DataArray."""
     return xr.DataArray(list(energy_dict.values()), dims=('base_combination',), coords={'base_combination': list(energy_dict.keys())})
 
 stacking_energies_flat = xr.Dataset()
@@ -83,6 +90,10 @@ states = [0,1]
 
 
 def migrate_junction(sequence_subset, penultimate_bases='CCGCGGCG', step=-1):
+    """Return a migrated sequence subset representation for a junction step.
+
+    step: -1 -> horizontal, 0 -> none, 1 -> vertical
+    """
     if step == -1: #Horizontal
         return penultimate_bases[0] + sequence_subset[0] + sequence_subset[3] + penultimate_bases[3] + \
                penultimate_bases[4] + sequence_subset[4] + sequence_subset[7] + penultimate_bases[7]
@@ -94,6 +105,7 @@ def migrate_junction(sequence_subset, penultimate_bases='CCGCGGCG', step=-1):
 
 base_pairs = ['AT','TA','CG','GC']
 def check_basepairing(sequence_subset):
+    """Check whether a sequence subset forms canonical basepairs at required positions."""
     if (sequence_subset[1:3] in base_pairs) and (sequence_subset[3:5] in base_pairs) and \
         (sequence_subset[5:7] in base_pairs) and ((sequence_subset[7] + sequence_subset[0]) in base_pairs):
         return True
@@ -102,6 +114,7 @@ def check_basepairing(sequence_subset):
 
 
 def migration_options(sequence_subset, penultimate_bases='CCGCGGCG', return_all=False):
+    """Return valid migration sequence options (or placeholders) for a given subset."""
     migration_option_list = []
     for step in [-1, 0, 1]:
        sequence_subset_migrated = migrate_junction(sequence_subset, penultimate_bases=penultimate_bases, step=step)
@@ -112,6 +125,7 @@ def migration_options(sequence_subset, penultimate_bases='CCGCGGCG', return_all=
     return migration_option_list
 
 def migration_sequence_subsets(sequence_subsets, penultimate_bases='CCGCGGCGC'):
+    """Compute possible migration sequences for an array of sequence subsets."""
     migration_sequences = np.array([migration_options(sequence_subset, penultimate_bases=penultimate_bases, return_all=True)
                                     for sequence_subset in sequence_subsets])
     migration_sequences[migration_sequences == None] = ''
@@ -123,6 +137,7 @@ bases = 'ATCG'
 base_combinations = [''.join(i) for i in itertools.product(bases, repeat=2)]
 
 def base_combination_per_position(sequence_subsets):
+    """Compute dinucleotide combinations per position for sequences."""
     base_combinations_per_position = xr.DataArray('', dims=('sequence_subset', 'position'),
                                           coords={'sequence_subset': sequence_subsets, 'position': np.arange(4)})
 
@@ -132,6 +147,10 @@ def base_combination_per_position(sequence_subsets):
                 [sequence_subset[i] + sequence_subset[j] for i, j in from_to_positions_per_state[state]]
 
 def base_combination_count(sequence_subsets, penultimate_bases=None):
+    """Count base-combination occurrences per subset, state and stack position.
+
+    Used to weight stacking energies per structural state.
+    """
     base_combination_count = xr.DataArray(0, dims=('sequence_subset', 'base_combination', 'state','stack_position'),
                                           coords={'sequence_subset': sequence_subsets,
                                                   'base_combination': base_combinations,
@@ -164,6 +183,7 @@ def base_combination_count(sequence_subsets, penultimate_bases=None):
 
 
 def calculate_total_stacking_energy(sequence_subsets, penultimate_bases=None):
+    """Compute the net stacking energy difference between two junction states."""
     return (base_combination_count(sequence_subsets, penultimate_bases=penultimate_bases)
             .sum('stack_position').diff('state').squeeze(drop=True) * stacking_energies_flat).sum('base_combination')
 
@@ -173,15 +193,35 @@ def calculate_total_stacking_energy(sequence_subsets, penultimate_bases=None):
 
 
 def stacking_energies(sequence_subsets,penultimate_bases = 'CCGCGGCG'):
+    """Return stacking energies per base_combination and stack position for subsets.
+
+    Parameters
+    ----------
+    sequence_subsets : array-like
+        Sequence subset strings
+    penultimate_bases : str
+        Penultimate bases used in edge positions
+
+    Returns
+    -------
+    xarray.DataArray
+        Stacking energies indexed by base_combination and positions
+    """
     return (base_combination_count(sequence_subsets, penultimate_bases=penultimate_bases)*stacking_energies_flat)
 
+
 def total_stacking_energies(sequence_subsets, penultimate_bases = 'CCGCGGCG'):
+    """Compute total stacking energies summed over combinations and positions."""
     return stacking_energies(sequence_subsets, penultimate_bases).sum('base_combination').sum('stack_position')
 
+
 def inner_stacking_energies(sequence_subsets, penultimate_bases = 'CCGCGGCG'):
+    """Return stacking energies restricted to inner stack positions (1 and 2)."""
     return stacking_energies(sequence_subsets, penultimate_bases).sel(stack_position=[1,2]).sum('base_combination').sum('stack_position')
 
+
 def inner_stacking_energies_minimum(sequence_subsets, penultimate_bases='CCGCGGCG'):
+    """Return minimum inner stacking energy across inner stack positions."""
     return stacking_energies(sequence_subsets, penultimate_bases).sel(stack_position=[1, 2]).sum('base_combination').min('stack_position')
 
     #

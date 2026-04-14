@@ -1,3 +1,5 @@
+"""Sequence generation and manipulation utilities for sequencing data."""
+
 import numpy as np
 
 def generate_sequences(base_composition):
@@ -33,6 +35,7 @@ def generate_sequences(base_composition):
     return sequences.view(f'U{len(base_composition_2)}').squeeze()
 
 def convert_bases(bases, conversion='basepair', **conversion_dict):
+    """Convert bases using a conversion mapping (default: basepair complementarity)."""
     if conversion == 'basepair':
         conversion_dict = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
 

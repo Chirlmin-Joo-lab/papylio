@@ -1,32 +1,60 @@
+"""Plugin management system for dynamic class extension.
+
+Provides mechanisms for loading plugins and dynamically extending core classes
+with plugin functionality through class composition.
+"""
 import importlib
 import pkgutil
 from papylio.log_functions import log_all_methods
 
 class PluginManager:
+    """Manager for discovering and loading plugin modules.
+
+    Automatically discovers and imports plugin modules from the papylio.plugins package.
+    Provides methods to retrieve plugin classes that extend core classes.
+    """
     def __init__(self):
+        """Initialize PluginManager and discover available plugins."""
         self.plugins_module = importlib.import_module('papylio.plugins')
         self.plugin_names = [pluginname for _, pluginname, ispkg in pkgutil.walk_packages(self.plugins_module.__path__) if ispkg]
         self.plugins = [importlib.import_module('papylio.plugins.'+plugin_name) for plugin_name in self.plugin_names]
 
     def get_class_plugins(self, class_name):
+        """Get plugin classes that extend a specific core class.
+
+        Parameters
+        ----------
+        class_name : str
+            Name of the core class to find plugins for
+
+        Returns
+        -------
+        tuple
+            Tuple of plugin classes extending the specified class
+        """
         return tuple([getattr(plugin, class_name) for plugin in self.plugins if hasattr(plugin, class_name)])
 
 
 def plugins(cls):
-    """
+    """Decorator that extends a class with compatible plugin classes.
+
+    Creates a new class that mixes in plugin classes with the decorated class.
+    Plugin classes have priority in method resolution order.
+
+    Initial comments:
     The function is ment as a decorator for the main classes and makes sure that for the class it is applied to a new class is created with the same name.
     This new class mixes-in the plugin classes with the old class, where the plugin classes have priority and thus more or less inherit from the old class.
 
     Parameters
     ----------
     cls : type
-        The input class
+        The class to decorate
 
     Returns
     -------
     type
         The adapted class with the same name as the input class, however now with the plugin classes mixed in.
-
+        New class with same name but extended with compatible plugin classes
     """
     classes = PluginManager().get_class_plugins(cls.__name__) + (cls,)
     if cls.__name__ == 'File':

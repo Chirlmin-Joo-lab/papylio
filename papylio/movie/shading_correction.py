@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""Shading correction utilities including the BaSiC optimizer.
+
+This module implements the BaSiC algorithm and supporting functions for
+estimating flatfield (illumination) and darkfield corrections for microscopy
+image stacks.
+"""
+
 __all__ = ['BaSiC']
 
 from pathlib import Path
@@ -17,14 +24,64 @@ from numba import njit
 # https://github.com/linum-uqam/PyBaSiC
 
 class BaSiC(object):
+    """BaSiC (Background and Shading Intensity Correction) optimizer.
+
+    Implements the BaSiC algorithm for correcting spatially-varying illumination
+    and background intensity in microscopy images. This is an improved version
+    of the original MATLAB implementation, using iterative reweighted L1 minimization.
+
+    References
+    ----------
+    linum-uqam/PyBaSiC: v1.0.0
+    Joël Lefebvre
+    10.5281/zenodo.7305570
+    https://github.com/linum-uqam/PyBaSiC
+
+    Notes
+    -----
+    - Estimates flatfield (illumination correction) and optionally darkfield (offset)
+    - Uses DCT (Discrete Cosine Transform) for regularization
+    - Employs iterative reweighting for robust L1 minimization
+    """
     def __init__(self, input, estimate_darkfield=False, extension=".tif", verbose=False,
                  working_size=128, epsilon=0.1, l_s=None, l_d=None, reweighting_tolerance=1e-3,
                  max_reweightingIterations=10):
-        """Input can either be:
-         - Path to a directory containing the images to process
-         - List of images path to process
-         - List of images as ndarray
-         - A stack of ndarrays of shape N_Images x Height x Width
+        """Initialize BaSiC optimizer.
+
+        Parameters
+        ----------
+        input : str, Path, list, or np.ndarray
+            Input data source. Can be:
+            - Path (str or Path) to directory containing images
+            - List of image file paths
+            - List of numpy arrays (images)
+            - Numpy array stack of shape (N_images, height, width)
+        estimate_darkfield : bool, optional
+            If True, estimate darkfield (offset). If False, assume offset=0 (default: False)
+        extension : str, optional
+            File extension to search for when input is a directory (default: ".tif")
+        verbose : bool, optional
+            If True, print progress information (default: False)
+        working_size : int, optional
+            Image downsampling size for faster computation. Images are resampled to
+            (working_size, working_size) (default: 128)
+        epsilon : float, optional
+            Stability parameter for reweighted L1-norm (default: 0.1)
+        l_s : float, optional
+            Regularization parameter for flatfield. If None, auto-computed (default: None)
+        l_d : float, optional
+            Regularization parameter for darkfield. If None, auto-computed (default: None)
+        reweighting_tolerance : float, optional
+            Convergence tolerance for L1 reweighting iterations (default: 1e-3)
+        max_reweightingIterations : int, optional
+            Maximum number of reweighting iterations (default: 10)
+
+        Raises
+        ------
+        ValueError
+            If input format is not recognized
+        AssertionError
+            If no files found when input is a directory
         """
         self.input_type = None
         self.extension = extension
@@ -56,6 +113,11 @@ class BaSiC(object):
         self.verbose = verbose
 
     def _sniff_input(self):
+        """Discover and sort image files in the input directory.
+
+        Searches for files with the specified extension and sorts them.
+        Called automatically when input is a directory.
+        """
         # Get a list of tiles to process
         directory = Path(self.directory).resolve()
         file_list = list(directory.glob(f"*{self.extension}"))
@@ -64,6 +126,16 @@ class BaSiC(object):
         assert len(self.files) > 0, "No files were found in the input directory. Make sure you provided the right path and file extension. Aborting."
 
     def _load_images(self, img_stack = None):
+        """Load and preprocess image stack.
+
+        Loads images from files (if needed) and resamples to working_size
+        for faster computation.
+
+        Parameters
+        ----------
+        img_stack : np.ndarray, optional
+            Pre-loaded image stack. If None, loads from files (default: None)
+        """
         # Load the stack
         if img_stack is None:
             img_stack = []
@@ -93,6 +165,24 @@ class BaSiC(object):
         self.img_stack_resized = img_stack_p.astype(np.float32)
 
     def normalize(self, img, clip=True, epsilon=1e-6):
+        """Apply shading correction to an image.
+
+        Normalizes an image using the estimated flatfield and darkfield.
+
+        Parameters
+        ----------
+        img : np.ndarray
+            Input image to normalize
+        clip : bool, optional
+            If True, clip output to valid range of input dtype (default: True)
+        epsilon : float, optional
+            Small value for numerical stability (default: 1e-6)
+
+        Returns
+        -------
+        np.ndarray
+            Corrected image in the same dtype as input
+        """
         img_p = (img.astype(np.float32) - self.darkfield_fullsize) / (self.flatfield_fullsize + epsilon)
         if clip and not(img.dtype in [np.float32, np.float64]):
 
@@ -102,6 +192,15 @@ class BaSiC(object):
         return img_p.astype(img.dtype)
 
     def write_images(self, directory, epsilon=1e-6):
+        """Apply shading correction and save corrected images to directory.
+
+        Parameters
+        ----------
+        directory : str or Path
+            Output directory for corrected images
+        epsilon : float, optional
+            Numerical stability parameter (default: 1e-6)
+        """
         # Create the output directory
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
@@ -121,6 +220,16 @@ class BaSiC(object):
             cv2.imwrite(str(filename), img_p)
 
     def prepare(self, img_stack=None):
+        """Prepare optimizer for fitting.
+
+        Loads images, resamples, initializes regularization parameters and
+        variables for optimization.
+
+        Parameters
+        ----------
+        img_stack : np.ndarray, optional
+            Pre-loaded image stack. If None, loads from configured source (default: None)
+        """
         # Load the data
         if img_stack is not None:
             self._load_images(img_stack)
@@ -155,7 +264,10 @@ class BaSiC(object):
         self.flag_reweigthing = True
 
     def update_weights(self):
-        """Weighting matrix for the Reweighted L1-norm"""
+        """Update weighting matrix for iterative reweighted L1-norm optimization.
+
+        Computes weights based on residuals for robust estimation.
+        """
         # Weight Update formula in the paper
         # self.W = 1.0 / (np.abs(self.Ir / self.Ib) + self.epsilon)
 
@@ -165,6 +277,11 @@ class BaSiC(object):
         self.reweighting_iteration += 1
 
     def update(self):
+        """Perform one optimization iteration.
+
+        Executes LADM optimization and updates flatfield, darkfield, and weights.
+        Checks convergence and manages reweighting iterations.
+        """
         last_flatfield = self.flatfield.copy()
         last_darkfield = self.darkfield.copy()
 
@@ -197,6 +314,11 @@ class BaSiC(object):
             self.flag_reweigthing = False
 
     def run(self):
+        """Execute the BaSiC optimization algorithm.
+
+        Performs iterative reweighting until convergence or max iterations.
+        Upsamples final flatfield and darkfield to original image dimensions.
+        """
         if self.verbose:
             pbar = tqdm.tqdm(desc="Reweighting Iteration", total=self.max_reweightingIterations)
         while self.flag_reweigthing:
@@ -213,30 +335,77 @@ class BaSiC(object):
         self.darkfield_fullsize = cv2.resize(self.darkfield.T, self.image_shape, cv2.INTER_LINEAR).T
 
     def set_flatfield(self, flatfield):
+        """Set a custom flatfield correction.
+
+        Parameters
+        ----------
+        flatfield : np.ndarray
+            Flatfield image to use
+        """
         self.flatfield_fullsize = cv2.resize(flatfield.T, self.image_shape, cv2.INTER_LINEAR).T
 
     def set_darkfield(self, darkfield):
+        """Set a custom darkfield correction.
+
+        Parameters
+        ----------
+        darkfield : np.ndarray
+            Darkfield image to use
+        """
         self.darkfield_fullsize = cv2.resize(darkfield.T, self.image_shape, cv2.INTER_LINEAR).T
 
     def get_flatfield(self):
+        """Get the estimated or set flatfield correction.
+
+        Returns
+        -------
+        np.ndarray
+            Flatfield correction image
+        """
         return self.flatfield_fullsize.copy()
 
     def get_darkfield(self):
+        """Get the estimated or set darkfield correction.
+
+        Returns
+        -------
+        np.ndarray
+            Darkfield correction image
+        """
         return self.darkfield_fullsize.copy()
 
 def shrink(theta, epsilon=1e-3):
-    """Scalar Shrink Operator"""
+    """Scalar shrinkage operator (soft-thresholding).
+
+    Applies soft-thresholding to input values for L1-norm minimization.
+
+    Parameters
+    ----------
+    theta : np.ndarray or float
+        Input values
+    epsilon : float, optional
+        Threshold value (default: 1e-3)
+
+    Returns
+    -------
+    np.ndarray or float
+        Shrunk values
+    """
     theta_p = np.sign(theta) * np.maximum(np.abs(theta) - epsilon, 0)
     return theta_p
 
 def inexact_alm_l1(imgs, l_s, l_d, tol=1e-6, maxIter=500, weight=1, estimateDarkField=True, rho=1.5, verbose=False):
-    """l1 minimization using the inexact augmented Lagrange multiplier method for Sparse low rank matrix recovery.
+    """Inexact augmented Lagrangian method for sparse low-rank recovery.
+
+    Solves the BaSiC L1-minimization problem to decompose image stack into
+    flatfield, darkfield, and residual components.
+
     Parameters
     ----------
-    imgs : N x P x Q ndarray
-        Images stack
+    imgs : np.ndarray
+        Image stack of shape (N_images * working_size, working_size)
     l_s : float
-        Flat-field regularization parameter
+        Flatfield regularization parameter
     l_d : float
         Dark-field regularization parameter
     tol : float
@@ -419,9 +588,42 @@ def inexact_alm_l1(imgs, l_s, l_d, tol=1e-6, maxIter=500, weight=1, estimateDark
 
 @njit
 def mean_axis_0(arr):
+    """Compute mean along axis 0 using numba JIT compilation.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Input array
+
+    Returns
+    -------
+    np.ndarray
+        Mean values along axis 0
+    """
     return np.array([arr[..., i].mean() for i in range(arr.shape[1])])
 
 def get_photobleach(imgflt_stack, flatfield, darkfield=None, size=(128,128)):
+    """Estimate photobleaching coefficients from image stack.
+
+    Analyzes temporal intensity changes to estimate photobleaching effects
+    across image frames. Useful for determining frame-wise illumination decay.
+
+    Parameters
+    ----------
+    imgflt_stack : np.ndarray
+        Stack of image frames
+    flatfield : np.ndarray
+        Flatfield correction image
+    darkfield : np.ndarray, optional
+        Darkfield correction image (default: None)
+    size : tuple, optional
+        Working size (x, y) for computation (default: (128, 128))
+
+    Returns
+    -------
+    np.ndarray
+        Photobleaching coefficients for each frame
+    """
     # Size is (x,y)
     img_stack = np.zeros((size[1], size[0], imgflt_stack.shape[0]))
 
@@ -791,3 +993,5 @@ def _get_photobleach(imgflt_stack, imgflt_stack_svd, flatfield, darkfield=None):
 #
 #     return A1_coeff
 #
+
+
