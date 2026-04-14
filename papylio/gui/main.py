@@ -360,14 +360,14 @@ class MainWindow(QMainWindow):
 
     def perform_mapping(self, t):
         print(t)
-        selected_files = self.experiment.selectedFiles
+        selected_files = self.experiment.selected_files
         if selected_files:
             selected_files.serial.perform_mapping()
             self.image_canvas.refresh()
             plt.show()
 
     def find_coordinates(self):
-        selected_files = self.experiment.selectedFiles
+        selected_files = self.experiment.selected_files
         if selected_files:
             selected_files.movie.determine_spatial_background_correction(use_existing=True)
             selected_files.find_coordinates()
@@ -375,7 +375,7 @@ class MainWindow(QMainWindow):
             self.update_plots()
 
     def extract_traces(self):
-        selected_files = self.experiment.selectedFiles
+        selected_files = self.experiment.selected_files
         if selected_files:
             selected_files.extract_traces()
             # self.image_canvas.refresh()
@@ -384,8 +384,8 @@ class MainWindow(QMainWindow):
     def onItemChange(self, item):
         if isinstance(item.data(), File):
             file = item.data()
-            file.isSelected = (True if item.checkState() == Qt.Checked else False)
-            print(f'{file}: {file.isSelected}')
+            file.is_selected = (True if item.checkState() == Qt.Checked else False)
+            print(f'{file}: {file.is_selected}')
 
         else:
             self.update = False
@@ -397,7 +397,7 @@ class MainWindow(QMainWindow):
             self.update_plots()
 
     def update_plots(self):
-        selected_files = self.experiment.selectedFiles + [None]
+        selected_files = self.experiment.selected_files + [None]
         self.image_canvas.file = selected_files[0]
         if selected_files[0] is not None:
             self.traces.dataset = selected_files[0].dataset
@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
         ])
         item = parentItem.child(parentItem.rowCount() - 1)
         item.setCheckable(True)
-        if file.isSelected:
+        if file.is_selected:
             item.setCheckState(Qt.Checked)
         else:
             item.setCheckState(Qt.Unchecked)

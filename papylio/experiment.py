@@ -174,25 +174,9 @@ class Experiment:
     #     return Molecules.sum([file.molecules for file in self.files])
 
     @property
-    def selectedFiles(self):
+    def selected_files(self):
         """list of File : List of selected files"""
-        return self.files[self.files.isSelected]
-
-    # @property
-    # def selectedMoleculesInSelectedFiles(self):
-    #     """list of Molecule : List of selected molecules in selected files"""
-    #     return [molecule for file in self.selectedFiles for molecule in file.selectedMolecules]
-
-    # @property
-    # def selectedMoleculesInAllFiles(self):
-    #     """list of Molecule : List of selected molecules in all files"""
-    #     return [molecule for file in self.files for molecule in file.selectedMolecules]
-
-    # @property
-    # def mapping_file(self):
-    #     for file in self.files:
-    #         if file.is_mapping_file:
-    #             return file
+        return self.files[self.files.is_selected]
 
     def load_mappings(self):
         mappings = []
@@ -504,13 +488,13 @@ class Experiment:
             Arbitrary keyword arguments.
 
         """
-        # files = [file for file in exp.files if file.isSelected]
+        # files = [file for file in exp.files if file.is_selected]
         # files = self.files
 
         if (fileSelection & moleculeSelection):
-            molecules = [molecule for file in self.selectedFiles for molecule in file.selectedMolecules]
+            molecules = [molecule for file in self.selected_files for molecule in file.selectedMolecules]
         elif (fileSelection & (not moleculeSelection)):
-            molecules = [molecule for file in self.selectedFiles for molecule in file.molecules]
+            molecules = [molecule for file in self.selected_files for molecule in file.molecules]
         elif ((not fileSelection) & moleculeSelection):
             molecules = [molecule for file in self.files for molecule in file.selectedMolecules]
         else:

@@ -146,7 +146,7 @@ def test_copy_selections_to_selected_files(experiment_hj):
     files_hj1[0].create_selection(name='test', variable='FRET', channel=None, aggregator='mean', operator='>', threshold=0.5)
     files_hj1[0].apply_selections()
 
-    files_hj1.isSelected = True
+    files_hj1.is_selected = True
     files_hj1[0].copy_selections_to_selected_files()
     assert 'selection_test' in files_hj1[-1].selections
 

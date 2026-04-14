@@ -47,12 +47,11 @@ class File:
         self.name = relative_filepath.name
         self.extensions = set()
 
-        self.exposure_time = None  # Found from log file or should be inputted
+        # self.exposure_time = None  # Found from log file or should be inputted
 
-        self.log_details = None  # a string with the contents of the log file
         self.number_of_frames = None
 
-        self.isSelected = False
+        self.is_selected = False
         # self.is_mapping_file = False
 
         self.movie = None
@@ -826,7 +825,7 @@ class File:
         return figure, axis
 
     def copy_coordinates_to_selected_files(self):
-        for file in self.experiment.selectedFiles:
+        for file in self.experiment.selected_files:
             if file is not self:
                 file.coordinates = self.coordinates
 
@@ -931,7 +930,7 @@ class File:
         selection_configurations = self.selection_configurations()
         applied_selection = json.loads(self.selected.attrs['configuration'])
 
-        for file in self.experiment.selectedFiles:
+        for file in self.experiment.selected_files:
             if file is not self:
                 for name, configuration in selection_configurations.items():
                     if configuration is None:
