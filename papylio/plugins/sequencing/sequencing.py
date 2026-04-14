@@ -408,6 +408,8 @@ class File:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        perform_logging = self.perform_logging
+        self.perform_logging = False
 
         self._sequencing_data = None
         self._sequencing_match = None
@@ -417,6 +419,8 @@ class File:
 
         # if self.experiment.import_all is True:
         #     self.findAndAddExtensions()
+
+        self.perform_logging = perform_logging
 
     def __getstate__(self):
         self._sequencing_data = None

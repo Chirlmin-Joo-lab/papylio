@@ -6,6 +6,7 @@ and adding configuration metadata to data arrays for reproducibility.
 import inspect
 import json
 import functools
+import sys
 from datetime import datetime
 import papylio
 
@@ -140,9 +141,16 @@ def log_call(method):
     """Log external calls first, then log exceptions if they occur."""
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
-        # Determine if this is an external call
-        stack = inspect.stack()
-        called_from_inside = any(frame.frame.f_locals.get("self") is self for frame in stack[1:])
+        # Early exit if logging disabled
+        if not getattr(self, 'perform_logging', False):
+            return method(self, *args, **kwargs)
+
+        # # Determine if this is an external call
+        # stack = inspect.stack()
+        # called_from_inside = any(frame.frame.f_locals.get("self") is self for frame in stack[1:])
+        # Only inspect stack if logging is enabled
+        caller = sys._getframe(1).f_locals.get("self")
+        called_from_inside = caller is self
 
         # Prepare argument string
         arg_str = ", ".join(

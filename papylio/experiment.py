@@ -324,7 +324,8 @@ class Experiment:
         # Find mapping file
         for file in self.files:
             if file.mapping is not None:
-                file.use_mapping_for_all_files()
+                #TODO: Check whether we want to log this or not. If so, then the mapping file name should be logged.
+                file.use_mapping_for_all_files(perform_logging=False)
                 break
 
         print('\nInitialize experiment: \n' + str(self.main_path))
