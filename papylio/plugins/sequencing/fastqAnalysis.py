@@ -1,3 +1,9 @@
+"""FASTQ data parsing and analysis for sequencing data.
+
+Provides classes for reading FASTQ files, analyzing sequence matches,
+and visualizing sequencing data.
+"""
+
 # -*- coding: utf-8 -*-
 """
 Created on Thu Aug 16 16:59:54 2018
@@ -22,6 +28,12 @@ except ModuleNotFoundError:
 import matplotlib.path as pth
 
 class FastqData:
+    """Container for FASTQ sequencing data with coordinate information and analysis methods.
+
+    Parses FASTQ headers to extract instrument, run, flowcell, lane, tile, x/y coordinates,
+    and sample information. Provides utilities for sequence matching, classification,
+    and visualization.
+    """
     def __init__(self, path):
         self.path = Path(path)
         self.write_path = self.path.parent
@@ -424,6 +436,15 @@ class FastqData:
 
 
 class Tile:
+    """Represents a single tile/region from a sequencing flowcell with its cluster coordinates.
+
+    Attributes
+    ----------
+    number : int
+        Tile identifier number
+    coordinates : np.ndarray
+        Array of (x, y) cluster positions on the tile
+    """
     def __init__(self, number, coordinates):
         self.name = str(number)
         self.number = number

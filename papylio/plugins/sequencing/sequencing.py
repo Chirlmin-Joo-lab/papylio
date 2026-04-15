@@ -1,3 +1,5 @@
+"""Core sequencing data structures and classes for experiment management."""
+
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,6 +32,7 @@ def find_file(root_folder, target_filename):
 
 
 class Experiment:
+    """Extended experiment class with sequencing data integration and tile mapping methods."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -385,6 +388,7 @@ class Experiment:
 
 # Probably it would be better to move the function below somewhere else [IS 12-02-2020]
 def within_bounds(coordinates, bounds, margin=0):
+    """Check if coordinates are within specified bounds with optional margin."""
     bounds = np.sort(bounds)
     criteria = np.array([(coordinates[:, 0] > (bounds[0, 0] + margin)),
                          (coordinates[:, 0] < (bounds[1, 0] - margin)),
@@ -396,6 +400,7 @@ def within_bounds(coordinates, bounds, margin=0):
 
 
 class File:
+    """Extended file class with sequencing data matching and analysis capabilities."""
     # def map_file_sequences_to_molecules(self, mapping_sequence, tile, match_threshold=5):
     #     sequencing_mapping_path = self.experiment.main_path.joinpath('sequencing_mapping')
     #     sequencing_mapping_path.mkdir(exist_ok=True)
@@ -406,6 +411,8 @@ class File:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        perform_logging = self.perform_logging
+        self.perform_logging = False
 
         self._sequencing_data = None
         self._sequencing_match = None
@@ -415,6 +422,8 @@ class File:
 
         # if self.experiment.import_all is True:
         #     self.findAndAddExtensions()
+
+        self.perform_logging = perform_logging
 
     def __getstate__(self):
         self._sequencing_data = None
@@ -919,6 +928,7 @@ class File:
 
 
 class Molecule:
+    """Extended molecule class with sequencing data linkage."""
     slots = 'sequence_index'
 
     def __init__(self, *args, **kwargs):
@@ -946,6 +956,7 @@ class Molecule:
 
 
 def std_string(value_and_uncertainty):
+    """Format value with uncertainty as a nicely formatted string."""
     value, uncertainty = value_and_uncertainty
     exponent = math.floor(math.log10(uncertainty))
     decimals = -exponent if exponent < 0 else 0
@@ -953,4 +964,5 @@ def std_string(value_and_uncertainty):
     return f'{np.round(value,-exponent):{units}.{decimals}f}±{np.round(uncertainty,-exponent):{units}.{decimals}f}'
 
 def mean_and_std_string(values):
+    """Compute and format mean with standard deviation as a nicely formatted string."""
     return std_string(np.mean(values), np.std(values))

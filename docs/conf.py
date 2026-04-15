@@ -69,8 +69,8 @@ autosummary_generate = True
 autoclass_content = "class"
 autodoc_default_options = {
     "members": True,
-    "undoc-members": False,
-    "inherited-members": False,
+    "undoc-members": True,
+    "inherited-members": True,
 }
 
 # -- Options for HTML output -------------------------------------------------

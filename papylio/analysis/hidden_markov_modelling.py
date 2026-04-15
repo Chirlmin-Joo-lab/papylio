@@ -1,3 +1,9 @@
+"""Hidden Markov Model (HMM) utilities for trace classification.
+
+Provides functions to fit HMMs to single-molecule traces, classify traces using
+fitted models, extract state parameters, transition matrices, and compute
+transition rates with uncertainty handling.
+"""
 import xarray as xr
 import numpy as np
 from itertools import accumulate, groupby
@@ -9,6 +15,33 @@ import scipy.linalg
 
 # file.FRET, file.classification, file.selected
 def classify_hmm(traces, classification, selection, n_states=2, threshold_state_mean=None, level='molecule', seed=0):
+    """Classify traces using Hidden Markov Models (HMMs).
+
+    Fits HMMs either per-molecule or per-file and returns a Dataset with
+    classification and state/transition statistics.
+
+    Parameters
+    ----------
+    traces : xr.DataArray
+        Trace data with dims ('molecule','frame',...)
+    classification : xr.DataArray
+        Initial classification or mask used to select segments for fitting
+    selection : xr.DataArray or boolean array
+        Selection mask of molecules to include
+    n_states : int, optional
+        Number of HMM hidden states (default: 2)
+    threshold_state_mean : float, optional
+        Optional threshold to filter low-amplitude states
+    level : {'molecule','file'}, optional
+        Fit HMMs per molecule or a single HMM per file (default: 'molecule')
+    seed : int, optional
+        RNG seed for reproducibility (default: 0)
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing HMM classification, state parameters and transition rates
+    """
     np.random.seed(seed)
     if level == 'molecule':
         models_per_molecule = fit_hmm_to_individual_traces(traces, classification, selection, parallel=False, n_states=n_states, threshold_state_mean=threshold_state_mean)
@@ -59,6 +92,20 @@ def classify_hmm(traces, classification, selection, n_states=2, threshold_state_
 
 
 def BIC(model, xis):
+    """Compute Bayesian Information Criterion (BIC) for a fitted HMM model and datasets.
+
+    Parameters
+    ----------
+    model : pomegranate.HiddenMarkovModel or pomegranate.Distribution
+        Fitted model object
+    xis : sequence of arrays
+        List of observed sequences used to compute likelihood
+
+    Returns
+    -------
+    float
+        BIC value (-2 * log-likelihood + k * log(n))
+    """
     if isinstance(model, pg.NormalDistribution):
         k = 2
         likelihood = model.probability(np.concatenate(xis)).prod()
@@ -79,6 +126,10 @@ def BIC(model, xis):
 
 
 def split_by_classification(xi, classification):
+    """Split an observation sequence xi and a matching classification array into contiguous segments.
+
+    Returns two lists: the list of xi segments and the corresponding classification segments.
+    """
     split_indices = np.nonzero(np.diff(classification))[0] + 1
     cis = np.split(classification, split_indices)
     xis = np.split(xi, split_indices)
@@ -87,6 +138,19 @@ def split_by_classification(xi, classification):
 
 
 def hmm1and2(input):
+    """Fit 1- and 2-state HMMs to input traces and choose the better model by BIC.
+
+    Parameters
+    ----------
+    input : tuple
+        (xi, classification, selected) where xi is a trace array for a molecule,
+        classification is a per-frame classification, and selected is a boolean.
+
+    Returns
+    -------
+    pomegranate.HiddenMarkovModel or None
+        Best model selected by BIC, or None if fitting failed or selection criteria not met.
+    """
     xi, classification, selected = input
     # xi = molecule.FRET.values
     # classification = molecule.classification.values
@@ -128,7 +192,26 @@ def hmm1and2(input):
 
     # return parameters, transition_matrix
 
+
 def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule'):
+    """Fit HMMs with up to n_states and return the best model by BIC.
+
+    Parameters
+    ----------
+    input : tuple or list
+        (xi, classification, selected) or lists when level='file'
+    n_states : int
+        Maximum number of states to consider
+    threshold_state_mean : float or None
+        Minimum separation required between state means to consider models distinct
+    level : {'molecule','file'}
+        Whether to fit per-molecule segments or treat the entire file as one sequence
+
+    Returns
+    -------
+    pomegranate.HiddenMarkovModel or None
+        Best-fit model or None if no suitable model found
+    """
 
     xi, classification, selected = input
 
@@ -199,19 +282,31 @@ def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule')
     else:
         return None
 
+
 def fit_hmm_to_individual_traces(traces, classification, selected, parallel=False, n_states=2, threshold_state_mean=None):
+    """Fit HMMs to each molecule's trace individually (optionally in parallel).
+
+    Returns a list of models (one per molecule), or None entries when fitting failed.
+    """
     cf = ObjectList(list(zip(traces.values, classification.values, selected.values)), return_none_if_all_none=False)
     cf.use_parallel_processing = parallel
     models_per_molecule = cf.map(hmm_n_states)(n_states=n_states, threshold_state_mean=threshold_state_mean)  # New taking sections into account 5540 traces: 5:02
         # Old not taking sections into account: 5092 traces 4:00 minutes (2:37 on server)
     return models_per_molecule
 
+
 def fit_hmm_to_file(traces, classification, selected, n_states=2, threshold_state_mean=None):
+    """Fit a single HMM to the entire file (all molecules concatenated or treated as sections).
+
+    Returns a single model instance applicable to every molecule.
+    """
     input_values = [traces.values, classification.values, selected.values]
     models = hmm_n_states(input_values, n_states=n_states, threshold_state_mean=threshold_state_mean, level='file')
     return models
 
+
 def number_of_states_from_models(models):
+    """Return DataArray with number of hidden states (excluding start/end) per model."""
 
     number_of_states = [model.state_count()-2 if model is not None else 0 for model in models]
     # state_count = []
@@ -223,7 +318,12 @@ def number_of_states_from_models(models):
 
     return xr.DataArray(number_of_states, dims='molecule')
 
+
 def state_parameters_from_models(models, n_states=2):
+    """Extract state distribution parameters (mean, std) from each model into an xr.DataArray.
+
+    Returns array shaped (molecule, state, parameter) where parameter 0=mean, 1=std.
+    """
     max_number_of_states = n_states
     number_of_parameters = 2
 
@@ -234,7 +334,12 @@ def state_parameters_from_models(models, n_states=2):
             state_parameters[i, :sp.shape[0], :] = sp
     return xr.DataArray(state_parameters, dims=('molecule', 'state', 'parameter'))
 
+
 def transition_matrices_from_models(models, n_states=2):
+    """Extract transition matrices from models and pack into xr.DataArray.
+
+    Each matrix is padded/truncated to (n_states+2)x(n_states+2) to include start/end rows/cols.
+    """
     max_number_of_states = n_states
     transition_matrix = np.full((len(models), max_number_of_states+2, max_number_of_states+2), np.nan)
     for i, model in enumerate(models):
@@ -250,7 +355,12 @@ def transition_matrices_from_models(models, n_states=2):
     # transition_matrix = transition_matrix[:, [1,0,2,3],:][:,:,[1,0,2,3]] # In case of a single state this put the state at index 0.
     return xr.DataArray(transition_matrix, dims=('molecule','from_state','to_state'))
 
+
 def sort_states_in_data(state_parameters, transition_matrices, classification_hmm):
+    """Sort states by their mean value and reorder transition matrices and classifications accordingly.
+
+    This ensures a consistent ordering (e.g., low->high FRET) across molecules.
+    """
     sort_indices = state_parameters[:, :, 0].argsort(axis=1)
 
     sort_indices_start_end_states = xr.DataArray([[2, 3]] * len(state_parameters.molecule), dims=('molecule', 'state'))
@@ -269,12 +379,19 @@ def sort_states_in_data(state_parameters, transition_matrices, classification_hm
 
     return state_parameters, transition_matrices, classification_hmm
 
+
 def trace_classification_model(traces, model):
+    """Apply a fitted model to traces and return per-frame class assignments as DataArray."""
     classification = np.vstack([model.predict(traces[m].values) for m in traces.molecule.values])
     classification = xr.DataArray(classification, dims=traces.dims)
     return classification
 
+
 def trace_classification_models(traces, classifications, models):
+    """Use per-molecule models to classify traces respecting original selection masks.
+
+    For molecules with model==None, returns -1 for all frames (indicating no classification).
+    """
     new_classifications = []
     for model, xi, ci in zip(models, traces.values, classifications.values):
         if model is not None:
@@ -294,7 +411,24 @@ def trace_classification_models(traces, classifications, models):
             new_classifications.append(-np.ones_like(xi))
     return xr.DataArray(np.vstack(new_classifications), dims=('molecule','frame'))
 
+
 def determine_transition_rates_from_probabilities(number_of_states, transition_probabilities, frame_rate):
+    """Convert transition probability matrices to transition rate matrices via matrix logarithm.
+
+    Parameters
+    ----------
+    number_of_states : xr.DataArray or array-like
+        Number of states per molecule
+    transition_probabilities : xr.DataArray
+        Transition probability matrices per molecule
+    frame_rate : float
+        Frame rate in Hz to scale discrete probabilities to rates
+
+    Returns
+    -------
+    xr.DataArray
+        Transition rates with the same dims as input probabilities (molecule, from_state, to_state)
+    """
     # transition_rates = np.full_like(transition_probabilities, np.nan)
     dims = transition_probabilities.dims
     transition_rates = np.full_like(transition_probabilities, np.nan, dtype=np.complex64)
@@ -310,12 +444,19 @@ def determine_transition_rates_from_probabilities(number_of_states, transition_p
 
     return xr.DataArray(transition_rates, dims=dims)
 
+
 def complex_transition_rates_to_nan(transition_rates):
+    """Mask transition rate matrices that contain complex entries, returning real part and valid mask."""
     is_complex = xr.DataArray((np.iscomplex(transition_rates) & ~np.isnan(transition_rates)).any(axis=2).any(axis=1), dims=('molecule'))
     transition_rates[is_complex, :, :] = np.nan
     return np.real(transition_rates), ~is_complex
 
+
 def transition_rates_outside_measurement_resolution_to_nan(transition_rates, number_of_frames, frame_rate):
+    """Set transition rates that are too small to be resolved (below 1 / (observation time)) to NaN.
+
+    Returns modified transition_rates and a boolean selection mask indicating which molecules pass the resolution test.
+    """
     # For more than two states we likely only have to take the off diagonal components
     off_diagonal_terms = transition_rates.values[:, ~np.eye(*transition_rates.shape[1:], dtype=bool)]
     has_too_low_rate = xr.DataArray((np.abs(off_diagonal_terms) < frame_rate/number_of_frames).any(axis=1), dims='molecule')
@@ -327,6 +468,7 @@ def transition_rates_outside_measurement_resolution_to_nan(transition_rates, num
 
 
 def histogram_1d_state_means(ds, name, save_path, number_of_states=1, state_index=0):
+    """Plot and save a histogram of 1D state means (e.g., FRET) for molecules with a given state count."""
     fig, ax = plt.subplots(figsize=(6.5,3.5), tight_layout=True)
     ds_subset = ds.sel(molecule=ds.number_of_states==number_of_states)
     if state_index > number_of_states-1:
@@ -345,6 +487,7 @@ def histogram_1d_state_means(ds, name, save_path, number_of_states=1, state_inde
 import matplotlib.pyplot as plt
 from matplotlib import cm
 def histogram_2d_state_means(ds, name, save_path, number_of_states=2, state_indices=[0,1]):
+    """Plot and save 2D histogram of mean values for two specified states."""
     fig, ax = plt.subplots(figsize=(8,6.5), tight_layout=True)
     ds_subset = ds.sel(molecule=ds.number_of_states==number_of_states)
     for state_index in state_indices:
@@ -363,6 +506,7 @@ def histogram_2d_state_means(ds, name, save_path, number_of_states=2, state_indi
 
 
 def histogram_2d_transition_rates(ds, name, save_path, frame_rate, number_of_states=2, state_indices=[0,1]):
+    """Plot and save 2D histogram of transition rates between two states."""
     fig, ax = plt.subplots(figsize=(8, 6.5), tight_layout=True)
     ds_subset = ds.sel(molecule=ds.number_of_states == number_of_states)
     for state_index in state_indices:
@@ -384,6 +528,24 @@ def histogram_2d_transition_rates(ds, name, save_path, frame_rate, number_of_sta
 
 
 def transition_rate_fit(ds, frame_rate, number_of_states=2, from_state=0, to_state=1):
+    """Fit a Gaussian to the kernel density estimate of transition rates and return mean/std.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Dataset containing transition_rate variables
+    frame_rate : float
+        Frame rate in Hz used to set plotting range
+    number_of_states : int
+        Number of states to select molecules by
+    from_state, to_state : int
+        State indices for which to extract transition rates
+
+    Returns
+    -------
+    (mean, std) : tuple of floats
+        Mean and standard deviation of fitted Gaussian to KDE of rates
+    """
     # fig, ax = plt.subplots(figsize=(8, 6.5), tight_layout=True)
     ds_subset = ds.sel(molecule=ds.number_of_states == number_of_states)
 
@@ -406,3 +568,4 @@ def transition_rate_fit(ds, frame_rate, number_of_states=2, from_state=0, to_sta
     plt.plot(x,gaussian_single(x, *popt))
 
     return mean, std
+

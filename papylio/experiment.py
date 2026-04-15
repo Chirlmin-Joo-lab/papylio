@@ -33,6 +33,16 @@ from papylio.movie.movie import Movie
 from papylio.plugin_manager import plugins
 
 def get_QApplication():
+    """Get or create a PySide2 QApplication instance.
+
+    Returns the existing QApplication instance if one exists, otherwise
+    creates and returns a new one.
+
+    Returns
+    -------
+    PySide2.QtWidgets.QApplication
+        The QApplication instance
+    """
     from PySide2 import QtWidgets
     app = QtWidgets.QApplication.instance()
     if app is None:
@@ -41,6 +51,21 @@ def get_QApplication():
     return app
 
 def get_path(main_window):
+    """Open a file dialog to select a directory.
+
+    Opens a platform-native directory selection dialog for the user to choose
+    a folder. Returns the selected path or None if cancelled.
+
+    Parameters
+    ----------
+    main_window : PySide2.QtWidgets.QMainWindow, optional
+        Parent window for the dialog. If None, a new QMainWindow is created
+
+    Returns
+    -------
+    str
+        Absolute path to selected directory, or empty string if cancelled
+    """
     app = get_QApplication()
     from PySide2.QtWidgets import QFileDialog, QMainWindow
     if main_window is None:
@@ -123,13 +148,25 @@ class Experiment:
         # Find mapping file
         # for file in self.files:
         #     if file.mapping is not None:
-        #         file.use_mapping_for_all_files()
+        #         #TODO: Check whether we want to log this or not. If so, then the mapping file name should be logged.
+        #         file.use_mapping_for_all_files(perform_logging=False)
         #         break
         self.load_mappings()
 
         print('\nInitialize experiment: \n' + str(self.main_path))
 
     def __getstate__(self):
+        """Prepare object for pickling by excluding non-serializable attributes.
+
+        Returns a dictionary of the object's state excluding files and other
+        attributes that cannot be properly serialized. This is used for
+        parallelization and object persistence.
+
+        Returns
+        -------
+        dict
+            Dictionary with object state minus excluded keys
+        """
         d = self.__dict__.copy()
         # d.pop('files')
         d['files'] = []
@@ -139,9 +176,23 @@ class Experiment:
         return d
 
     def __setstate__(self, dict):
+        """Restore object state from pickled state dictionary.
+
+        Parameters
+        ----------
+        dict : dict
+            State dictionary from __getstate__
+        """
         self.__dict__.update(dict)
 
     def __repr__(self):
+        """Return string representation of the Experiment object.
+
+        Returns
+        -------
+        str
+            String representation in format 'Experiment(name)'
+        """
         return (f'{self.__class__.__name__}({self.name})')
 
     @property
@@ -154,6 +205,16 @@ class Experiment:
 
     @channels.setter
     def channels(self, channels):
+        """Set channels used in the experiment.
+
+        Automatically updates the number of channels and channel pairs when
+        channels are modified.
+
+        Parameters
+        ----------
+        channels : list or array-like
+            Channel identifiers (typically strings like 'g', 'r')
+        """
         self._channels = np.atleast_1d(np.array(channels))
         self._number_of_channels = len(channels)
         self._pairs = [[c1, c2] for i1, c1 in enumerate(channels) for i2, c2 in enumerate(channels) if i2 > i1]
@@ -188,16 +249,23 @@ class Experiment:
 
     @property
     def analysis_path(self):
+        """pathlib.Path : Path to the Analysis folder.
+
+        Creates the Analysis folder in the main experiment directory if it
+        does not exist, then returns the path.
+        """
         analysis_path = self.main_path.joinpath('Analysis')
         analysis_path.mkdir(parents=True, exist_ok=True)
         return analysis_path
 
     @property
     def file_paths(self):
+        """list of pathlib.Path : List of relative file paths for all files in experiment"""
         return [file.relative_filepath for file in self.files]
 
     @property
     def nc_file_paths(self):
+        """list of pathlib.Path : List of relative NetCDF file paths for all files in experiment"""
         return [file.relative_filepath.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
 
     def find_file_paths_and_extensions(self, paths):
@@ -378,6 +446,27 @@ class Experiment:
 
     def determine_flatfield_and_darkfield_corrections(self, files, method='BaSiC', illumination_index=0, frame_index=0,
                                                       estimate_darkfield=True, **kwargs):
+        """Determine and save flatfield and darkfield corrections for image shading.
+
+        Calculates spatial shading corrections using the specified method and saves
+        them as TIFF files in the main experiment directory. Automatically loads the
+        corrections into the experiment.
+
+        Parameters
+        ----------
+        files : FileCollection
+            Collection of files to use for determining corrections
+        method : str, optional
+            Correction method to use (default: 'BaSiC')
+        illumination_index : int, optional
+            Index of the illumination pattern to correct (default: 0)
+        frame_index : int, optional
+            Frame index to use for correction calculation (default: 0)
+        estimate_darkfield : bool, optional
+            If True, also estimate and save darkfield correction (default: True)
+        **kwargs
+            Additional keyword arguments passed to spatial_shading_correction
+        """
         from papylio.movie.basic_shading_correction import spatial_shading_correction
 
         darkfield, flatfield = spatial_shading_correction(files.movie, method=method,
@@ -391,6 +480,12 @@ class Experiment:
         self.load_flatfield_correction()
 
     def load_flatfield_correction(self):
+        """Load flatfield correction images from disk.
+
+        Searches for flatfield correction TIFF files in the main experiment directory.
+        If found, loads them and adds them to the common image corrections dataset.
+        Updates all movie objects with the loaded corrections.
+        """
         file_paths = list(self.main_path.glob('flatfield*'))
         if file_paths:
             movie = self.files[0].movie
@@ -415,6 +510,12 @@ class Experiment:
         self.add_common_image_corrections_to_movies()
 
     def load_darkfield_correction(self):
+        """Load darkfield correction images from disk.
+
+        Searches for darkfield correction TIFF files in the main experiment directory.
+        If found, loads them and adds them to the common image corrections dataset.
+        Updates all movie objects with the loaded corrections.
+        """
         file_paths = list(self.main_path.glob('darkfield*'))
         if file_paths:
             movie = self.files[0].movie
@@ -440,6 +541,11 @@ class Experiment:
         self.add_common_image_corrections_to_movies()
 
     def add_common_image_corrections_to_movies(self):
+        """Apply common image corrections to all movie objects.
+
+        Sets the common image corrections (flatfield, darkfield) to all movie
+        objects in the experiment so they can be applied during image processing.
+        """
         self.files.movie._common_corrections = self.common_image_corrections
 
     # def show_flatfield_and_darkfield_corrections(self, name='', save=True):
@@ -517,9 +623,28 @@ class Experiment:
         fig.savefig(self.main_path.joinpath('number_of_molecules.png'), bbox_inches='tight')
 
     def print_files(self):
+        """Print a summary of all files in the experiment.
+
+        Outputs a formatted representation of all files currently loaded
+        in the experiment.
+        """
         self.files.print()
 
     def plot_trace(self, files=None, query={}, **kwargs):
+        """Plot molecule traces with interactive visualization.
+
+        Opens an interactive window to visualize and inspect molecule traces
+        from NetCDF files. Allows filtering of molecules using a query.
+
+        Parameters
+        ----------
+        files : FileCollection, optional
+            Files to plot traces from. If None, uses all files in experiment
+        query : dict, optional
+            Query dictionary to filter molecules (default: {})
+        **kwargs
+            Additional keyword arguments passed to TracePlotWindow
+        """
         # from papylio.trace_plot import TraceAnalysisFrame
 
         if files is None:
@@ -533,6 +658,12 @@ class Experiment:
             TracePlotWindow(dataset=ds_sel, save_path=None, **kwargs)
 
     def export_number_of_molecules_per_file(self):
+        """Export the number of molecules in each file to an Excel spreadsheet.
+
+        Creates an Excel file containing a summary of the number of molecules
+        detected in each file of the experiment. Missing files are marked with -1.
+        The file is saved as 'number_of_molecules.xlsx' in the main experiment directory.
+        """
         df = pd.DataFrame(columns=['Number of molecules'])
         for i, file in enumerate(self.files):
             n = str(file.relative_filepath)

@@ -1,5 +1,18 @@
-from pathlib import Path
-import numpy as np
+"""File and I/O utilities for Papylio.
+
+This module defines the File class which represents all the data related to a single experimental movie file
+and provides methods for reading movies, extracting coordinates, performing
+trace extraction and analysis, and saving results.
+"""
+
+if __name__ == '__main__':
+    import sys
+    from pathlib import Path
+    p = Path(__file__).parents[1]
+    sys.path.insert(0, str(p))
+
+from pathlib import Path # For efficient path manipulation
+import numpy as np #scientific computing with Python
 import pandas as pd
 import matplotlib.pyplot as plt
 import ast
@@ -7,6 +20,7 @@ import xarray as xr
 import warnings
 import sys
 import re
+from typing import Literal
 import logging
 import inspect
 import tifffile
@@ -25,18 +39,38 @@ from papylio.coordinate_optimization import  coordinates_within_margin, \
                                                     coordinates_within_margin_selection
 from papylio.trace_extraction import extract_traces
 from papylio.log_functions import add_configuration_to_dataarray
-from papylio.analysis.hidden_markov_modelling import classify_hmm
+from papylio.background_subtraction import extract_background
 from papylio.plugin_manager import plugins
 from papylio.analysis.dwell_time_extraction import dwell_times_from_classification
 from papylio.analysis.dwell_time_analysis import analyze_dwells, plot_dwell_time_histogram, plot_dwell_analysis
 from papylio.decorators import return_none_when_executed_by_pycharm
 from papylio.helper_functions import get_default_parameters
+from papylio.analysis.classification_simple import classify_threshold
+from papylio.analysis.hidden_markov_modelling import classify_hmm
+
 
 @plugins
 class File:
+    """
+    A class representing all the data related to a single-molecule data file, handling movie imports,
+    coordinate finding, trace extraction, and analysis.
+    """
+
     unit_mapping = mp.MatchPoint()
 
     def __init__(self, relative_filepath, extensions=None, experiment=None, perform_logging=True):
+
+        """
+        Initialize a File object.
+
+        Parameters:
+            relativeFilePath (str or Path): Path to the file relative to the experiment root.
+            extensions (set, optional): Set of file extensions associated with this file.
+            experiment (Experiment, optional): The experiment object this file belongs to.
+            perform_logging (bool, optional): Whether to log activities for this file. Default is True.
+        """
+        self.perform_logging = False # It is set to False temporarily until the end of __init__.
+
         self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
                                   'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
 
@@ -93,11 +127,13 @@ class File:
         self._log('info', f"Initialized {self} with Papylio v{papylio.__version__}")
 
     def __repr__(self):
+        """Return a string representation of the File object."""
         return (f'{self.__class__.__name__}({self.relativePath.joinpath(self.name)})')
 
     @property
     @return_none_when_executed_by_pycharm
     def _log_filepath(self):
+        """Return the path to the log file."""
         return self.absolute_filepath.with_suffix(".log")
 
     @property
@@ -110,6 +146,13 @@ class File:
         return self.__logger
 
     def _log(self, log_type, message):
+        """
+        Log a message to the file's log.
+
+        Parameters:
+            log_type (str): The logging level (e.g., 'info', 'warning', 'error').
+            message (str): The message to log.
+        """
         if self.perform_logging:
             handler = logging.FileHandler(self._log_filepath, mode="a", encoding="utf-8")
             formatter = logging.Formatter(
@@ -127,16 +170,19 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def relative_filepath(self):
+        """Return the path to the file relative to the experiment root."""
         return self.relativePath.joinpath(self.name)
 
     @property
     @return_none_when_executed_by_pycharm
     def absolute_filepath(self):
+        """Return the absolute path to the file."""
         return self.relative_filepath.absolute()
 
     @property
     @return_none_when_executed_by_pycharm
     def number_of_molecules(self):
+        """Return the number of molecules in the file's dataset."""
         try:
             with netCDF4.Dataset(self.absolute_filepath.with_suffix('.nc')) as dataset:
                 return dataset.dimensions['molecule'].size
@@ -156,19 +202,33 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def number_of_channels(self):
+        """Return the number of channels in the experiment."""
         #TODO this needs to be independent from Experiment and should probably be set.
         return self.experiment.number_of_channels
 
     def projection_image(self, **kwargs):
+        """Return the default projection image."""
         return self.get_projection_image(**kwargs)
 
     def average_image(self, **kwargs):
+        """Return the average projection image."""
         return self.get_projection_image(projection_type='average', **kwargs)
 
     def maximum_projection_image(self, **kwargs):
+        """Return the maximum projection image."""
         return self.get_projection_image(projection_type='maximum', **kwargs)
 
     def get_projection_image(self, load=True, **projection_image_configuration):
+        """
+        Get or generate a projection image.
+
+        Parameters:
+            load (bool, optional): Whether to try loading an existing image from disk. Default is True.
+            **kwargs: Additional configuration parameters for image projection.
+
+        Returns:
+            numpy.ndarray: The projection image.
+        """
         if load:
             image = Movie.load_projection_image(self.absolute_filepath, **projection_image_configuration)
         else:
@@ -182,16 +242,25 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def coordinates_metric(self):
+        """Return the molecule coordinates in metric units (e.g., nanometers)."""
         return self.coordinates * self.movie.pixel_size
 
     @property
     @return_none_when_executed_by_pycharm
     def coordinates_stage(self):
+        """Return the molecule coordinates in stage units."""
         coordinates = self.coordinates.sel(channel=0)
         coordinates_stage = self.movie.pixel_to_stage_coordinates_transformation(coordinates)
         return xr.DataArray(coordinates_stage, coords=coordinates.coords)
 
     def set_coordinates_of_channel(self, coordinates, channel):
+        """
+        Set coordinates for a specific channel and update other channels using mapping.
+
+        Parameters:
+            coordinates (numpy.ndarray or xarray.DataArray): The coordinates to set.
+            channel (int or str): The channel index or name.
+        """
         if not isinstance(coordinates, xr.DataArray):
             coordinates = xr.DataArray(coordinates, dims=('molecule', 'dimension'))
         channel_index = self.movie.get_channel_indices_from_names(channel)[0]
@@ -207,16 +276,40 @@ class File:
         self.coordinates = coordinates
 
     def coordinates_from_channel(self, channel):
+        """
+        Get coordinates for a specific channel.
+
+        Parameters:
+            channel (int or str): The channel index or name.
+
+        Returns:
+            xarray.DataArray: The coordinates for the specified channel.
+        """
+
         channel = self.movie.get_channel_from_name(channel).index
         return self.coordinates.sel(channel=channel)
 
     def __getstate__(self):
+        """Return the object's state for pickling."""
         return self.__dict__.copy()
 
     def __setstate__(self, dict):
+        """Set the object's state during unpickling."""
         self.__dict__.update(dict)
 
     def __getattr__(self, item):
+        """
+        Dynamically retrieve attributes, specifically looking into the netCDF dataset.
+
+        Parameters:
+            item (str): The name of the attribute to retrieve.
+
+        Returns:
+            The attribute value.
+
+        Raises:
+            AttributeError: If the attribute is not found.
+        """
         if item == 'dataset_variables':
             return
         if item in self.dataset_variables or item.startswith('selection') or item.startswith('classification') or item.startswith('intensity'):
@@ -231,22 +324,47 @@ class File:
             return super().__getattribute__(item)
 
     def __setattr__(self, name, value):
+        """
+        Set an attribute and log the change if it's an external assignment.
+
+        Parameters:
+            name (str): The name of the attribute.
+            value: The value to set.
+        """
         super().__setattr__(name, value)
-        # Skip logger itself
-        if name != "_logger" and hasattr(self, "_logger"):
-            # Check if the assignment comes from outside this instance
-            stack = inspect.stack()
-            external = all(frame.frame.f_locals.get("self") is not self for frame in stack[1:])
-            if external:
+        # # Skip logger itself
+        # if name != "_logger" and self.perform_logging:
+        #     # Check if the assignment comes from outside this instance
+        #     stack = inspect.stack()
+        #     external = all(frame.frame.f_locals.get("self") is not self for frame in stack[1:])
+        #     if external:
+        #         self._log('info', f"Set attribute {name} = {value!r}")
+
+        if name.startswith("_") or name == "perform_logging":
+            return
+        if self.__dict__.get("perform_logging"):  # avoids descriptor overhead
+            caller = sys._getframe(1).f_locals.get("self")
+            # if not isinstance(caller, File):
+            if caller is not self:
                 self._log('info', f"Set attribute {name} = {value!r}")
 
     def get_data(self, key):
+        """
+        Retrieve data from the netCDF dataset.
+
+        Parameters:
+            key (str): The name of the data variable to retrieve.
+
+        Returns:
+            xarray.DataArray: The retrieved data.
+        """
         with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
             return dataset[key].load()
 
     @property
     @return_none_when_executed_by_pycharm
     def dataset(self):
+        """Return the full xarray dataset for this file."""
         if self.absolute_filepath.with_suffix('.nc').exists():
             with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
                 return dataset.load()
@@ -256,25 +374,43 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def dataset_selected(self):
+        """Return the xarray dataset containing only selected molecules."""
         dataset = self.dataset
         return dataset.sel(molecule=dataset.selected)
 
     @property
     @return_none_when_executed_by_pycharm
     def data_vars(self):
+        """Return the data variables of the netCDF dataset."""
+
         with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
             return dataset.data_vars
 
     @property
     @return_none_when_executed_by_pycharm
     def dataset_attributes(self):
+        """Return the global attributes of the netCDF dataset."""
         if self.absolute_filepath.with_suffix('.nc').exists():
             with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
                 return dataset.attrs
         else:
             return {}
 
+    def get_dataset_attribute(self, attribute_name):
+        #TODO: Check whether this is necessary
+        dataset_filepath = self.absoluteFilePath.with_suffix('.nc')
+        if dataset_filepath.exists():
+            with netCDF4.Dataset(dataset_filepath) as dataset:
+                return dataset.getncattr(attribute_name) if attribute_name in dataset.ncattrs() else None
+        return None
+
     def _init_dataset(self, number_of_molecules):
+        """
+        Initialize the netCDF dataset for this file.
+
+        Parameters:
+            number_of_molecules (int): The number of molecules to initialize the dataset with.
+        """
         selected = xr.DataArray(False, dims=('molecule',), coords={'molecule': range(number_of_molecules)}, name='selected')
         add_configuration_to_dataarray(selected)
         selected.attrs['configuration'] = json.dumps([])
@@ -289,6 +425,12 @@ class File:
         self.extensions.add('.nc')
 
     def find_extensions(self):
+        """
+        Scan the experiment directory for files matching this file's name and return their extensions.
+
+        Returns:
+            list: A list of found file extensions.
+        """
         file_names = [file.name for file in self.experiment.main_path.joinpath(self.relativePath).glob(self.name + '*')]
         extensions = [file_name[len(self.name):] for file_name in file_names]
         # For the special case of a sifx file, which is located inside a folder
@@ -303,22 +445,35 @@ class File:
         return extensions
 
     def find_and_add_extensions(self):
+        """Find associated file extensions and add them to this File object."""
         self.add_extensions(self.find_extensions())
 
     def add_extensions(self, extensions, load=True):
+        """
+        Add extensions to this file and optionally load the data.
+
+        Parameters:
+            extensions (str or list): One or more extensions to add.
+            load (bool, optional): Whether to import the data associated with the extensions. Default is True.
+        """
         if isinstance(extensions, str):
             extensions = [extensions]
         for extension in set(extensions)-self.extensions:
             if load:
                 self.importFunctions.get(extension, self.none_function)(extension)
-            if extension in self.importFunctions.keys():
-                self.extensions.add(extension)
-        # or self.extensions = self.extensions | extensions
+            self.extensions.add(extension) # Maybe not necessary?
 
     def none_function(self, *args, **kwargs):
+        """A placeholder function that does nothing."""
         return
 
     def import_movie(self, extension):
+        """
+        Import movie data associated with the given extension.
+
+        Parameters:
+            extension (str): The file extension to import from.
+        """
         if extension == '.sifx':
             filepath = self.absolute_filepath.joinpath('Spooled files.sifx')
         # elif extension == '.nd2' and '_fov' in self.name:
@@ -337,6 +492,12 @@ class File:
         # self.number_of_frames = self.movie.number_of_frames
 
     def import_coeff_file(self, extension):
+        """
+        Import a coefficient file for linear coordinate mapping.
+
+        Parameters:
+            extension (str): The file extension (usually '.coeff').
+        """
         # TODO: Move this to the MatchPoint class
         from skimage.transform import AffineTransform
         if self.mapping is None: # the following only works for 'linear'transformation_type
@@ -369,11 +530,23 @@ class File:
             self.mapping.destination_name = 'Acceptor'
 
     def export_mapping(self, filetype='nc'):
+        """
+        Export the current coordinate mapping.
+
+        Parameters:
+            filetype (str, optional): The format to save the mapping in (e.g., 'yml', 'classic'). Default is 'yml'.
+        """
         for i, mapping in enumerate(self.mappings):
             filename = f'channel_mapping_c{i+1}_' + mapping.source_name + '_to_' + mapping.destination_name
             mapping.save(self.experiment.main_path / filename, filetype)
 
     def import_map_file(self, extension):
+        """
+        Import a map file for nonlinear coordinate mapping.
+
+        Parameters:
+            extension (str): The file extension (usually '.map').
+        """
         # TODO: Move this to the MatchPoint class
         #coefficients = np.genfromtxt(self.absoluteFilePath.with_suffix('.map'))
         file_content=np.genfromtxt(self.absolute_filepath.with_suffix('.map'))
@@ -419,6 +592,7 @@ class File:
     #     self.mapping = mp.MatchPoint.load(self.absolute_filepath.with_suffix(extension))
 
     def use_for_darkfield_correction(self):
+        """Use the average projection of this file as a darkfield correction image for the experiment."""
         image = self.get_projection_image(projection_type='average', frame_range=(0, None), apply_corrections=False)
         tifffile.imwrite(self.experiment.main_path / 'darkfield.tif', image, imagej=True)
         self.experiment.load_darkfield_correction()
@@ -426,6 +600,14 @@ class File:
     def find_coordinates(self, channels=('donor', 'acceptor'),
                          projection_image_configuration=None, sliding_window=None,
                          peak_finding_configuration=None, margin=10, fit_peaks=True, remove_peaks_with_close_neighbors=None):
+        """
+        Find and set the locations of all molecules within the movie's images.
+
+        This function performs peak finding on projection images, handles multiple channels,
+        and manages coordinate sets across different frames if sliding windows are used.
+
+        For configuration options see the "find_coordinates" section in the default configuration file.
+        """
 
         if projection_image_configuration is None:
             projection_image_configuration = dict()
@@ -480,6 +662,22 @@ class File:
 
     def determine_psf_size(self, method='gaussian_fit', projection_type='average', frame_range=(0,20), channel_index=0, illumination_index=0,
                            peak_finding_configuration={'minimum_intensity_difference': 150}, maximum_radius=5):
+        """
+        Determine the Point Spread Function (PSF) size by fitting Gaussians to detected peaks.
+
+        Parameters:
+            method (str, optional): Method to determine PSF size ('gaussian_fit' or 'median'). Default is 'gaussian_fit'.
+            projection_type (str, optional): Type of image projection to use. Default is 'average'.
+            frame_range (tuple, optional): Range of frames to use for projection. Default is (0, 20).
+            channel_index (int, optional): Index of the channel to use. Default is 0.
+            illumination_index (int, optional): Index of the illumination to use. Default is 0.
+            peak_finding_configuration (dict, optional): Arguments for peak finding.
+            maximum_radius (int, optional): Maximum radius for PSF size. Default is 5.
+
+        Returns:
+            float: The determined PSF size.
+        """
+
         image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range,
                                           illumination=illumination_index)
         image = self.movie.get_channel(image, channel=channel_index)
@@ -541,6 +739,7 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def coordinates(self):
+        """Return the molecule coordinates from the netCDF dataset."""
         if self.absolute_filepath.with_suffix('.nc').exists():
             with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
                 if hasattr(dataset, 'coordinates'):
@@ -552,11 +751,29 @@ class File:
 
     @coordinates.setter
     def coordinates(self, coordinates):
+        """
+        Set molecule coordinates and update the netCDF dataset.
+
+        Parameters:
+            coordinates (xarray.DataArray): The coordinates to set.
+        """
+        # Reset current .nc file
         self._init_dataset(len(coordinates.molecule))
         coordinates.drop('file', errors='ignore').to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def extract_traces(self, mask_size, neighbourhood_size=11, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
+        """
+        Extract intensity traces for each molecule from the movie.
+
+        Parameters:
+            mask_size (int): Size of the mask for intensity extraction.
+            neighbourhood_size (int, optional): Size of the neighbourhood for background extraction.
+            background_correction (optional): Background correction method.
+            alpha_correction (optional): Alpha correction factor.
+            gamma_correction (optional): Gamma correction factor.
+        """
+
         if self.number_of_molecules == 0:
             print('No molecules found, perform `find_coordinates` first')
             return
@@ -602,6 +819,14 @@ class File:
 
     def apply_trace_corrections(self, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
+        """
+        Apply corrections (background, alpha, gamma) to existing intensity traces.
+
+        Parameters:
+            background_correction (optional): Background correction method.
+            alpha_correction (optional): Alpha correction factor.
+            gamma_correction (optional): Gamma correction factor.
+        """
         from papylio.trace_correction import trace_correction
 
         if 'intensity_raw' in self.data_vars:
@@ -623,12 +848,22 @@ class File:
             self.calculate_FRET()
 
     def calculate_FRET(self):
+        """Calculate and save FRET values for the intensity traces."""
         intensity = self.intensity
         FRET = calculate_FRET(intensity)
         FRET.attrs = intensity.attrs
         FRET.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def get_traces(self, selected=False):
+        """
+        Get all data variables that have a 'frame' dimension (traces).
+
+        Parameters:
+            selected (bool, optional): Whether to return traces only for selected molecules. Default is False.
+
+        Returns:
+            xarray.Dataset: The traces dataset.
+        """
         dataset = self.dataset
 
         included_data_var_names = []
@@ -643,8 +878,24 @@ class File:
 
         return traces
 
+    @property
+    @return_none_when_executed_by_pycharm
+    def traces_names(self):
+        """Return names of data variables that are traces (have 'frame' as the last dimension)."""
+        # return list(self.classifications.data_vars.keys())
+        return [
+            name for name, da in self.data_vars.items()
+            if da.dims and da.dims[-1] == "frame"
+        ]
+
     def plot_hmm_rates(self, name=None):
         # TODO: Check this out and what we want to do with it.
+        """
+        Plot histograms of HMM transition rates for molecules with 2 states.
+
+        Parameters:
+            name (str, optional): Name to use for the plot title and filename.
+        """
         if name is None:
             name = self.name
         dataset = self.dataset
@@ -682,10 +933,17 @@ class File:
         figure.savefig(file_path)
 
     def save_dataset_selected(self):
+        """Save the dataset containing only selected molecules to a new netCDF file."""
         encoding = {'file': {'dtype': '|S'}, 'selected': {'dtype': bool}}
         self.dataset_selected.to_netcdf(self.absolute_filepath.parent / (self.name + '_selected.nc'), engine='netcdf4', mode='w', encoding=encoding)
 
     def import_pks_file(self, extension):
+        """
+        Import molecule coordinates and background from a .pks file.
+
+        Parameters:
+            extension (str): The file extension.
+        """
         peaks = import_pks_file(self.absolute_filepath.with_suffix('.pks'))
         peaks = split_dimension(peaks, 'peak', ('molecule', 'channel'), (-1, 2)).reset_index('molecule', drop=True)
         # peaks = split_dimension(peaks, 'molecule', ('molecule_in_file', 'file'), (-1, 1), (-1, [file]), to='multiindex')
@@ -700,12 +958,19 @@ class File:
             .to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def export_pks_file(self):
+        """Export current molecule coordinates and background to a .pks file."""
         peaks = xr.merge([self.coordinates.to_dataset('dimension'), self.background.to_dataset()])\
             .stack(peaks=('molecule', 'channel')).to_array(dim='parameter').T
         export_pks_file(peaks, self.absolute_filepath.with_suffix('.pks'))
         self.extensions.add('.pks')
 
     def import_traces_file(self, extension):
+        """
+        Import intensity traces from a .traces file.
+
+        Parameters:
+            extension (str): The file extension.
+        """
         traces = import_traces_file(self.absolute_filepath.with_suffix('.traces'))
         intensity = split_dimension(traces, 'trace', ('molecule', 'channel'), (-1, 2))\
             .reset_index(['molecule','frame'], drop=True)
@@ -716,6 +981,7 @@ class File:
         xr.Dataset({'intensity': intensity}).to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def export_traces_file(self):
+        """Export current intensity traces to a .traces file."""
         traces = self.intensity.stack(trace=('molecule', 'channel')).T
         export_traces_file(traces, self.absolute_filepath.with_suffix('.traces'))
         self.extensions.add('.traces')
@@ -799,6 +1065,13 @@ class File:
             self.movie.channel_mappings = mappings
 
     def show_mapping_in_image(self, axes=None, save=True, unit='pixel', projection_image_configuration=None, imshow_configuration=None):
+        """
+        Visualize the coordinate mapping on a projection image.
+
+        Parameters:
+            axis (matplotlib.axes.Axes, optional): The axis to plot on.
+            save (bool, optional): Whether to save the plot as an image. Default is True.
+        """
         if not hasattr(self, 'mappings') or self.mappings is None:
             raise RuntimeError('File does not contain a mapping.')
 
@@ -825,17 +1098,23 @@ class File:
         return figure, axis
 
     def copy_coordinates_to_selected_files(self):
+        """Copy the current coordinates to all selected files in the experiment."""
         for file in self.experiment.selected_files:
             if file is not self:
                 file.coordinates = self.coordinates
 
-    # def use_mapping_for_all_files(self):
+    # def use_mapping_for_all_files(self, perform_logging=True):
+    #     """Apply the current coordinate mapping to all files in the experiment."""
     #     print(f"\n{self} used as mapping")
     #     self.is_mapping_file = True
+    #     #mapping = self.movie.use_for_mapping()
     #     for file in self.experiment.files:
     #         if file is not self:
-    #             file.mappings = self.mappings
+    #             perform_logging_file = file.perform_logging
+    #             file.perform_logging = perform_logging
+    #             file.mapping = self.mapping
     #             file.is_mapping_file = False
+    #             file.perform_logging = perform_logging_file
 
     def get_variable(self, variable, selected=False, frame_range=None, average=False, return_none_if_nonexistent=False):
         # TODO: make it possible to also select the channel (or perform other selections), e.g. by passing 'intensity_c0'.
@@ -877,23 +1156,43 @@ class File:
         return da
 
     def set_variable(self, data, **kwargs):
+        """
+        Save data as a variable in the netCDF dataset.
+
+        Parameters:
+            data (numpy.ndarray or xarray.DataArray): The data to save.
+            **kwargs: Additional arguments for xarray.DataArray.
+        """
         da = xr.DataArray(data, **kwargs)
         da.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     @property
     @return_none_when_executed_by_pycharm
     def intensity_total(self):
+        """Return the sum of intensities across all channels."""
         return calculate_intensity_total(self.intensity)
 
     @property
     @return_none_when_executed_by_pycharm
     def selections(self):
+        """Return all selection variables from the dataset."""
         with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
             return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
                                if key.startswith('selection_')}).load()
 
     def create_selection(self, variable, channel, aggregator, operator, threshold, name=None):
         # TODO: Make this more general like classification
+        """
+        Create a new selection based on a threshold applied to a variable.
+
+        Parameters:
+            variable (str): The name of the variable to use.
+            channel (int or str): The channel to use.
+            aggregator (str): The aggregator to apply over frames (e.g., 'mean', 'max').
+            operator (str): The operator for thresholding ('<' or '>').
+            threshold (float): The threshold value.
+            name (str, optional): The name of the selection.
+        """
         data_array = getattr(self, variable)
 
         if 'channel' in data_array.dims:
@@ -927,6 +1226,7 @@ class File:
         self.set_variable(selection, name=name)
 
     def copy_selections_to_selected_files(self):
+        """Copy current selections and active selection state to all selected files in the experiment."""
         selection_configurations = self.selection_configurations()
         applied_selection = json.loads(self.selected.attrs['configuration'])
 
@@ -941,14 +1241,17 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def selection_names(self):
+        """Return the names of all available selections."""
         return list(self.selections.data_vars.keys())
 
     @property
     @return_none_when_executed_by_pycharm
     def selection_names_active(self):
+        """Return the names of the currently active selections."""
         return json.loads(self.selected.attrs['configuration'])
 
     def clear_selections(self):
+        """Clear all selections and reset the active selection state."""
         dataset = self.dataset
         dataset = dataset.drop_vars([name for name in dataset.data_vars.keys() if name.startswith('selection_')])
         encoding = {
@@ -957,6 +1260,15 @@ class File:
         dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
 
     def selection_configurations(self, *selection_names):
+        """
+        Get the configurations for the specified selections.
+
+        Parameters:
+            *selection_names: The names of the selections to get configurations for.
+
+        Returns:
+            dict: A dictionary of selection names and their configurations.
+        """
         selection_names = list(selection_names)
         if not selection_names:
             selection_names = self.selection_names
@@ -971,6 +1283,13 @@ class File:
         return selection_configurations
 
     def apply_selections(self, *selection_names, add_to_current=False):
+        """
+        Apply the specified selections to the dataset.
+
+        Parameters:
+            *selection_names: The names of the selections to apply.
+            add_to_current (bool, optional): Whether to add to the currently active selections. Default is False.
+        """
         selection_names = list(selection_names)
         all_selection_names = self.selection_names
         if not selection_names:
@@ -1010,6 +1329,7 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def classification(self):
+        """Get the default classification for molecules in this file."""
         # Or add a standard classification datavar in the dataset?
         if not 'classification' in self.data_vars:
             self.apply_classifications()
@@ -1019,6 +1339,7 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def classifications(self):
+        """Return all classification variables from the dataset."""
         with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
             return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
                                if key.startswith('classification_')}).load()
@@ -1026,9 +1347,20 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def classification_names(self):
+        """Return the names of all available classifications."""
         return list(self.classifications.data_vars.keys())
 
     def classification_configurations(self, classification_names='all'):
+        """
+        Get the configurations for the specified classifications.
+
+        Parameters:
+            classification_names (str or list, optional): The names of the classifications to get configurations for.
+                Default is 'all'.
+
+        Returns:
+            dict: A dictionary of classification names and their configurations.
+        """
         if classification_names == 'all':
             classification_names = self.classification_names
 
@@ -1041,9 +1373,21 @@ class File:
                     classification_configurations[name] = None
         return classification_configurations
 
-    def create_classification(self, classification_type, variable, select=None, name=None, classification_configuration=None, apply=None):
+    def create_classification(self, classification_type: Literal["threshold", "hmm"], variable, select=None, name=None, classification_configuration=None, apply=None):
+        """
+        Create a new classification.
+
+        Parameters:
+            classification_type (str): The type of classification ('threshold' or 'hmm').
+            variable (str): The name of the variable to classify.
+            select (optional): A selection to apply before classification.
+            name (str, optional): The name of the classification.
+            classification_configuration (dict, optional): Additional arguments for the classification method.
+            apply (bool, optional): Whether to apply the classification immediately.
+        """
         if classification_configuration is None:
             classification_configuration = {}
+
         if isinstance(variable, str):
             traces = getattr(self, variable)
         else:
@@ -1054,11 +1398,9 @@ class File:
             traces = traces.sel(**select)
 
         if classification_type == 'threshold':
-            from papylio.analysis.classification_simple import classify_threshold
             ds = classify_threshold(traces, **classification_configuration).to_dataset()
             # TODO: perhaps replace the following line with some function that actually spits out the classification configuration.
             add_configuration_to_dataarray(ds.classification, classify_threshold, classification_configuration)
-
         elif classification_type in ['hmm', 'hidden_markov_model']:
             # ds = hmm_traces(self.FRET, n_components=2, covariance_type="full", n_iter=100) # Old
             classification = self.classification
@@ -1091,11 +1433,28 @@ class File:
     def classify_hmm(self, variable, seed=0, n_states=2, threshold_state_mean=None,
                      level='molecule'):  # , use_selection=True, use_classification=True):
         #TODO: Depricate this
+        """
+        Create an HMM-based classification.
+
+        Parameters:
+            variable (str): The name of the variable to classify.
+            seed (int, optional): Random seed for HMM. Default is 0.
+            n_states (int, optional): Number of states for HMM. Default is 2.
+            threshold_state_mean (float, optional): Threshold for state mean.
+            level (str, optional): The level at which to perform HMM ('molecule' or 'frame'). Default is 'molecule'.
+        """
         self.create_classification(name='hmm', classification_type='hmm', variable=variable,
                                    classification_configuration=dict(seed=seed, n_states=n_states,
                                 threshold_state_mean=threshold_state_mean, level=level))
 
     def apply_classifications(self, add_to_current=False, **classification_assignment):
+        """
+        Apply the specified classifications to the dataset.
+
+        Parameters:
+            add_to_current (bool, optional): Whether to add to the currently active classification. Default is False.
+            **classification_assignment: Mapping of classification names to state indices.
+        """
         if add_to_current:
             classification_assignment_old = json.loads(self.classification.attrs['configuration'])
             for key in classification_assignment.keys():
@@ -1139,22 +1498,45 @@ class File:
 
         self.set_variable(classification_combined, name='classification', dims=('molecule','frame'))
 
+    def clear_classifications(self):
+        """Clear all classifications and reset the active classification state."""
+        dataset = self.dataset
+        dataset = dataset.drop_vars([name for name in dataset.data_vars.keys() if name.startswith('classification_')])
+        # for name, da in dataset.data_vars.items():
+        #     da.encoding['dtype'] = da.dtype
+        encoding = {
+            var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
+        }
+        dataset.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+
+
     @property
     @return_none_when_executed_by_pycharm
     def cycle_time(self):
+        """Return the mean cycle time (time between frames)."""
         return self.time.diff('frame').mean().item()
 
     @property
     @return_none_when_executed_by_pycharm
     def sampling_interval(self):
+        """Return the mean sampling interval (time between frames)."""
         return self.time.diff('frame').mean().item()
 
     @property
     @return_none_when_executed_by_pycharm
     def frame_rate(self):
+        """Return the average frame rate."""
         return 1 / self.cycle_time
 
     def determine_dwells_from_classification(self, variable='FRET', selected=False, inactivate_start_and_end_states=True):
+        """
+        Extract dwell times from the current classification.
+
+        Parameters:
+            variable (str, optional): The trace variable to use for dwell time extraction. Default is 'FRET'.
+            selected (bool, optional): Whether to use only selected molecules. Default is False.
+            inactivate_start_and_end_states (bool, optional): Whether to ignore the first and last dwells. Default is True.
+        """
         # TODO: Make it possible to pass multiple traces.
         classification = self.classification
         classification = classification.assign_coords(molecule=self.molecule)
@@ -1182,6 +1564,16 @@ class File:
         dwells.to_netcdf(self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4', mode='w')
 
     def classification_binary(self, positive_states_only=False, selected=False):
+        """
+        Get a binary representation of the classification.
+
+        Parameters:
+            positive_states_only (bool, optional): Whether to include only positive states. Default is False.
+            selected (bool, optional): Whether to use only selected molecules. Default is False.
+
+        Returns:
+            xarray.DataArray: The binary classification.
+        """
         states_in_file = xr.DataArray(np.unique(self.classification), dims='state')
         if positive_states_only:
             states_in_file = states_in_file[states_in_file >= 0]
@@ -1193,6 +1585,7 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def number_of_states_from_classification(self):
+        """Return the number of unique states detected for each molecule based on the classification."""
         molecule_has_state = self.classification_binary(positive_states_only=True).any(dim='frame')
         number_of_states = molecule_has_state.sum(dim='state')
         return number_of_states
@@ -1200,12 +1593,30 @@ class File:
     @property
     @return_none_when_executed_by_pycharm
     def dwells(self):
+        """Load and return the dwell times dataset."""
         return xr.load_dataset(self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4')
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
                        fit_dwell_times_configuration={}, plot_dwell_analysis_configuration={}, save_file_path=None):
+        """
+        Analyze dwell times.
 
+        Parameters:
+            method (str, optional): The analysis method. Default is 'maximum_likelihood_estimation'.
+            number_of_exponentials (list, optional): Number of exponentials to fit. Default is [1, 2].
+            state_names (list, optional): Names of the states.
+            truncation (float, optional): Truncation time for fitting.
+            P_bounds (tuple, optional): Bounds for the amplitudes.
+            k_bounds (tuple, optional): Bounds for the rates.
+            plot (bool, optional): Whether to plot the results. Default is False.
+            fit_dwell_times_configuration (dict, optional): Additional arguments for dwell time fitting.
+            plot_dwell_analysis_configuration (dict, optional): Additional arguments for plotting.
+            save_file_path (str, optional): Path to save the analysis results.
+
+        Returns:
+            xarray.Dataset: The dwell analysis results.
+        """
         dwells = self.dwells
 
         # At the moment single-state states are already set at -128 so they don't need to be separated.
@@ -1241,6 +1652,22 @@ class File:
 
     def plot_dwell_analysis(self, name=None, plot_type='pdf', plot_range=None, axes=None, bins='auto_discrete',
                             log=False, sharey=False, save_path=None):
+        """
+        Plot the results of dwell time analysis.
+
+        Parameters:
+            name (str, optional): Name for the plot title.
+            plot_type (str, optional): Type of plot ('pdf', 'cdf', etc.). Default is 'pdf'.
+            plot_range (tuple, optional): Range for the x-axis.
+            axes (optional): Matplotlib axes to plot on.
+            bins (optional): Binning strategy. Default is 'auto_discrete'.
+            log (bool, optional): Whether to use a log scale for the x-axis. Default is False.
+            sharey (bool, optional): Whether to share the y-axis across plots. Default is False.
+            save_path (str or Path, optional): Directory to save the plot.
+
+        Returns:
+            tuple: (figure, axes)
+        """
         dwell_analysis = self.dwell_analysis
         dwells = self.dwells
 
@@ -1260,17 +1687,34 @@ class File:
     @return_none_when_executed_by_pycharm
     def dwell_analysis(self):
         # TODO: Consider whether to save the dwell_analysis in an excel file instead of an nc file.
+        """Load and return the dwell analysis results from the netCDF file."""
         # return pd.read_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
         return xr.load_dataset(self.absolute_filepath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'), engine='netcdf4')
 
     @dwell_analysis.setter
     def dwell_analysis(self, dwell_analysis):
+        """
+        Set dwell analysis results and save to the netCDF file.
+
+        Parameters:
+            dwell_analysis (xarray.Dataset): The dwell analysis results to save.
+        """
         # dwell_analysis.to_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
         # dataset = xr.DataArray(dataset, dims=('exponential', ' variable'))
         dwell_analysis.to_netcdf(self.absolute_filepath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'),
                                  engine='netcdf4', mode='w')
 
     def state_count(self, selected=True, states=None):
+        """
+        Count the number of molecules in each state.
+
+        Parameters:
+            selected (bool, optional): Whether to use only selected molecules. Default is True.
+            states (list, optional): The states to count.
+
+        Returns:
+            xarray.DataArray: The counts for each state.
+        """
         # if hasattr(self, 'number_of_states'):
         n, c = np.unique(self.get_variable('number_of_states', selected=selected), return_counts=True)
         if states is None:
@@ -1282,17 +1726,41 @@ class File:
         return state_count
 
     def state_fraction(self, **state_count_kwargs):
+        """
+        Calculate the fraction of molecules in each state.
+
+        Parameters:
+            **state_count_kwargs: Arguments passed to state_count.
+
+        Returns:
+            xarray.DataArray: The fraction of molecules in each state.
+        """
         state_count = self.state_count(**state_count_kwargs)
         state_fraction = state_count / state_count.sum('number_of_states')
         state_fraction.name = 'state_fraction'
         return state_fraction
 
     def determine_trace_correction(self):
+        """Open a GUI window to determine trace correction parameters."""
         from papylio.trace_correction import TraceCorrectionWindow
         # TODO: Should work on intensity raw if intensity raw is there else on intensity.
         TraceCorrectionWindow(self.intensity)
 
     def show_histogram(self, variable, selected=False, frame_range=None, average=False, axis=None, **hist_configuration):
+        """
+        Show a histogram of a variable.
+
+        Parameters:
+            variable (str): The name of the variable.
+            selected (bool, optional): Whether to use only selected molecules. Default is False.
+            frame_range (tuple, optional): Range of frames to include.
+            average (bool or str, optional): Whether to average the variable.
+            axis (optional): Matplotlib axis to plot on.
+            **hist_configuration: Additional arguments for the histogram plot.
+
+        Returns:
+            tuple: (figure, axis)
+        """
         # TODO: add save
         da = self.get_variable(variable, selected=selected, frame_range=frame_range, average=average)
         figure, axis = histogram(da, axis=axis, **hist_configuration)
@@ -1343,7 +1811,6 @@ class File:
 
         return axes
 
-
     def histogram_2D_intensity_per_channel(self, selected=False, frame_range=None, average=False,
                                            channel_x=0, channel_y=1, **marginal_hist2d_configuration):
         """
@@ -1392,8 +1859,14 @@ class File:
 
         return axes
 
-
     def show_image(self, axes=None, unit='pixel', projection_image_configuration=None, imshow_configuration=None):
+        #TODO: Finish docstring
+        """
+        Show a projection image of the movie.
+
+        Returns:
+            tuple: (figure, axes)
+        """
         # TODO: Show two channels separately and connect axes
         # Split configuration based on inspect??
 
@@ -1439,6 +1912,15 @@ class File:
 
     def show_coordinates(self, axes=None, annotate=False, unit='pixel', scatter_configuration=None):
         # TODO: Consider making this a QWidget
+        """
+        Show detected molecule coordinates on a plot.
+
+        Parameters:
+            axes (optional): Matplotlib axes to plot on.
+            annotate (bool, optional): Whether to enable interactive annotations.
+            unit (str, optional): Unit for coordinates ('pixel' or 'metric'). Default is 'pixel'.
+            **scatter_configuration: Additional arguments for scatter plot.
+        """
         if scatter_configuration is None:
             scatter_configuration = {}
 
@@ -1510,60 +1992,60 @@ class File:
 
     def show_coordinates_in_image(self, axes=None, unit='pixel', annotate=False, projection_image_configuration=None,
                                   imshow_configuration=None, scatter_configuration=None):
+        # TODO: Finish docstring
+        """
+        Show projection image with overlaid molecule coordinates.
+        """
+
         figure, axes = self.show_image(axes=axes, unit=unit, projection_image_configuration=projection_image_configuration,
                                        imshow_configuration=imshow_configuration)
         self.show_coordinates(axes=axes, annotate=annotate, unit=unit, scatter_configuration=scatter_configuration)
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
-    def show_traces(self, plot_variables=['intensity', 'FRET'], ylims=[(0, 35000), (0, 1)], colours=[('g', 'r'), ('b')],
-                    selected=False, split_illuminations=True, **kwargs):
-        # probably better to put selected and illumination options in TracePlotWindow
-        dataset = xr.Dataset()
-        for variable in plot_variables:
-            dataset[variable] = getattr(self, variable)
-        selected_original = self.selected
-        dataset['selected'] = selected_original
-        if selected:
-            dataset = dataset.sel(molecule=dataset['selected'])
+    def show_traces(self, split_illuminations=True, **kwargs):
+        """
+        Open a GUI window to visualize intensity traces.
 
-        if split_illuminations:
-            illuminations_in_file = np.unique(dataset.illumination)
-            if len(illuminations_in_file) > 1:
-                for plot_variable in ['intensity', 'FRET']:
-                    if plot_variable in plot_variables:
-                        plot_variable_index = plot_variables.index(plot_variable)
-                        for j, illumination_index in enumerate(illuminations_in_file):
-                            name = f'{plot_variable}_i{illumination_index}'
-                            dataset[name] = dataset[plot_variable].sel(frame=dataset.illumination == illumination_index)
-                            plot_variables.insert(plot_variable_index + j + 1, name)
-                            if j > 0:
-                                ylims.insert(plot_variable_index + j, ylims[plot_variable_index])
-                                colours.insert(plot_variable_index + j, colours[plot_variable_index])
-                        plot_variables.pop(plot_variable_index)
+        Parameters:
+            split_illuminations (bool, optional): Whether to split traces by illumination. Default is True.
+            **kwargs: Additional arguments for TracePlotWindow.
+        """
+        dataset = self.dataset
 
-        # dataset = self.dataset
         save_path = self.experiment.main_path.joinpath('Trace plots')
         if not save_path.is_dir():
             save_path.mkdir()
 
         from papylio.trace_plot import TracePlotWindow
-        TracePlotWindow(dataset=dataset, plot_variables=plot_variables, ylims=ylims, colours=colours, save_path=save_path, **kwargs)
-        if selected:
-            selected_original[dict(molecule=selected_original)] = dataset.selected
-        else:
-            selected_original = dataset.selected
-
-        # We could also save the whole dataset, but since currently only alterations are made to selected.
-        selected_original.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
+                        dataset_path=self.absoluteFilePath.with_suffix('.nc'), save_path=save_path, **kwargs)
 
 
 def calculate_intensity_total(intensity):
+    """
+    Calculate the total intensity by summing across channels.
+
+    Parameters:
+        intensity (xarray.DataArray): The input intensity DataArray.
+
+    Returns:
+        xarray.DataArray: The total intensity.
+    """
     intensity_total = intensity.sum(dim='channel')
     intensity_total.name = 'intensity_total'
     intensity_total.attrs = intensity.attrs
     return intensity_total
 
 def calculate_FRET(intensity):
+    """
+    Calculate FRET efficiency from donor and acceptor intensities.
+
+    Parameters:
+        intensity (xarray.DataArray): The input intensity DataArray with at least two channels.
+
+    Returns:
+        xarray.DataArray: The FRET efficiency.
+    """
     # TODO: Make suitable for mutliple colours
     donor = intensity.sel(channel=0, drop=True)
     acceptor = intensity.sel(channel=1, drop=True)
@@ -1572,6 +2054,15 @@ def calculate_FRET(intensity):
     return FRET
 
 def calculate_stoichiometry(intensity):
+    """
+    Calculate stoichiometry from intensity data.
+
+    Parameters:
+        intensity (xarray.DataArray): The input intensity DataArray.
+
+    Returns:
+        xarray.DataArray: The stoichiometry values.
+    """
     intensity_total = calculate_intensity_total(intensity)
     intensity_total_i0 = intensity_total.sel(frame=intensity.illumination == 0)
     intensity_total_i1 = intensity_total.sel(frame=intensity.illumination == 1).values
@@ -1581,6 +2072,15 @@ def calculate_stoichiometry(intensity):
     return stoichiometry
 
 def import_pks_file(pks_filepath):
+    """
+    Import peaks and background data from a .pks file.
+
+    Parameters:
+        pks_filepath (str or Path): Path to the .pks file.
+
+    Returns:
+        xarray.DataArray: The imported peak data.
+    """
     pks_filepath = Path(pks_filepath)
     data = np.genfromtxt(pks_filepath)
     if len(data) == 0:
@@ -1593,6 +2093,13 @@ def import_pks_file(pks_filepath):
 
 
 def export_pks_file(peaks, pks_filepath):
+    """
+    Export peak data to a .pks file.
+
+    Parameters:
+        peaks (xarray.DataArray): The peak data to export.
+        pks_filepath (str or Path): The destination file path.
+    """
     pks_filepath = Path(pks_filepath)
     with pks_filepath.open('w') as pks_file:
         for i, (x, y, background) in enumerate(peaks.values):
@@ -1602,6 +2109,15 @@ def export_pks_file(peaks, pks_filepath):
 
 
 def import_traces_file(traces_filepath):
+    """
+    Import intensity traces from a .traces file.
+
+    Parameters:
+        traces_filepath (str or Path): Path to the .traces file.
+
+    Returns:
+        xarray.DataArray: The imported traces.
+    """
     traces_filepath = Path(traces_filepath)
     with traces_filepath.open('r') as traces_file:
         number_of_frames = np.fromfile(traces_file, dtype=np.int32, count=1).item()
@@ -1617,6 +2133,13 @@ def import_traces_file(traces_filepath):
 
 
 def export_traces_file(traces, traces_filepath):
+    """
+    Export intensity traces to a .traces file.
+
+    Parameters:
+        traces (xarray.DataArray): The traces to export.
+        traces_filepath (str or Path): The destination file path.
+    """
     traces_filepath = Path(traces_filepath)
     with traces_filepath.open('w') as traces_file:
         # Number of frames
@@ -1626,6 +2149,20 @@ def export_traces_file(traces, traces_filepath):
         traces.values.T.astype(np.int16).tofile(traces_file)
 
 def split_dimension(data_array, old_dim, new_dims, new_dims_shape=None, new_dims_coords=None, to='dimensions'):
+    """
+    Split a single dimension into multiple dimensions in an xarray DataArray.
+
+    Parameters:
+        data_array (xarray.DataArray): The input DataArray.
+        old_dim (str): The dimension to split.
+        new_dims (tuple of str): The names of the new dimensions.
+        new_dims_shape (tuple of int, optional): The shapes of the new dimensions.
+        new_dims_coords (tuple, optional): The coordinates for the new dimensions.
+        to (str, optional): Target format ('dimensions' or 'multiindex'). Default is 'dimensions'.
+
+    Returns:
+        xarray.DataArray: The DataArray with split dimensions.
+    """
     all_dims = list(data_array.dims)
     old_dim_index = all_dims.index(old_dim)
     all_dims[old_dim_index:old_dim_index + 1] = new_dims

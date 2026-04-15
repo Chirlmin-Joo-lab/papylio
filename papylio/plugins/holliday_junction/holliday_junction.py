@@ -1,3 +1,9 @@
+"""Visualization and utility helpers for Holliday junction sequence analysis.
+
+Includes plotting functions and sequence formatting / classification helpers used by the
+Holliday junction plugin.
+"""
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import xarray as xr
@@ -9,6 +15,7 @@ from papylio.plugins.holliday_junction.sequence_generation import all_basepaired
 
 
 def basepair_count_per_position(basepair_count, save_path):
+    """Plot counts of basepairs per position and save figure files."""
     title = (basepair_count.name.replace('basepair_count','basepair_count_per_position'))
 
     basepair_count_stacked = basepair_count.stack(basepair=('base_0', 'base_1'))
@@ -43,6 +50,7 @@ def basepair_count_per_position(basepair_count, save_path):
     figure.savefig(savefile_path.with_suffix('.pdf'))
 
 def basepaired_sequence_subset_count(sequence_subset_count, save_path):
+    """Plot counts of basepaired sequence subsets in a grouped heatmap and save."""
     title = (sequence_subset_count.name.replace('sequence_count', 'basepaired_sequence_count'))
     variable = sequence_subset_count.attrs['variable']
 
@@ -230,7 +238,7 @@ def basepaired_sequence_subset_count(sequence_subset_count, save_path):
 
 def plot_holliday_junction(data, size=1, name=None, s2max=None, geometry='square',
                                       axis_facecolor="lightgrey", save_path=None, vmin=None, vmax=None, axis=None, cmap=None):
-
+    """Plot a Holliday junction style visualization for sequence-subset data."""
     if name is None:
         name = data.name
 
@@ -484,7 +492,7 @@ def plot_holliday_junction(data, size=1, name=None, s2max=None, geometry='square
 
 def plot_basepaired_holliday_junction(data, size=1, name=None, s2max=None, geometry='square',
                                       axis_facecolor="lightgrey", save_path=None, vmin=None, vmax=None, axis=None, cmap=None):
-
+    """Plot a tiled basepaired Holliday junction visualization to show per-subset values."""
     if name is None:
         name = data.name
 
@@ -669,6 +677,7 @@ def plot_basepaired_holliday_junction(data, size=1, name=None, s2max=None, geome
 
 
 def format_sequence_subset(sequence_subset):
+    """Return a human-readable multi-line representation for a single subset."""
     ss = sequence_subset
     return np.array(
     [f'  ||  ',
@@ -680,6 +689,7 @@ def format_sequence_subset(sequence_subset):
     )
 
 def format_sequence_subsets(sequence_subsets):
+    """Format multiple sequence subsets into a printable block."""
     spacer = np.array(['  ']*6)
     sequence_subsets_formatted = np.array([format_sequence_subset(ss) for ss in sequence_subsets])
     spacers = np.array([spacer]*len(sequence_subsets))
@@ -699,6 +709,7 @@ def batched(iterable, n):
         yield batch
 
 def print_sequence_subsets(sequence_subsets, rows=None):
+    """Print formatted sequence subsets optionally arranged in rows."""
     if isinstance(sequence_subsets, str):
         sequence_subsets = [sequence_subsets]
     if rows is not None:
@@ -710,6 +721,7 @@ def print_sequence_subsets(sequence_subsets, rows=None):
 
 
 def char_add(strings):
+    """Horizontally concatenate an iterable of character arrays using numpy.char.add."""
     for i, s in enumerate(strings):
         if i == 0:
             final = s
@@ -719,21 +731,25 @@ def char_add(strings):
 
 
 def shorthand_notation(sequences):
+    """Return every other base (shorthand) from each sequence."""
     return [s[0::2] for s in sequences]
 
 
 def purine_pyrimidine_sequence(sequences):
+    """Translate sequences to purine/pyrimidine notation (R/Y)."""
     translation_table = str.maketrans('AGCT', 'RRYY')
     return [s.translate(translation_table) for s in sequences]
 
 
 def roll(sequences, n):
+    """Rotate sequences by one base n times."""
     for i in range(n):
         sequences = [s[1:] + s[0] for s in sequences]
     return sequences
 
 
 def roll_multiple(sequences, n):
+    """Return a list of n+1 rotations of the input sequence list."""
     ss = [sequences]
     for i in range(n):
         sequences = roll(sequences, 1)
@@ -742,10 +758,15 @@ def roll_multiple(sequences, n):
 
 
 def purine_pyrimidine_classes():
+    """Return a mapping of class index to purine/pyrimidine pattern strings."""
     return {1: 'RRRR', 2: 'YRRR', 3: 'YYRR', 4: 'YRYR', 5: 'YYYR', 6: 'YYYY'}
 
 
 def purine_pyrimidine_classification(sequence_subsets, xarray=False):
+    """Classify sequence subsets by purine/pyrimidine patterns.
+
+    Returns integer class labels or an xarray.DataArray when xarray=True.
+    """
     shorthand_purine_pyrimidine = shorthand_notation(purine_pyrimidine_sequence(sequence_subsets))
     shorthand_purine_pyrimidine_roll = np.array(roll_multiple(shorthand_purine_pyrimidine, 3)).T
 
@@ -762,6 +783,7 @@ def purine_pyrimidine_classification(sequence_subsets, xarray=False):
 
 
 def variant_score(variant):
+    """Compute a heuristic score for ordering sequence variants."""
     score = 0
     #     for i, l in enumerate(variant):
     #         if l == 'C':
@@ -789,6 +811,7 @@ def variant_score(variant):
 
 
 def shorthand_sequence_rotationally_symmetric(sequence_subsets, xarray=False):
+    """Compute a rotationally invariant shorthand representation for subsets."""
     invariant_shorthand = []
     for sequence_subset in sequence_subsets:
         variants = roll_multiple(shorthand_notation([sequence_subset]), 3)
@@ -819,3 +842,4 @@ def shorthand_sequence_rotationally_symmetric(sequence_subsets, xarray=False):
     #                                                         coords=dict(sequence_subset=sequence_subsets))
 
     #     return shorthand_sequence_rotationally_symmetric
+

@@ -1,3 +1,8 @@
+"""TIFF movie reader (TIF/TIFF) and simple helpers.
+
+Provides a TifMovie subclass that uses tifffile to read multi-page TIFF stacks and metadata.
+"""
+
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -8,15 +13,31 @@ from papylio.timer import Timer
 
 
 class TifMovie(Movie):
+    """Movie class for reading TIFF/TIF image files.
+
+    Handles loading and processing of TIFF format images, supporting both
+    single-file and multi-frame stacks. Extracts metadata from TIFF tags.
+    """
     extensions = ['.tif', '.tiff']
 
     def __init__(self, arg, *args, **kwargs):
+        """Initialize TifMovie instance.
+
+        Parameters
+        ----------
+        arg : str or Path
+            Path to the TIFF file
+        *args
+            Additional positional arguments passed to Movie parent class
+        **kwargs
+            Additional keyword arguments passed to Movie parent class
+        """
         super().__init__(arg, *args, **kwargs)
-        
+
 
         self.writepath = self.filepath.parent
         self.name = self.filepath.with_suffix('').name
-        
+
         self.threshold = {  'view':             (0,200),
                             'point-selection':  (45,25)
                             }
@@ -30,12 +51,22 @@ class TifMovie(Movie):
         # self._initialized = True
 
     def open(self):
+        """Open TIFF file for reading.
+
+        Creates a tifffile.TiffFile object to access file contents.
+        """
         self.file = tifffile.TiffFile(self.filepath)
 
     def close(self):
+        """Close the TIFF file."""
         self.file.close()
 
     def _read_header(self):
+        """Read and parse TIFF file header and metadata.
+
+        Extracts image dimensions, data type, number of frames, and
+        calibration/positioning information from TIFF tags and metadata.
+        """
         with self:
             tif_tags = {}
             for tag in self.file.pages[0].tags.values():
@@ -83,6 +114,20 @@ class TifMovie(Movie):
     #
     @property
     def time(self):
+        """Temporal information for each frame.
+
+        Returns
+        -------
+        xr.DataArray
+            Time coordinate for each frame, computed from either DateTime tags
+            or exposure time. Dimension: (frame,). Units: seconds from start.
+
+        Notes
+        -----
+        - For Andor/Solis TIFF files: computed from AndorExposureTime tags
+        - For other files with DateTime: parsed from DateTime TIFF tags
+        - Time is cached after first access
+        """
         # TODO: Get time when in read_frame
         if self._time is None:
             with self:
@@ -103,6 +148,23 @@ class TifMovie(Movie):
         return self._time
 
     def _read_frame(self, frame_number):
+        """Read a single frame from the TIFF file.
+
+        Parameters
+        ----------
+        frame_number : int
+            Index of frame to read (0-based)
+
+        Returns
+        -------
+        np.ndarray
+            Single frame image array
+
+        Raises
+        ------
+        IndexError
+            If frame_number is >= number_of_frames
+        """
         with self:
             # if self.number_of_frames == 1:
             #     # return -1,0,0,0
@@ -116,6 +178,25 @@ class TifMovie(Movie):
         return im
 
     def _read_frames(self, frame_indices=None):
+        """Read multiple frames from the TIFF file.
+
+        Parameters
+        ----------
+        frame_indices : list or np.ndarray
+            Indices of frames to read
+
+        Returns
+        -------
+        np.ndarray or dask.array
+            Requested frames stacked along first dimension.
+            Returns numpy array if use_dask=False, dask array otherwise.
+
+        Notes
+        -----
+        - For single frames, uses tifffile directly
+        - For multiple frames, uses tifffile.imread with key parameter
+        - Can optionally use dask_image for lazy loading if use_dask=True
+        """
         if not self.use_dask:
             if len(frame_indices) == 1:
                 with self:

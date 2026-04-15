@@ -1,3 +1,5 @@
+"""Plotting utilities for sequencing match visualization and statistics."""
+
 import math
 import numpy as np
 import xarray as xr
@@ -34,6 +36,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 def single_mutations(sequence):
+    """Generate all single-base mutations of a given sequence."""
     sequences = [] # [sequence]
     bases = 'ACTG'
     for i in range(len(sequence)):
@@ -44,6 +47,7 @@ def single_mutations(sequence):
     return sequences
 
 def plot_single_mutation_data(sequence, da):
+    """Plot bar chart of single-mutation data for a given reference sequence."""
     sequences = [sequence] + single_mutations(sequence)
     da = da.sel(sequence=sequences)
 
@@ -72,6 +76,7 @@ def plot_single_mutation_data(sequence, da):
                         ha='center', va='bottom', arrowprops={'width': 0.2, 'headwidth': 3, 'headlength': 2})
 
 def double_mutations(sequence, add_reference=False):
+    """Generate all double-base mutations of a given sequence."""
     ## Generated dataset
     # sequence = 'GGCGCCGC'
     sequences = []
@@ -99,6 +104,7 @@ def double_mutations(sequence, add_reference=False):
 
 
 def plot_double_mutations(sequence, da, da_annotation=None, save=False, save_path=None, **kwargs):
+    """Plot heatmap showing effects of all double-base mutations on a given metric."""
     # sequences = [sequence] + double_mutations(sequence)
     bases = 'ACTG'
     data = np.zeros((len(sequence)*3, len(sequence)*3))
@@ -222,6 +228,7 @@ def plot_double_mutations(sequence, da, da_annotation=None, save=False, save_pat
 
 
 def plot_sequencing_match(match, write_path, title, filename, unit = 'um', MiSeq_pixels_to_um = None, Fluo_pixels_to_um = None, save=True):
+    """Visualize sequencing match with source and destination coordinates shown side-by-side."""
     # TODO: Update for new tile and sequencing matches
     source = match.source
     source_in_destination = match.transform_coordinates(source)
@@ -355,6 +362,7 @@ def plot_sequencing_match(match, write_path, title, filename, unit = 'um', MiSeq
 
 # Show all matched files in tiles
 def plot_matched_files_in_tile(files, show_file_coordinates=False, show_file_vertices=True, unit='um', save=False):
+    """Plot all files matched to coordinates in a single sequencing tile."""
     # TODO: Update for new tile and sequencing matches
 
     def MiSeq_pixels_to_um(pixels):
@@ -423,6 +431,7 @@ def plot_matched_files_in_tile(files, show_file_coordinates=False, show_file_ver
             figure.savefig(f'Matched_files_in_tile_{tile.name}.png', bbox_inches='tight', dpi=250)
 
 def plot_cluster_locations_per_tile(dataset, number_of_tiles=19, number_of_surfaces=2, save_filepath=None):
+    """Create grid of plots showing cluster locations per sequencing tile."""
     # TODO: Update for new tile and sequencing matches
     # df should contain Tile number, x and y
 

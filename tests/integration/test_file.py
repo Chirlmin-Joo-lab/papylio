@@ -22,6 +22,11 @@ def experiment_hj(shared_datadir):
     return Experiment(shared_datadir / 'Papylio example dataset - analyzed')
 
 @pytest.fixture
+def experiment_hj_no_logging(shared_datadir):
+    from papylio import Experiment
+    return Experiment(shared_datadir / 'Papylio example dataset - analyzed', perform_logging=False)
+
+@pytest.fixture
 def file_hj(experiment_hj):
     return experiment_hj.files.select('HJ')[0]
 
@@ -41,6 +46,9 @@ def file_output_with_selected(file_output):
     selected[[0,5,33]] = True
     file_output.set_variable(selected)
     return file_output
+
+def test_without_logging(experiment_hj_no_logging):
+    experiment_hj_no_logging.files[0].perform_mapping()
 
 def test_projection_image(file, shared_datadir):
     image_newly_made = file.projection_image()

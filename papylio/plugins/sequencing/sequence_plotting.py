@@ -1,3 +1,5 @@
+"""Sequence visualization and plotting utilities for sequencing analysis."""
+
 import re
 import numpy as np
 import pandas as pd
@@ -5,6 +7,7 @@ import matplotlib.pyplot as plt
 
 def plot_sequence_density(sequences, expected_seq=None, start=None, end=None, is_circular=False,
                           row_length=None, figure=None, save=False, title=''):
+    """Visualize sequence base transitions as a line plot with optional reference sequence overlay."""
     sequences = sequences.view('U1').reshape(-1, len(sequences[0]))
     if is_circular:
         sequences = np.hstack([sequences, sequences[:,0:1]])

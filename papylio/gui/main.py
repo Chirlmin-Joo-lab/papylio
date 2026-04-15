@@ -1,3 +1,8 @@
+"""Main GUI application and image canvas widget.
+
+Defines the main application window and image canvas used by the Papylio GUI.
+"""
+
 import sys
 import PySide2
 import platform
@@ -18,6 +23,7 @@ import papylio as pp
 from papylio import Experiment, File
 from papylio.trace_plot import TracePlotWindow
 from papylio.gui.selection_widget import SelectionWidget
+from papylio.gui.classification_widget import ClassificationWidget
 
 # class TreeNode:
 #     def __init__(self, node_object, parent=None):
@@ -212,6 +218,13 @@ from papylio.gui.selection_widget import SelectionWidget
 
 
 class MainWindow(QMainWindow):
+    """Main application window.
+
+    This class defines the main window of the Papylio GUI, including the
+    file tree, image canvas, and various control widgets for
+    interacting with the data and configuring the experiment.
+    """
+
     # def __init__(self):
     #     super().__init__()
     #     # model = QFileSystemModel()
@@ -318,6 +331,9 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.traces, 'Traces')
         self.selection = SelectionWidget(parent=self)
         tabs.addTab(self.selection, 'Selection (beta)')
+        self.classification = ClassificationWidget(parent=self)
+        self.classification.classificationChanged.connect(self.update_plots)
+        tabs.addTab(self.classification, 'Classification (beta)')
         tabs.currentChanged.connect(self.setTabFocus)
 
         experiment_layout = QVBoxLayout()
@@ -402,9 +418,11 @@ class MainWindow(QMainWindow):
         if selected_files[0] is not None:
             self.traces.dataset = selected_files[0].dataset
             self.selection.file = selected_files[0]
+            self.classification.file = selected_files[0]
         else:
             self.traces.dataset = None
             self.selection.file = None
+            self.classification.file = None
 
     def addExperiment(self, experiment):
 
@@ -470,6 +488,13 @@ class MainWindow(QMainWindow):
 
 
 class ImageCanvas(FigureCanvas):
+    """Image canvas widget.
+
+    This class defines the canvas used to display images in the Papylio
+    GUI. It is responsible for rendering the image data and updating the
+    display when the underlying data changes.
+    """
+
     def __init__(self, parent=None, width=14, height=7, dpi=100):
         self.figure = mpl.figure.Figure(figsize=(width, height), dpi=dpi, constrained_layout=True)  # , figsize=(2, 2))
         super().__init__(self.figure)
