@@ -15,12 +15,16 @@ from pathlib import Path
 import pandas as pd
 import tifffile
 import numpy as np
+from matchpoint import MatchPoint
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import xarray as xr
 import scipy.ndimage
 from skimage.transform import AffineTransform
 
+import matchpoint as mp
+
+from papylio.helper_functions import get_default_parameters
 # from papylio.movie.background_correction import rollingball
 from papylio.movie.background_correction import determine_temporal_background_correction, \
     determine_spatial_background_correction, determine_single_value_background_correction # remove_background, get_threshold
@@ -74,6 +78,9 @@ class Movie:
     Provides abstract interface for loading, processing, and accessing
     image data from various microscopy file formats.
     """
+
+    unit_mapping = mp.MatchPoint()
+
     @classmethod
     def type_dict(cls):
         """Get dictionary mapping file extensions to Movie subclasses.
@@ -231,11 +238,18 @@ class Movie:
         else:
             image_info['apply_corrections'] = False
 
+        overlay_result = re.search('_overlay', filename)
+        if overlay_result is None:
+            image_info['overlay_channels'] = False
+        else:
+            image_info['overlay_channels'] = True
+
         return image_info
 
+    from papylio.helper_functions import get_default_parameters
+
     @classmethod
-    def image_info_to_filename(cls, filename, fov_index=None, projection_type=None, frame_range=None,
-                               illumination=None, apply_corrections=None):
+    def image_info_to_filename(cls, filename, fov_index=None, **projection_image_configuration):
         """Construct standardized filename from base name and image metadata.
 
         Parameters
@@ -244,31 +258,30 @@ class Movie:
             Base filename
         fov_index : int, optional
             Field of view index (default: None)
-        projection_type : str, optional
-            Projection type: 'average', 'maximum', or None (default: None)
-        frame_range : tuple, optional
-            (start, end) or (start, end, interval) frame indices (default: None)
-        illumination : int, optional
-            Illumination index (default: None)
-        apply_corrections : bool, optional
-            If False, appends '_raw' to filename (default: None)
+        projection_image_configuration : keyword arguments
 
         Returns
         -------
         str
             Formatted filename with metadata embedded
         """
+
+        projection_image_configuration = get_default_parameters(cls.make_projection_image) | projection_image_configuration
+
         # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
         if fov_index is not None:
             # filename += f'_fov{self.fov_info["fov_chosen"]:03d}'
             filename += f'_fov{fov_index:03d}'
 
+        projection_type = projection_image_configuration.get('projection_type', None)
         if projection_type is not None:
             filename += '_' + projection_type[:3]
 
+        frame_range = projection_image_configuration.get('frame_range', None)
         if frame_range is not None:
             filename += str(range(*frame_range)).replace('range(', '_f').replace(', ', '-').replace(')', '')
 
+        illumination = projection_image_configuration.get('illumination', None)
         if illumination is not None:  # and self.number_of_illuminations_in_movie > 1:
             illumination_index = cls.get_illumination_from_name(illumination).index
             filename += f'_i{illumination_index}'
@@ -277,8 +290,13 @@ class Movie:
         #     channel_index = cls.get_channel_from_name(channel).index
         #     filename += f'_i{channel_index}'
 
+        apply_corrections = projection_image_configuration.get('apply_corrections', False)
         if apply_corrections is False:
             filename += '_raw'
+
+        overlay_channels = projection_image_configuration.get('overlay_channels', False)
+        if overlay_channels:
+            filename += '_overlay'
 
         return filename
 
@@ -339,6 +357,8 @@ class Movie:
         self.channel_arrangement = [[[0, 1]]]
         # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
         # self.channel_arrangement = xr.DataArray([[[0,1]]], dims=('frame','y','x'))
+
+        self.channel_mapping = [self.unit_mapping,]*(self.number_of_channels-1)
 
         self.illumination_arrangement = [0]  # First level: frames, second level: illumination
         # self.illumination_arrangement = xr.DataArray([[True, False]], dims=('frame', 'illumination'), coords={'illumination': [0,1]}) # TODO: np.array([0]) >> list of list It would be good to have a default illumination_arrangement of np.array([0]), i.e. illumination 0 all the time?
@@ -682,7 +702,7 @@ class Movie:
             # Perhaps remove the outermost layer from channel_configuration
             # Or add this to separate and flatten channels
 
-        frames = self.separate_channels(frames)
+        frames = self.separate_channels(frames, self.channel_rows, self.channel_columns)
         # frames = np.stack([channel.crop_images(images) for channel in self.channels]
 
         if apply_corrections:  # and self.correct_images
@@ -706,7 +726,8 @@ class Movie:
         """int : Number of channel columns in channel arrangement"""
         return len(self.channel_arrangement[0, 0])
 
-    def separate_channels(self, frames):
+    @staticmethod
+    def separate_channels(frames, channel_rows, channel_columns):
         """Separate channels from spatial dimensions.
 
         Splits frames from single image dimension into separate channel dimension
@@ -716,6 +737,10 @@ class Movie:
         ----------
         frames : np.ndarray or xr.DataArray
             Input frames with channels arranged spatially
+        channel_rows : int
+            Number of channel rows in channel arrangement
+        channel_columns : int
+            Number of channel columns in channel arrangement
 
         Returns
         -------
@@ -729,7 +754,7 @@ class Movie:
         return xr.apply_ufunc(
             expand_axes, frames, input_core_dims=[['y', 'x']], output_core_dims=[['channel', 'y', 'x']],
             exclude_dims=set(['y', 'x']),
-            kwargs={"expand_into": (self.channel_rows, self.channel_columns), "from_axes": (-2, -1),
+            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
                     "to_axes": (frames.ndim,) * 2, "new_axes_positions": [-3]}
         )
         # return xr.apply_ufunc(
@@ -742,13 +767,18 @@ class Movie:
         # new = split_along_axes(frames.values, (channel_rows, channel_columns), from_axes=(1, 2))
         # return xr.DataArray(new, dims=['frame','y','x','channel'])
 
-    def flatten_channels(self, frames):
+    @staticmethod
+    def flatten_channels(frames, channel_rows=None, channel_columns=None):
         """Combine channel dimension back into spatial dimensions.
 
         Parameters
         ----------
         frames : np.ndarray or xr.DataArray
             Frames with channel as separate dimension
+        channel_rows : int
+            Number of channel rows in channel arrangement
+        channel_columns : int
+            Number of channel columns in channel arrangement
 
         Returns
         -------
@@ -765,7 +795,7 @@ class Movie:
         return xr.apply_ufunc(
             expand_axes, frames, input_core_dims=[['channel', 'y', 'x']], output_core_dims=[['y', 'x']],
             exclude_dims=set(['x', 'y']),
-            kwargs={"expand_into": (self.channel_rows, self.channel_columns), "from_axes": (-2, -1),
+            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
                     "to_axes": (-3, -3),
                     "inverse": True, "squeeze": True}
         )
@@ -844,7 +874,7 @@ class Movie:
         if channel_names in [None, 'all']:
             return self.channels
 
-        if not isinstance(channel_names, list):
+        if not isinstance(channel_names, list) and not isinstance(channel_names, tuple):
             channel_names = [channel_names]
 
         return [self.get_channel_from_name(channel_name) for channel_name in channel_names]
@@ -863,8 +893,8 @@ class Movie:
 
             #     tifffile.imwrite(self.writepath.joinPath(f'{self.name}_fr{frame_number}.tif'), image,  photometric='minisblack')
 
-    def make_projection_image(self, projection_type='average', frame_range=(0,20), apply_corrections=True, illumination=None, write=False,
-                              return_image=True, flatten_channels=True, intensity_range=None, color_map='gray'):
+    def make_projection_image(self, projection_type='average', frame_range=(0,20), apply_corrections=True,
+                              illumination=None, overlay_channels=False):
         """ Construct a projection image
         Determine a projection image for a number_of_frames starting at start_frame.
         i.e. [start_frame, start_frame + number_of_frames)
@@ -891,6 +921,8 @@ class Movie:
         # Make suitable for negative values
         if frame_range[0] > self.number_of_frames:
             raise ValueError(f'Invalid frame range {frame_range}')
+        if frame_range[1] is None:
+            frame_range = (frame_range[0], self.number_of_frames)
         if frame_range[1] > self.number_of_frames:
             frame_range[1] = self.number_of_frames
             warnings.warn(f'Frame range exceeds available frames, used frame range {frame_range} instead')
@@ -904,7 +936,7 @@ class Movie:
         frame_indices = frame_indices[self.illumination_index_per_frame.values[frame_indices] == illumination_index]
 
         # Calculate sum of frames and find mean
-        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float32'))
+        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float32'), self.channel_rows, self.channel_columns)
 
         frame_indices_subsets = np.array_split(frame_indices, len(frame_indices) // self.chunk_size + 1)
 
@@ -933,34 +965,63 @@ class Movie:
                     image = np.maximum(image, frames.max(axis=0))
             # sys.stdout.write(f'\r   Processed frames {frame_indices[0]}-{frame_indices[-1]}\n')
 
-        if write:
-            filename = Movie.image_info_to_filename(self.name, fov_index=self.fov_index, projection_type=projection_type,
-                                                    frame_range=frame_range, illumination=illumination_index, apply_corrections=apply_corrections)
-            filepath = self.writepath.joinpath(filename)
-            write_image = self.flatten_channels(image)
-            if write in [True, 'tif']:
-                if hasattr(self, 'pixel_size'):
-                    resolution = 1/self.pixel_size
-                else:
-                    resolution = None
-                tifffile.imwrite(filepath.with_suffix('.tif'), write_image,
-                                 resolution=resolution,
-                                 imagej=True,
-                                 metadata={'unit': 'um',
-                                           'axes': 'YX'}
-                                 )
-            elif write in ['png']:
-                filepath = filepath.with_name(filepath.name + f'_v{intensity_range[0]}-{intensity_range[1]}')
-                if intensity_range is None:
-                    intensity_range = self.intensity_range
-            # plt.imsave(filepath.with_suffix('.tif'), image, format='tif', cmap=colour_map, vmin=self.intensity_range[0], vmax=self.intensity_range[1])
-                plt.imsave(filepath.with_suffix('.png'), write_image, vmin=intensity_range[0], vmax=intensity_range[1], cmap=color_map)
+        if overlay_channels:
+            for i in self.channel_indices[1:].values:
+                image[i, :, :] = self.channel_mappings[i-1].transform_image(image[i, :, :], inverse=True)
+            image = image.sum(axis=0, keepdims=True)
 
-        if return_image:
-            if flatten_channels:
-                return self.flatten_channels(image)
+        return image
+
+
+    def save_projection_image(self, intensity_range=None, color_map='gray', path=None, filetype='tif', **projection_image_configuration):
+        image = self.make_projection_image(**projection_image_configuration)
+
+        if path is None:
+            path = self.writepath
+
+        filename = Movie.image_info_to_filename(self.name, **projection_image_configuration)
+        filepath = path.joinpath(filename)
+
+        if projection_image_configuration.get('overlay_channels', False):
+            channel_names = 'overlay'
+        else:
+            channel_names = [channel.name for channel in self.channels]
+
+        if filetype in ['tif', 'tiff']:
+            if hasattr(self, 'pixel_size'):
+                resolution = 1 / self.pixel_size
             else:
-                return image
+                resolution = None
+            tifffile.imwrite(filepath.with_suffix('.tif'), image,
+                             resolution=resolution,
+                             imagej=True,
+                             metadata={'unit': 'um',
+                                       'axes': 'CYX',
+                                       'Labels': channel_names}
+                             )
+        elif filetype in ['png']:
+            if len(image.shape) == 3:  # i.e. there is still a channel dimension
+                write_image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
+            else:
+                write_image = image
+            filepath = filepath.with_name(filepath.name + f'_v{intensity_range[0]}-{intensity_range[1]}')
+            if intensity_range is None:
+                intensity_range = self.intensity_range
+            plt.imsave(filepath.with_suffix('.png'), write_image, vmin=intensity_range[0], vmax=intensity_range[1],
+                       cmap=color_map)
+
+        return image
+
+    @staticmethod
+    def load_projection_image(filepath, **projection_image_configuration):
+        image_filename = Movie.image_info_to_filename(filepath.name, **projection_image_configuration)
+        image_filepath = filepath.with_name(image_filename).with_suffix('.tif')
+
+        if image_filepath.is_file():
+            return tifffile.imread(image_filepath)
+        else:
+            return None
+            # raise FileNotFoundError(f'Projection image not found at {image_filepath}')
 
     def make_projection_images(self, projection_type='average', frame_range=(0, 20)):
         # Perhaps put this in make_projection_image as a special type of cmap

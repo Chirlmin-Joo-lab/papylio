@@ -34,10 +34,10 @@ experiment_path = r'N:\tnw\BN\CMJ\Shared\Ivo\PhD_data\20221023 - Objective-type 
 # experiment_path = r'N:\tnw\BN\CMJ\Shared\Ivo\PhD_data\20221023 - Objective-type TIRF (BN)\Test'
 exp = pp.Experiment(experiment_path)
 
-files_channel_mapping = exp.files[exp.files.relativeFilePath.str.regex('Bead slide')]
-files_green_laser = exp.files[exp.files.relativeFilePath.str.regex('3.*HJ_scan TIRF 561')]
-files_red_laser_after = exp.files[exp.files.relativeFilePath.str.regex('3.*HJ_scan TIRF 642 after')]
-files_red_laser_before = exp.files[exp.files.relativeFilePath.str.regex('3.*HJ_scan TIRF 642 before')]
+files_channel_mapping = exp.files[exp.files.relative_filepath.str.regex('Bead slide')]
+files_green_laser = exp.files[exp.files.relative_filepath.str.regex('3.*HJ_scan TIRF 561')]
+files_red_laser_after = exp.files[exp.files.relative_filepath.str.regex('3.*HJ_scan TIRF 642 after')]
+files_red_laser_before = exp.files[exp.files.relative_filepath.str.regex('3.*HJ_scan TIRF 642 before')]
 
 files_red_laser_before.movie.illumination_arrangement = [1]
 files_red_laser_after.movie.illumination_arrangement = [1]
@@ -103,12 +103,12 @@ def add_red_laser_intensity_to_files_green(file_green, file_red_before, file_red
         intensity_red_before = file_red_before.intensity.mean('frame')
         intensity_red_before = intensity_red_before.drop('file')
         intensity_red_before.name = 'intensity_red_before'
-        intensity_red_before.to_netcdf(file_green.absoluteFilePath.with_suffix('.nc'), engine='h5netcdf', mode='a')
+        intensity_red_before.to_netcdf(file_green.absolute_filepath.with_suffix('.nc'), engine='h5netcdf', mode='a')
 
         intensity_red_after = file_red_after.intensity.mean('frame')
         intensity_red_after = intensity_red_after.drop('file')
         intensity_red_after.name = 'intensity_red_after'
-        intensity_red_after.to_netcdf(file_green.absoluteFilePath.with_suffix('.nc'), engine='h5netcdf', mode='a')
+        intensity_red_after.to_netcdf(file_green.absolute_filepath.with_suffix('.nc'), engine='h5netcdf', mode='a')
 
     else:
         raise FileNotFoundError
@@ -273,7 +273,7 @@ test.determine_pairs()
 #                        data_vars='minimal', coords='minimal', compat='override', engine='h5netcdf')#, parallel=True)#, chunks={'molecule': 100})
 import time
 start = time.time()
-ds = xr.open_mfdataset([file.relativeFilePath.with_suffix('.nc') for file in files_green_laser], combine='nested', concat_dim='molecule',
+ds = xr.open_mfdataset([file.relative_filepath.with_suffix('.nc') for file in files_green_laser], combine='nested', concat_dim='molecule',
                        data_vars='minimal', coords='minimal', compat='override', engine='h5netcdf', parallel=False)
 print(time.time()-start)
 
@@ -451,7 +451,7 @@ eds.to_netcdf(exp.main_path.joinpath('Analysis').joinpath('HJ7 mutations').joinp
 #                        data_vars='minimal', coords='minimal', compat='override', engine='h5netcdf')#, parallel=True)#, chunks={'molecule': 100})
 import time
 start = time.time()
-ds = xr.open_mfdataset([file.relativeFilePath.with_suffix('.nc') for file in files_green_laser], combine='nested', concat_dim='molecule',
+ds = xr.open_mfdataset([file.relative_filepath.with_suffix('.nc') for file in files_green_laser], combine='nested', concat_dim='molecule',
                        data_vars='minimal', coords='minimal', compat='override', engine='h5netcdf', parallel=False)
 print(time.time()-start)
 
@@ -476,7 +476,7 @@ def read_netcdfs(files, dim, transform_func=None):
 def ff(ds):
     return ds.sel(molecule=(ds.sequence_variable == 'CAGCAGCA'))
 
-filepaths = files_green_laser.absoluteFilePath.with_suffix('.nc')
+filepaths = files_green_laser.absolute_filepath.with_suffix('.nc')
 start = time.time()
 test = read_netcdfs(filepaths, 'molecule', transform_func=ff)
 print(time.time()-start)
@@ -502,13 +502,13 @@ for file in tqdm.tqdm(files_green_laser[400:]):
     #     ds[key] = ds[key].astype('|S')
 
     encoding = {'file': {'dtype': '|S'}, 'dimension': {'dtype': '|S'}, 'selected': {'dtype': bool}}
-    ds.to_netcdf(file.absoluteFilePath.with_suffix('.nc'), engine='h5netcdf', mode='w', encoding=encoding)
+    ds.to_netcdf(file.absolute_filepath.with_suffix('.nc'), engine='h5netcdf', mode='w', encoding=encoding)
 
 
 def change_type(file):
     ds = file.dataset
     encoding = {'file': {'dtype': '|S'}, 'dimension': {'dtype': '|S'}, 'selected': {'dtype': bool}}
-    ds.to_netcdf(file.absoluteFilePath.with_suffix('.nc'), engine='h5netcdf', mode='w', encoding=encoding)
+    ds.to_netcdf(file.absolute_filepath.with_suffix('.nc'), engine='h5netcdf', mode='w', encoding=encoding)
 
 import joblib
 from objectlist.base import tqdm_joblib

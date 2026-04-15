@@ -38,6 +38,10 @@ def test_make_projection_image_frame_range_out_of_bounds(movie, shared_datadir):
     movie.make_projection_image(projection_type='average', frame_range=(390, 410), illumination=None, write=True,
                                 return_image=True, flatten_channels=True)
 
+def test_make_projection_image_overlay_channels(movie, shared_datadir):
+    movie.make_projection_image(projection_type='average', frame_range=(0, 20), illumination=None, write=True,
+                                return_image=True, flatten_channels=True, overlay_channels=True)
+
 def test_make_projection_images(movie, shared_datadir):
     movie.make_projection_images(projection_type='average', frame_range=(0,20))
 

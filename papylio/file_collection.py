@@ -68,19 +68,19 @@ class FileCollection(ObjectList):
     def print(self):
         """Print a formatted list of all files in the collection."""
         for i, file in enumerate(self):
-            print(f"{i:3d}.  {file.relativeFilePath}")
+            print(f"{i:3d}.  {file.relative_filepath}")
 
     def merge_datasets(self, filepath_out=None, init_file_index=0, with_selected_only=False, with_sequence_only=False):
         """Merge datasets from the collection into a single netCDF file."""
         #TODO: remove sequencing part, or move to the sequencing plugin
         if filepath_out is None:
-            filepath_out = self[0].absoluteFilePath.parent / 'merged_dataset.nc'
-        filepaths_in = self.serial.absoluteFilePath.with_suffix('.nc')
+            filepath_out = self[0].absolute_filepath.parent / 'merged_dataset.nc'
+        filepaths_in = self.serial.absolute_filepath.with_suffix('.nc')
         merge_datasets(filepaths_in, filepath_out, concat_dim='molecule', init_file=filepaths_in[init_file_index],
                        with_selected_only=with_selected_only, with_sequence_only=with_sequence_only)
 
     def reorder_datasets_using_sequence_subset(self, folderpath_out):
         """Reorder datasets using sequence subset information."""
         files = self[self.has_sequencing_match]
-        filepaths_in = files.serial.absoluteFilePath.with_suffix('.nc')
+        filepaths_in = files.serial.absolute_filepath.with_suffix('.nc')
         reorder_datasets_using_sequence_subset(filepaths_in, folderpath_out, concat_dim='molecule')

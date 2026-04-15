@@ -45,7 +45,7 @@ def make_gaussian_mask(size, offsets, sigma=1.291):
     masks = masks/norm_factors
     return masks
 
-def extract_traces(movie, coordinates, background=None, mask_size=1.291, neighbourhood_size=11, correct_illumination=False):
+def extract_traces(movie, coordinates, mask_size, neighbourhood_size=11):
     """Extract per-molecule intensity time traces from a Movie given coordinates.
 
     Parameters
@@ -54,14 +54,10 @@ def extract_traces(movie, coordinates, background=None, mask_size=1.291, neighbo
         Movie object providing frame access
     coordinates : xarray.DataArray
         Coordinates with dims ('molecule','channel','y','x') or similar
-    background : xarray.DataArray or None
-        Optional background image or per-frame background to subtract
     mask_size : float
         Sigma of Gaussian mask used for weighted extraction
     neighbourhood_size : int
         Size of the ROI (pixels) around each coordinate to sum
-    correct_illumination : bool
-        If True, attempt basic illumination correction per frame
 
     Returns
     -------

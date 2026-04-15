@@ -1,23 +1,11 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Sep 14 15:24:46 2018
-
-@author: ivoseverins
-"""
-# Use the following lines on Mac
-# from sys import platform
-# if platform == "darwin":
-#     from matplotlib import use
-#     use('WXAgg')
 import PySide2
-import os  # Miscellaneous operating system interfaces - to be able to switch from Mac to Windows
-from pathlib import Path  # For efficient path manipulation
+import os
+from pathlib import Path
 
 import tqdm
 import yaml
 import numpy as np
 import pandas as pd
-# import wx
 
 ###################################################
 ## To enable interactive plotting with PySide2 in PyCharm 2022.3
@@ -29,14 +17,14 @@ use('Qt5Agg')
 ###################################################
 
 import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt  # Provides a MATLAB-like plotting framework
+import matplotlib.pyplot as plt
 import xarray as xr
 from collections import UserDict
 import re
 import tifffile
+import matchpoint as mp
 
 from papylio.file import File
-# from papylio.molecule import Molecules
 from papylio.file_collection import FileCollection
 from papylio.plotting import histogram
 from papylio.movie.movie import Movie
@@ -44,162 +32,6 @@ from papylio.movie.movie import Movie
 # from papylio.plugin_manager import PluginMetaClass
 from papylio.plugin_manager import plugins
 
-import re  # Regular expressions
-import warnings
-from nd2reader import ND2Reader
-
-
-# import matplotlib.pyplot as plt #Provides a MATLAB-like plotting framework
-# import itertools #Functions creating iterators for efficient looping
-# np.seterr(divide='ignore', invalid='ignore')
-# import pandas as pd
-# from threshold_analysis_v2 import stepfinder
-# import pickle
-
-class Configuration(UserDict):
-    """Configuration class for managing YAML configuration files.
-
-    Extends UserDict to provide dictionary-like access to configuration settings
-    stored in YAML format. Supports automatic reloading when the configuration
-    file is modified on disk.
-    """
-    # Ruamel yaml parser may be better for preserving comments
-    # https://sourceforge.net/projects/ruamel-yaml/
-    def __init__(self, filepath):
-        """Initialize Configuration object.
-
-        Loads configuration from the specified YAML file, or loads the default
-        configuration if the file does not exist. The default configuration is
-        saved to the specified filepath.
-
-        Parameters
-        ----------
-        filepath : str or pathlib.Path
-            Path to the configuration YAML file
-        """
-        self.reload_block = 0
-        self.filepath = Path(filepath)
-        self.previous_file_modification_time = 0
-
-        # Load custom config file or otherwise load the default config file
-        if self.filepath.is_file():
-            self.load()
-        else:
-            filepath = Path(__file__).with_name('default_configuration.yml')
-            with filepath.open('r') as yml_file:
-                self._data = yaml.load(yml_file, Loader=yaml.SafeLoader)
-            # self.load(Path(__file__).with_name('default_configuration.yml'))
-            self.save()
-
-    @property
-    def data(self):
-        """dict : Configuration data dictionary.
-
-        Automatically reloads configuration from file if it has been modified
-        and reloading is enabled.
-        """
-        self.load()
-        return self._data
-
-    @data.setter
-    def data(self, data):
-        """Set configuration data dictionary.
-
-        Parameters
-        ----------
-        data : dict
-            Configuration data to set
-        """
-        self._data = data
-
-    @property
-    def file_modification_time(self):
-        """float : File modification timestamp (read-only)"""
-        return self.filepath.stat().st_mtime
-
-    @property
-    def reload(self):
-        """bool : Whether automatic reloading is enabled (read-only).
-
-        Returns True when not inside a context manager, False otherwise.
-        """
-        return self.reload_block == 0
-
-    def __enter__(self):
-        """Context manager entry point.
-
-        Loads configuration and increments reload block counter to prevent
-        automatic reloading during the context.
-
-        Returns
-        -------
-        Configuration
-            Returns self for use in 'with' statements
-        """
-        self.load()
-        self.reload_block += 1
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit point.
-
-        Decrements reload block counter to re-enable automatic reloading.
-
-        Parameters
-        ----------
-        exc_type : type
-            Exception type if an exception occurred
-        exc_val : Exception
-            Exception value if an exception occurred
-        exc_tb : traceback
-            Exception traceback if an exception occurred
-        """
-        self.reload_block -= 1
-
-    def __getitem__(self, item):
-        """Get configuration item using dictionary-like access.
-
-        Parameters
-        ----------
-        item : str
-            Configuration key
-
-        Returns
-        -------
-        Any
-            Configuration value
-        """
-        return self.data[item]
-
-    def load(self, filepath=None):
-        """Load configuration from YAML file.
-
-        Reloads configuration from file only if the reload block counter is 0
-        (i.e., not in a context manager) and the file has been modified.
-
-        Parameters
-        ----------
-        filepath : str or pathlib.Path, optional
-            Path to load from. If None, uses the default filepath
-        """
-        if self.reload:
-            file_modification_time = self.file_modification_time
-            if file_modification_time != self.previous_file_modification_time:
-                if filepath is None:
-                    filepath = self.filepath
-                with filepath.open('r') as yml_file:
-                    self._data = yaml.load(yml_file, Loader=yaml.SafeLoader)
-                self.previous_file_modification_time = file_modification_time
-
-    def save(self):
-        """Save configuration to YAML file.
-
-        Writes the current configuration data to the YAML file specified
-        in the filepath attribute.
-        """
-        with self.filepath.open('w') as yml_file:
-            yaml.dump(self._data, yml_file, sort_keys=False)
-
-# from PyQt5.QtWidgets import QFileDialog
 def get_QApplication():
     """Get or create a PySide2 QApplication instance.
 
@@ -234,16 +66,6 @@ def get_path(main_window):
     str
         Absolute path to selected directory, or empty string if cancelled
     """
-    # if not 'app' in globals().keys():
-    #     global app
-    #     app = wx.App(None)
-    # dlg = wx.DirDialog(None, message="Choose a folder", defaultPath="")
-    # if dlg.ShowModal() == wx.ID_OK:
-    #     path = dlg.GetPath()
-    # else:
-    #     path = None
-    # dlg.Destroy()
-
     app = get_QApplication()
     from PySide2.QtWidgets import QFileDialog, QMainWindow
     if main_window is None:
@@ -272,6 +94,7 @@ class Experiment:
         If true, then all files in the main folder are automatically imported. \n
         If false, then files are detected, but not imported.
     """
+
     # TODO: Add presets for specific microscopes
     def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None, perform_logging=True, use_colorblind_friendly_colors=True):
         """Init method for the Experiment class
@@ -300,33 +123,35 @@ class Experiment:
         self.import_all = import_all
         self.perform_logging = perform_logging
 
+        self.excluded_extensions = ['pdf', 'dat', 'db', 'py', 'yml', 'png', 'pdf', 'xlsx', 'md', 'txt']
+        self.excluded_names = ['_ave', '_max', '_corrections', '_dwells', '_dwell_analysis',
+                               'darkfield', 'flatfield', '_sequencing_data', '_sequencing_match']
+        self.excluded_paths = ['Analysis', 'Sequencing data', 'Results']
+
         set_default_matplotlib_colors(use_colorblind_friendly_colors)
 
         self._channels = np.atleast_1d(np.array(channels))
         self._number_of_channels = len(channels)
         self._pairs = [[c1, c2] for i1, c1 in enumerate(channels) for i2, c2 in enumerate(channels) if i2 > i1]
 
-        # Load custom config file or otherwise load the default config file
-        self.configuration = Configuration(self.main_path.joinpath('config.yml'))
-
         os.chdir(main_path)
 
         # file_paths = self.find_file_paths()
         # self.add_files(file_paths, test_duplicates=False)
 
-        with self.configuration:
-            self.add_files(self.main_path, test_duplicates=False)
+        self.add_files(self.main_path, test_duplicates=False)
 
         self.common_image_corrections = xr.Dataset()
         self.load_darkfield_correction()
         self.load_flatfield_correction()
 
         # Find mapping file
-        for file in self.files:
-            if file.mapping is not None:
-                #TODO: Check whether we want to log this or not. If so, then the mapping file name should be logged.
-                file.use_mapping_for_all_files(perform_logging=False)
-                break
+        # for file in self.files:
+        #     if file.mapping is not None:
+        #         #TODO: Check whether we want to log this or not. If so, then the mapping file name should be logged.
+        #         file.use_mapping_for_all_files(perform_logging=False)
+        #         break
+        self.load_mappings()
 
         print('\nInitialize experiment: \n' + str(self.main_path))
 
@@ -410,30 +235,17 @@ class Experiment:
     #     return Molecules.sum([file.molecules for file in self.files])
 
     @property
-    def selectedFiles(self):
+    def selected_files(self):
         """list of File : List of selected files"""
-        return self.files[self.files.isSelected]
+        return self.files[self.files.is_selected]
 
-    # @property
-    # def selectedMoleculesInSelectedFiles(self):
-    #     """list of Molecule : List of selected molecules in selected files"""
-    #     return [molecule for file in self.selectedFiles for molecule in file.selectedMolecules]
-
-    # @property
-    # def selectedMoleculesInAllFiles(self):
-    #     """list of Molecule : List of selected molecules in all files"""
-    #     return [molecule for file in self.files for molecule in file.selectedMolecules]
-
-    @property
-    def mapping_file(self):
-        """File : Mapping file object from the experiment, if one exists.
-
-        Returns the first file marked as a mapping file. Returns None if no
-        mapping file is found.
-        """
-        for file in self.files:
-            if file.is_mapping_file:
-                return file
+    def load_mappings(self):
+        mappings = []
+        for filepath in self.main_path.glob('channel_mapping*.nc'):
+            mappings.append(mp.MatchPoint.load(filepath))
+        if len(mappings) == (self.number_of_channels-1):
+            for file in self.files:
+                file.mappings = mappings
 
     @property
     def analysis_path(self):
@@ -449,12 +261,12 @@ class Experiment:
     @property
     def file_paths(self):
         """list of pathlib.Path : List of relative file paths for all files in experiment"""
-        return [file.relativeFilePath for file in self.files]
+        return [file.relative_filepath for file in self.files]
 
     @property
     def nc_file_paths(self):
         """list of pathlib.Path : List of relative NetCDF file paths for all files in experiment"""
-        return [file.relativeFilePath.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
+        return [file.relative_filepath.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
 
     def find_file_paths_and_extensions(self, paths):
         """Find unique files in all subfolders and add them to the experiment
@@ -489,14 +301,14 @@ class Experiment:
                      #p.is_file() &
                      # Exclude stings in filename
                      all(name not in p.with_suffix('').name for name in
-                         self.configuration['files']['excluded_names']) &
+                         self.excluded_names) &
                      # Exclude strings in path
                      all(path not in str(p.relative_to(self.main_path).parent) for path in
-                         self.configuration['files']['excluded_paths']) &
+                         self.excluded_paths) &
                      # Exclude hidden folders
                      ('.' not in [s[0] for s in p.parts]) &
                      # Exclude file extensions
-                     (p.suffix[1:] not in self.configuration['files']['excluded_extensions'])
+                     (p.suffix[1:] not in self.excluded_extensions)
              )
              ]
 
@@ -689,7 +501,7 @@ class Experiment:
                 illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 flatfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
-                    movie.separate_channels(flatfield)
+                    movie.separate_channels(flatfield, movie.channel_rows, movie.channel_columns)
 
             self.common_image_corrections['flatfield_correction'] = flatfield_correction
         else:
@@ -720,7 +532,7 @@ class Experiment:
                 # illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 darkfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
-                    movie.separate_channels(darkfield)
+                    movie.separate_channels(darkfield, movie.channel_rows, movie.channel_columns)
 
             self.common_image_corrections['darkfield_correction'] = darkfield_correction
         else:
@@ -782,13 +594,13 @@ class Experiment:
             Arbitrary keyword arguments.
 
         """
-        # files = [file for file in exp.files if file.isSelected]
+        # files = [file for file in exp.files if file.is_selected]
         # files = self.files
 
         if (fileSelection & moleculeSelection):
-            molecules = [molecule for file in self.selectedFiles for molecule in file.selectedMolecules]
+            molecules = [molecule for file in self.selected_files for molecule in file.selectedMolecules]
         elif (fileSelection & (not moleculeSelection)):
-            molecules = [molecule for file in self.selectedFiles for molecule in file.molecules]
+            molecules = [molecule for file in self.selected_files for molecule in file.molecules]
         elif ((not fileSelection) & moleculeSelection):
             molecules = [molecule for file in self.files for molecule in file.selectedMolecules]
         else:
@@ -809,16 +621,6 @@ class Experiment:
 
         fig.savefig(self.main_path.joinpath('number_of_molecules.pdf'), bbox_inches='tight')
         fig.savefig(self.main_path.joinpath('number_of_molecules.png'), bbox_inches='tight')
-
-    def select(self):
-        """Simple method to look through all molecules in the experiment
-
-        Plots a molecule. If enter is pressed the next molecule is shown.
-
-        """
-        for molecule in self.molecules:
-            molecule.plot()
-            input("Press enter to continue")
 
     def print_files(self):
         """Print a summary of all files in the experiment.
@@ -848,20 +650,10 @@ class Experiment:
         if files is None:
             files = self.files
 
-        file_paths = [file.relativeFilePath.with_suffix('.nc') for file in files if '.nc' in file.extensions]
+        file_paths = [file.relative_filepath.with_suffix('.nc') for file in files if '.nc' in file.extensions]
 
         with xr.open_mfdataset(file_paths, concat_dim='molecule', combine='nested') as ds:
             ds_sel = ds.query(query)  # HJ1_WT, HJ7_G116T
-            # if not 'app' in globals().keys():
-            #     global app
-            #     app = wx.App(None)
-            # app = wit.InspectableApp()
-            # frame = TraceAnalysisFrame(None, ds_sel, "Sample editor")
-            # frame.molecules = exp.files[1].molecules
-            # print('test')
-            # import wx.lib.inspection
-            # wx.lib.inspection.InspectionTool().Show()
-            # app.MainLoop()
             from papylio.trace_plot import TracePlotWindow
             TracePlotWindow(dataset=ds_sel, save_path=None, **kwargs)
 
@@ -874,7 +666,7 @@ class Experiment:
         """
         df = pd.DataFrame(columns=['Number of molecules'])
         for i, file in enumerate(self.files):
-            n = str(file.relativeFilePath)
+            n = str(file.relative_filepath)
             try:
                 nms = file.number_of_molecules
             except FileNotFoundError:
