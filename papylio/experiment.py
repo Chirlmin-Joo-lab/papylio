@@ -73,6 +73,8 @@ def get_path(main_window):
     path = QFileDialog.getExistingDirectory(main_window, 'Choose directory')
     return path
 
+# TODO: Perhaps make Experiment a subclass of FileCollection
+
 @plugins
 class Experiment:
     """ Main experiment class
@@ -297,26 +299,7 @@ class Experiment:
 
         """
         main_path = Path(r'N:\tnw\BN\CMJ\Shared\Ivo\PhD_data\20230912 - Objective-type TIRF (BN)')
-        remove_pattern_filename = re.compile("|".join(map(re.escape, self.filename_suffixes)))
-        #
-        # filepaths_and_extensions = set()
-        #
-        # stack = [main_path]
-        # while stack:
-        #     dir_path = stack.pop()
-        #     dir_path_relative = Path(dir_path).relative_to(main_path)
-        #     with os.scandir(dir_path) as dir_items:
-        #         for item in dir_items:
-        #             if item.is_dir():
-        #                 stack.append(item.path)
-        #             elif item.is_file():
-        #                 filepath = Path(item.path)
-        #                 if filepath.suffix in self.included_extensions:
-        #                     # filename = remove_pattern_filename.sub('', filepath.name)
-        #                     filename = filepath.name
-        #                     for pattern in self.filename_suffixes:
-        #                         filename = filename.replace(pattern, '')
-        #                     filepaths_and_extensions.add(dir_path_relative / filename)
+        # remove_pattern_filename = re.compile("|".join(map(re.escape, self.filename_suffixes)))
 
         #TODO: Things like _dwells.nc are now added as extensions, not sure whether we need extensions at all actually.
 
@@ -347,35 +330,6 @@ class Experiment:
                                     extension = filename_suffix + extension
                             filepaths_and_extensions[dir_path_relative / filename].add(extension)
 
-
-        # if isinstance(paths, str) or isinstance(paths, Path):
-        #     #paths = paths.glob('**/*')
-        #         #'**/?*.*')  # At least one character in front of the extension to prevent using hidden folders
-        #
-        #     # The following approach is faster than checking each file separately using is_file() for network drives. (not tested for regular drives)
-        #     files_and_folders = set(paths.glob('**/*'))
-        #     folders = set(paths.glob('**'))
-        #     paths = files_and_folders - folders
-        #
-        # file_paths_and_extensions = \
-        #     [[p.relative_to(self.main_path).with_suffix(''), p.suffix]
-        #      for p in paths
-        #      if (
-        #              # Use only files
-        #              #p.is_file() &
-        #              # Exclude stings in filename
-        #              all(name not in p.with_suffix('').name for name in
-        #                  self.excluded_names) &
-        #              # Exclude strings in path
-        #              all(path not in str(p.relative_to(self.main_path).parent) for path in
-        #                  self.excluded_paths) &
-        #              # Exclude hidden folders
-        #              ('.' not in [s[0] for s in p.parts]) &
-        #              # Exclude file extensions
-        #              (p.suffix[1:] not in self.excluded_extensions)
-        #      )
-        #      ]
-
         # TODO: Test spooled file and nd2 file import
         new_filepaths_and_extensions = defaultdict(set)
         for i, (filepath, extensions) in enumerate(filepaths_and_extensions.items()):
@@ -389,10 +343,6 @@ class Experiment:
                     for fov_id in range(nd2_movie.number_of_fov):
                         new_path = Path(str(filepath) + f'_fov{fov_id:03d}')
                         new_filepaths_and_extensions[filepath] = extensions
-                        # fov_info['fov_chosen'] = fov_id
-                        # new_file = File(new_path, self, fov_info=fov_info.copy())
-                        # if new_file.extensions:
-                        #     self.files.append(new_file)
                 else:
                     new_filepaths_and_extensions[filepath] = extensions
             else:
@@ -400,17 +350,6 @@ class Experiment:
         filepaths_and_extensions = new_filepaths_and_extensions
 
         return filepaths_and_extensions
-
-        # filepaths_and_extensions = np.array(filepaths_and_extensions)
-        #
-        # file_paths_and_extensions = filepaths_and_extensions[filepaths_and_extensions[:, 0].argsort()]
-        # unique_file_paths, indices = np.unique(file_paths_and_extensions[:, 0], return_index=True)
-        # extensions_per_filepath = np.split(file_paths_and_extensions[:, 1], indices[1:])
-
-        # unique_filepaths = list(filepaths_and_extensions.keys())
-        # extensions_per_filepath = list(filepaths_and_extensions.values())
-        #
-        # return unique_filepaths, extensions_per_filepath
 
     def add_files(self, paths, test_duplicates=True):
         """Find unique files in all subfolders and add them to the experiment
@@ -435,7 +374,6 @@ class Experiment:
             else:
                 i = self.file_paths.find(file_path.absolute().relative_to(self.main_path))
                 self.files[i].add_extensions(extensions)
-
 
     def determine_flatfield_and_darkfield_corrections(self, files, method='BaSiC', illumination_index=0, frame_index=0,
                                                       estimate_darkfield=True, **kwargs):
@@ -540,26 +478,6 @@ class Experiment:
         objects in the experiment so they can be applied during image processing.
         """
         self.files.movie._common_corrections = self.common_image_corrections
-
-    # def show_flatfield_and_darkfield_corrections(self, name='', save=True):
-    #     pass
-
-    # def load_darkfield_correction(self):
-    #     file_paths = list(self.main_path.glob('darkfield*'))
-    #     if file_paths:
-    #         movie = self.files[0].movie
-    #         darkfield_correction = xr.DataArray(np.zeros((movie.number_of_illuminations,
-    #                                             movie.height, movie.width)), # perhaps make the movie width and height equal to the channel width and height
-    #                                    dims=('illumination', 'y', 'x'),
-    #                                    coords={'illumination': movie.illumination_indices})
-    #         for file_path in file_paths:
-    #             darkfield = tifffile.imread(file_path)
-    #             _, _, illumination_indices, _ = movie.image_type_from_filename(file_path.name)
-    #             darkfield_correction[dict(illumination=illumination_indices)] = darkfield
-    #
-    #         self.files.movie.darkfield_correction = darkfield_correction
-    #     else:
-    #         self.files.movie.darkfield_correction = None
 
     def histogram(self, axis=None, bins=100, parameter='E', molecule_averaging=False,
                   fileSelection=False, moleculeSelection=False, makeFit=False, export=False, **kwargs):

@@ -13,6 +13,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 # TODO: Make sure that the collection can only contain File objects
+# TODO: perhaps add file info method that generates a table with info of the file, for example number of molecules, etc.
 class FileCollection(ObjectList):
     def __getattr__(self, item):
         """Delegate attribute access to individual files and concatenate xarray results if applicable."""
