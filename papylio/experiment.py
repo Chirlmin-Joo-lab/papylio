@@ -298,7 +298,6 @@ class Experiment:
         Since sifx files made using spooling are all called 'Spooled files' the parent folder is used as file instead of the sifx file
 
         """
-        main_path = Path(r'N:\tnw\BN\CMJ\Shared\Ivo\PhD_data\20230912 - Objective-type TIRF (BN)')
         # remove_pattern_filename = re.compile("|".join(map(re.escape, self.filename_suffixes)))
 
         #TODO: Things like _dwells.nc are now added as extensions, not sure whether we need extensions at all actually.
@@ -306,10 +305,10 @@ class Experiment:
         from collections import defaultdict
         filepaths_and_extensions = defaultdict(set)
 
-        stack = [main_path]
+        stack = [self.main_path]
         while stack:
             dir_path = stack.pop()
-            dir_path_relative = Path(dir_path).relative_to(main_path)
+            dir_path_relative = Path(dir_path).relative_to(self.main_path)
             if any(excluded_path in str(dir_path_relative) for excluded_path in self.excluded_paths):
                 continue
             with os.scandir(dir_path) as dir_items:
