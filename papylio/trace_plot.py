@@ -14,11 +14,11 @@ from typing import Optional
 
 ###################################################
 ## To enable interactive plotting with PySide2 in PyCharm 2022.3
-import PySide2
+import PySide6
 import sys
-sys.modules['PyQt5'] = sys.modules['PySide2']
+sys.modules['PyQt6'] = sys.modules['PySide6']
 import matplotlib
-matplotlib.use('Qt5Agg')
+matplotlib.use('qtagg')
 ###################################################
 
 import matplotlib.pyplot as plt
@@ -31,12 +31,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib2 import Path
 
-from PySide2.QtWidgets import (QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QCheckBox, QLabel,
+from PySide6.QtWidgets import (QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QCheckBox, QLabel,
                                QTableWidget, QTableWidgetItem, QHeaderView, QTreeView, QStyledItemDelegate,
                                QAbstractItemView)
-from PySide2.QtGui import QStandardItemModel, QStandardItem, QColor
-from PySide2.QtGui import QKeySequence, QCloseEvent, QDragMoveEvent
-from PySide2.QtCore import Qt, QModelIndex, QTimer
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor
+from PySide6.QtGui import QKeySequence, QCloseEvent, QDragMoveEvent
+from PySide6.QtCore import Qt, QModelIndex, QTimer
 
 import sys
 import time
@@ -47,7 +47,7 @@ import netCDF4
 import json
 
 # from matplotlib.backends.qt_compat import QtWidgets
-from PySide2 import QtWidgets
+from PySide6 import QtWidgets
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
@@ -1231,7 +1231,7 @@ if __name__ == "__main__":
     exp = pp.Experiment(r'C:\Users\ivoseverins\surfdrive\Promotie\Code\Python\traceAnalysis\twoColourExampleData\20141017 - Holliday junction - Copy')
     ds = exp.files[0].dataset
 
-    from PySide2.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     frame = TracePlotWindow(ds)

@@ -12,10 +12,10 @@ import numpy as np
 
 from papylio.file import calculate_FRET, calculate_stoichiometry, calculate_intensity_total
 
-from PySide2 import QtWidgets
-from PySide2.QtWidgets import QMainWindow, QPushButton, QWidget, QVBoxLayout, QLineEdit, QLabel
-from PySide2.QtGui import QKeySequence
-from PySide2.QtCore import Qt
+from PySide6 import QtWidgets
+from PySide6.QtWidgets import QMainWindow, QPushButton, QWidget, QVBoxLayout, QLineEdit, QLabel
+from PySide6.QtGui import QKeySequence
+from PySide6.QtCore import Qt
 
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)

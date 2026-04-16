@@ -1,4 +1,4 @@
-import PySide2
+import PySide6
 import os
 from pathlib import Path
 
@@ -9,11 +9,11 @@ import pandas as pd
 
 ###################################################
 ## To enable interactive plotting with PySide2 in PyCharm 2022.3
-import PySide2
+import PySide6
 import sys
-sys.modules['PyQt5'] = sys.modules['PySide2']
+sys.modules['PyQt6'] = sys.modules['PySide6']
 from matplotlib import use
-use('Qt5Agg')
+use('qtagg')
 ###################################################
 
 import matplotlib.colors as mcolors
@@ -43,7 +43,7 @@ def get_QApplication():
     PySide2.QtWidgets.QApplication
         The QApplication instance
     """
-    from PySide2 import QtWidgets
+    from PySide6 import QtWidgets
     app = QtWidgets.QApplication.instance()
     if app is None:
         # if it does not exist then a QApplication is created
@@ -58,7 +58,7 @@ def get_path(main_window):
 
     Parameters
     ----------
-    main_window : PySide2.QtWidgets.QMainWindow, optional
+    main_window : PySide6.QtWidgets.QMainWindow, optional
         Parent window for the dialog. If None, a new QMainWindow is created
 
     Returns
@@ -67,7 +67,7 @@ def get_path(main_window):
         Absolute path to selected directory, or empty string if cancelled
     """
     app = get_QApplication()
-    from PySide2.QtWidgets import QFileDialog, QMainWindow
+    from PySide6.QtWidgets import QFileDialog, QMainWindow
     if main_window is None:
         main_window = QMainWindow()
     path = QFileDialog.getExistingDirectory(main_window, 'Choose directory')
