@@ -123,14 +123,27 @@ class Experiment:
         self.import_all = import_all
         self.perform_logging = perform_logging
 
+        ### CONFIGURATION ###
         self.excluded_extensions = ['pdf', 'dat', 'db', 'py', 'yml', 'png', 'pdf', 'xlsx', 'md', 'txt']
-        self.excluded_names = ['_ave', '_max', '_corrections', '_dwells', '_dwell_analysis',
-                               'darkfield', 'flatfield', '_sequencing_data', '_sequencing_match']
+        self.included_extensions = ['.nc']
+        self.filename_suffixes = ['_ave', '_max', '_corrections', '_dwells', '_dwell_analysis']
+        self.filename_suffixes += ['_sequencing_data', '_sequencing_match'] # TODO: Move sequencing related terms to sequencing.py
+        self.excluded_names = ['darkfield', 'flatfield']
         self.excluded_paths = ['Analysis', 'Sequencing data', 'Results']
+        #####################
+
 
         set_default_matplotlib_colors(use_colorblind_friendly_colors)
 
+        ### MICROSCOPE ###
         self._channels = np.atleast_1d(np.array(channels))
+        self.microscope_name = 'TIR-T'
+        ##################
+
+        self.movie_extensions = list(Movie.type_dict().keys())
+        self.included_extensions += self.movie_extensions
+
+
         self._number_of_channels = len(channels)
         self._pairs = [[c1, c2] for i1, c1 in enumerate(channels) for i2, c2 in enumerate(channels) if i2 > i1]
 
@@ -283,65 +296,121 @@ class Experiment:
         Since sifx files made using spooling are all called 'Spooled files' the parent folder is used as file instead of the sifx file
 
         """
+        main_path = Path(r'N:\tnw\BN\CMJ\Shared\Ivo\PhD_data\20230912 - Objective-type TIRF (BN)')
+        remove_pattern_filename = re.compile("|".join(map(re.escape, self.filename_suffixes)))
+        #
+        # filepaths_and_extensions = set()
+        #
+        # stack = [main_path]
+        # while stack:
+        #     dir_path = stack.pop()
+        #     dir_path_relative = Path(dir_path).relative_to(main_path)
+        #     with os.scandir(dir_path) as dir_items:
+        #         for item in dir_items:
+        #             if item.is_dir():
+        #                 stack.append(item.path)
+        #             elif item.is_file():
+        #                 filepath = Path(item.path)
+        #                 if filepath.suffix in self.included_extensions:
+        #                     # filename = remove_pattern_filename.sub('', filepath.name)
+        #                     filename = filepath.name
+        #                     for pattern in self.filename_suffixes:
+        #                         filename = filename.replace(pattern, '')
+        #                     filepaths_and_extensions.add(dir_path_relative / filename)
 
-        if isinstance(paths, str) or isinstance(paths, Path):
-            #paths = paths.glob('**/*')
-                #'**/?*.*')  # At least one character in front of the extension to prevent using hidden folders
+        #TODO: Things like _dwells.nc are now added as extensions, not sure whether we need extensions at all actually.
 
-            # The following approach is faster than checking each file separately using is_file() for network drives. (not tested for regular drives)
-            files_and_folders = set(paths.glob('**/*'))
-            folders = set(paths.glob('**'))
-            paths = files_and_folders - folders
+        from collections import defaultdict
+        filepaths_and_extensions = defaultdict(set)
 
-        file_paths_and_extensions = \
-            [[p.relative_to(self.main_path).with_suffix(''), p.suffix]
-             for p in paths
-             if (
-                     # Use only files
-                     #p.is_file() &
-                     # Exclude stings in filename
-                     all(name not in p.with_suffix('').name for name in
-                         self.excluded_names) &
-                     # Exclude strings in path
-                     all(path not in str(p.relative_to(self.main_path).parent) for path in
-                         self.excluded_paths) &
-                     # Exclude hidden folders
-                     ('.' not in [s[0] for s in p.parts]) &
-                     # Exclude file extensions
-                     (p.suffix[1:] not in self.excluded_extensions)
-             )
-             ]
+        stack = [main_path]
+        while stack:
+            dir_path = stack.pop()
+            dir_path_relative = Path(dir_path).relative_to(main_path)
+            if any(excluded_path in str(dir_path_relative) for excluded_path in self.excluded_paths):
+                continue
+            with os.scandir(dir_path) as dir_items:
+                for item in dir_items:
+                    if item.is_dir():
+                        stack.append(item.path)
+                    elif item.is_file():
+                        filepath = Path(item.path)
+                        if filepath.suffix in self.included_extensions:
+                            # filename = remove_pattern_filename.sub('', filepath.name)
+                            filename = filepath.stem
+                            extension = filepath.suffix
+                            if any(excluded_name in filename for excluded_name in self.excluded_names):
+                                continue
+                            for filename_suffix in self.filename_suffixes:
+                                if filename_suffix in filename:
+                                    filename = filename.replace(filename_suffix, '')
+                                    extension = filename_suffix + extension
+                            filepaths_and_extensions[dir_path_relative / filename].add(extension)
+
+
+        # if isinstance(paths, str) or isinstance(paths, Path):
+        #     #paths = paths.glob('**/*')
+        #         #'**/?*.*')  # At least one character in front of the extension to prevent using hidden folders
+        #
+        #     # The following approach is faster than checking each file separately using is_file() for network drives. (not tested for regular drives)
+        #     files_and_folders = set(paths.glob('**/*'))
+        #     folders = set(paths.glob('**'))
+        #     paths = files_and_folders - folders
+        #
+        # file_paths_and_extensions = \
+        #     [[p.relative_to(self.main_path).with_suffix(''), p.suffix]
+        #      for p in paths
+        #      if (
+        #              # Use only files
+        #              #p.is_file() &
+        #              # Exclude stings in filename
+        #              all(name not in p.with_suffix('').name for name in
+        #                  self.excluded_names) &
+        #              # Exclude strings in path
+        #              all(path not in str(p.relative_to(self.main_path).parent) for path in
+        #                  self.excluded_paths) &
+        #              # Exclude hidden folders
+        #              ('.' not in [s[0] for s in p.parts]) &
+        #              # Exclude file extensions
+        #              (p.suffix[1:] not in self.excluded_extensions)
+        #      )
+        #      ]
 
         # TODO: Test spooled file and nd2 file import
-        new_file_paths_and_extensions = []
-        for i, (file_path, extensions) in enumerate(file_paths_and_extensions):
-            if (file_path.name == 'Spooled files'):
-                new_file_paths_and_extensions.append([file_path.parent, extensions])
+        new_filepaths_and_extensions = defaultdict(set)
+        for i, (filepath, extensions) in enumerate(filepaths_and_extensions.items()):
+            if (filepath.name == 'Spooled files'):
+                new_filepaths_and_extensions.append([filepath.parent, extensions])
                 # file_paths_and_extensions[i, 0] = file_paths_and_extensions[i, 0].parent
-            elif '.nd2' in extensions and not 'fov' in str(file_path):
+            elif '.nd2' in extensions and not 'fov' in str(filepath):
                 from papylio.movie.movie import Movie
-                nd2_movie = Movie(file_path.with_suffix('.nd2'))
+                nd2_movie = Movie(filepath.with_suffix('.nd2'))
                 if nd2_movie.number_of_fov > 1:  # if the file is nd2 with multiple field of views
                     for fov_id in range(nd2_movie.number_of_fov):
-                        new_path = Path(str(file_path) + f'_fov{fov_id:03d}')
-                        new_file_paths_and_extensions.append([new_path, extensions])
+                        new_path = Path(str(filepath) + f'_fov{fov_id:03d}')
+                        new_filepaths_and_extensions[filepath] = extensions
                         # fov_info['fov_chosen'] = fov_id
                         # new_file = File(new_path, self, fov_info=fov_info.copy())
                         # if new_file.extensions:
                         #     self.files.append(new_file)
                 else:
-                    new_file_paths_and_extensions.append([file_path, extensions])
+                    new_filepaths_and_extensions[filepath] = extensions
             else:
-                new_file_paths_and_extensions.append([file_path, extensions])
-        file_paths_and_extensions = new_file_paths_and_extensions
+                new_filepaths_and_extensions[filepath] = extensions
+        filepaths_and_extensions = new_filepaths_and_extensions
 
-        file_paths_and_extensions = np.array(file_paths_and_extensions)
+        return filepaths_and_extensions
 
-        file_paths_and_extensions = file_paths_and_extensions[file_paths_and_extensions[:, 0].argsort()]
-        unique_file_paths, indices = np.unique(file_paths_and_extensions[:, 0], return_index=True)
-        extensions_per_filepath = np.split(file_paths_and_extensions[:, 1], indices[1:])
+        # filepaths_and_extensions = np.array(filepaths_and_extensions)
+        #
+        # file_paths_and_extensions = filepaths_and_extensions[filepaths_and_extensions[:, 0].argsort()]
+        # unique_file_paths, indices = np.unique(file_paths_and_extensions[:, 0], return_index=True)
+        # extensions_per_filepath = np.split(file_paths_and_extensions[:, 1], indices[1:])
 
-        return unique_file_paths, extensions_per_filepath
+        # unique_filepaths = list(filepaths_and_extensions.keys())
+        # extensions_per_filepath = list(filepaths_and_extensions.values())
+        #
+        # return unique_filepaths, extensions_per_filepath
 
     def add_files(self, paths, test_duplicates=True):
         """Find unique files in all subfolders and add them to the experiment
@@ -360,89 +429,13 @@ class Experiment:
         """
         file_paths_and_extensions = self.find_file_paths_and_extensions(paths)
 
-        for file_path, extensions in tqdm.tqdm(zip(*file_paths_and_extensions), 'Import files',
-                                               total=(len(file_paths_and_extensions[0]))):
+        for file_path, extensions in tqdm.tqdm(file_paths_and_extensions.items(), 'Import files'):
             if not test_duplicates or (file_path.absolute().relative_to(self.main_path) not in self.file_paths):
                 self.files.append(File(file_path, extensions, self, perform_logging=self.perform_logging))
             else:
                 i = self.file_paths.find(file_path.absolute().relative_to(self.main_path))
                 self.files[i].add_extensions(extensions)
 
-        # nd2_file = list(self.main_path.glob(str(relativeFilePath) + '.nd2'))
-        # fov_info = {'number_of_fov': 1}  # fov=Field of View
-        # if nd2_file:  # check if the nd2 file has multiple fov data,
-        #     fov_info = self.get_fov_from_nd2(nd2_file[0])
-        #
-        # if fov_info['number_of_fov'] > 1:  # if the file is nd2 with multiple field of views
-        #     for fov_id in range(fov_info['number_of_fov']):
-        #         new_path = Path(str(relativeFilePath) + f'_fov{fov_id:03d}')
-        #         fov_info['fov_chosen'] = fov_id
-        #         new_file = File(new_path, self, fov_info=fov_info.copy())
-        #         if new_file.extensions:
-        #             self.files.append(new_file)
-
-
-
-    # def add_files(self, file_paths, test_duplicates=True):
-    #     for file_path in file_paths:
-    #         self.add_file(file_path, test_duplicates)
-    #
-    #     for file in self.files:
-    #         if file.mapping is not None:
-    #             file.use_mapping_for_all_files()
-    #             break
-
-    # def add_file(self, file_path, test_duplicates=True):
-    #     """Add a file to the experiment
-    #
-    #     Add the file to the experiment only if the file object has found and imported relevant extensions .
-    #     If the file is already present in experiment, then try to find and import new extensions.
-    #
-    #     Parameters
-    #     ----------
-    #     relativeFilePath : pathlib.Path or str
-    #         Path with respect to the main experiment path
-    #
-    #     """
-    #     # Perhaps move this conversion to relative file path to File
-    #     relative_file_path = Path(file_path).absolute().relative_to(self.main_path)
-    #
-    #     # if there is no extension, add all files with the same name with all extensions
-    #     # if there is an extension just add that file if the filename is the same
-    #
-    #     # Test whether file is already in experiment
-    #     # for file in self.files:
-    #     #     if file.relativeFilePath == relativeFilePath:
-    #     #         file.findAndAddExtensions()
-    #     #         break
-    #     # else:
-    #     #     new_file = File(relativeFilePath, self)
-    #     #     if new_file.extensions:
-    #     #         self.files.append(new_file)
-    #
-    #
-    #     if not test_duplicates or (relative_file_path not in self.file_paths):
-    #         self.files.append(File(relative_file_path, self))
-    #     else:
-    #         i = self.file_paths.find(file_path.absolute().relative_to(self.main_path))
-    #         self.files[i].findAndAddExtensions()
-
-    # def load_flatfield_correction(self):
-    #     file_paths = list(self.main_path.glob('flatfield*'))
-    #     if file_paths:
-    #         movie = self.files[0].movie
-    #         flatfield_correction = xr.DataArray(np.ones((movie.number_of_illuminations,
-    #                                             movie.height, movie.width)), # perhaps make the movie width and height equal to the channel width and height
-    #                               dims=('illumination', 'y', 'x'),
-    #                               coords={'illumination': movie.illumination_indices})
-    #         for file_path in file_paths:
-    #             flatfield = tifffile.imread(file_path)
-    #             _, _, illumination_indices, _ = movie.image_type_from_filename(file_path.name)
-    #             flatfield_correction[dict(illumination=illumination_indices)] = flatfield
-    #
-    #         self.files.movie.flatfield_correction = flatfield_correction
-    #     else:
-    #         self.files.movie.flatfield_correction = None
 
     def determine_flatfield_and_darkfield_corrections(self, files, method='BaSiC', illumination_index=0, frame_index=0,
                                                       estimate_darkfield=True, **kwargs):
