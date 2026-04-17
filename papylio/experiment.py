@@ -140,6 +140,7 @@ class Experiment:
         ### MICROSCOPE ###
         self._channels = np.atleast_1d(np.array(channels))
         self.microscope_name = 'TIR-T'
+        # self.rotation = 1
         ##################
 
         self.movie_extensions = list(Movie.type_dict().keys())
@@ -325,7 +326,7 @@ class Experiment:
                                 continue
                             for filename_suffix in self.filename_suffixes:
                                 if filename_suffix in filename:
-                                    filename = filename.replace(filename_suffix, '')
+                                    filename = filename.split(filename_suffix)[0]
                                     extension = filename_suffix + extension
                             filepaths_and_extensions[dir_path_relative / filename].add(extension)
 
