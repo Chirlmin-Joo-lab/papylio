@@ -712,7 +712,7 @@ class Movie:
             frames = self.frames_to_xarray_dataarray(frames, frame_indices)
 
         if flatten_channels:
-            frames = self.flatten_channels(frames)
+            frames = self.flatten_channels(frames, self.channel_rows, self.channel_columns)
 
         return frames
 
@@ -768,7 +768,7 @@ class Movie:
         # return xr.DataArray(new, dims=['frame','y','x','channel'])
 
     @staticmethod
-    def flatten_channels(frames, channel_rows=None, channel_columns=None):
+    def flatten_channels(frames, channel_rows, channel_columns):
         """Combine channel dimension back into spatial dimensions.
 
         Parameters
