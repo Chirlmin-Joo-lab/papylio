@@ -657,7 +657,7 @@ class PlotConfiguration(QWidget):
         if item.column() == 0:
             # self._update_order_from_model()
             variable_name = item.model().item(item.row(), 0).text()
-            active = bool(item.checkState())
+            active = item.checkState() == Qt.Checked
             if active is not self.plot_settings[variable_name]['active']:
                 self.plot_settings[variable_name]['active'] = active
                 self.canvas.plot_settings = self.plot_settings

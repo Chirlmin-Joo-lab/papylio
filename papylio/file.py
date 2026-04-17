@@ -229,6 +229,7 @@ class File:
         Returns:
             numpy.ndarray: The projection image.
         """
+        # TODO: Add option to flatten channels?
         if load:
             image = Movie.load_projection_image(self.absolute_filepath, **projection_image_configuration)
         else:
@@ -2018,7 +2019,7 @@ class File:
 
         from papylio.trace_plot import TracePlotWindow
         TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
-                        dataset_path=self.absoluteFilePath.with_suffix('.nc'), save_path=save_path, **kwargs)
+                        dataset_path=self.absolute_filepath.with_suffix('.nc'), save_path=save_path, **kwargs)
 
 
 def calculate_intensity_total(intensity):
