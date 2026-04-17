@@ -16,7 +16,7 @@ from copy import deepcopy
 import scipy.linalg
 
 # file.FRET, file.classification, file.selected
-def classify_hmm(traces, classification, selection, n_states=2, threshold_state_mean=None, level='molecule', seed=0):
+def classify_hmm(traces, classification, selection, n_states=2, threshold_state_mean=None, level='molecule', parallel=False, seed=0):
     """Classify traces using Hidden Markov Models (HMMs).
 
     Fits HMMs either per-molecule or per-file and returns a Dataset with
@@ -46,7 +46,7 @@ def classify_hmm(traces, classification, selection, n_states=2, threshold_state_
     """
     np.random.seed(seed)
     if level == 'molecule':
-        models_per_molecule = fit_hmm_to_individual_traces(traces, classification, selection, parallel=False, n_states=n_states, threshold_state_mean=threshold_state_mean)
+        models_per_molecule = fit_hmm_to_individual_traces(traces, classification, selection, parallel=parallel, n_states=n_states, threshold_state_mean=threshold_state_mean)
     elif level == 'file':
         model = fit_hmm_to_file(traces, classification, selection, n_states=n_states, threshold_state_mean=threshold_state_mean)
         number_of_molecules = np.shape(traces)[0]
@@ -138,64 +138,6 @@ def split_by_classification(xi, classification):
     # cis = [cii[0] for cii in cis]
     return xis, cis
 
-
-def hmm1and2(input):
-    """Fit 1- and 2-state HMMs to input traces and choose the better model by BIC.
-
-    Parameters
-    ----------
-    input : tuple
-        (xi, classification, selected) where xi is a trace array for a molecule,
-        classification is a per-frame classification, and selected is a boolean.
-
-    Returns
-    -------
-    pomegranate.HiddenMarkovModel or None
-        Best model selected by BIC, or None if fitting failed or selection criteria not met.
-    """
-    xi, classification, selected = input
-    # xi = molecule.FRET.values
-    # classification = molecule.classification.values
-    if not selected:
-        return None
-
-    classification_st_0 = classification < 0
-    if classification_st_0.all():
-        return None
-    if (~classification_st_0).sum() < 2:
-        return None
-
-    included_frame_selection = classification >= 0
-    xis, cis = split_by_classification(xi, included_frame_selection)
-
-    xis = [xii for cii, xii in zip(cis, xis) if cii[0]]
-
-    dist1 = Normal().fit(np.concatenate(xis))
-    model1 = DenseHMM.from_matrix([[1]], [dist1], [1])
-    # model1 = pg.HiddenMarkovModel.fit(pg.distributions.Normal, n_components=1, X=[xi])
-    model2 = DenseHMM([Normal(), Normal()])
-    model2.fit(xis)
-
-    bic_model1 = BIC(model1, xis)
-    bic_model2 = BIC(model2, xis)
-
-    if bic_model1 < bic_model2:
-        # parameters = np.array(model1.parameters)
-        # transition_matrix = np.array([1])
-        return model1
-    elif bic_model2 < bic_model1:
-        # parameters = np.vstack([model2.states[0].distribution.parameters, model2.states[1].distribution.parameters])
-        # transition_matrix = model2.dense_transition_matrix()
-        return model2
-    else:
-        # parameters = None
-        # transition_matrix = None
-        return None
-        # raise(ValueError)
-
-    # return parameters, transition_matrix
-
-
 def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule'):
     """Fit HMMs with up to n_states and return the best model by BIC.
 
@@ -254,7 +196,8 @@ def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule')
             try:
                 mean1 = dist1.means[0]
                 cov1 = dist1.covs[0,0]
-                model = DenseHMM([Normal([mean1+cov1*state], [[cov1]]) for state in range(1, state+1)])
+                model = DenseHMM([Normal([mean1-cov1+cov1*state/n_states], [[cov1/10]]) for state in range(1, state+1)])
+                # model = DenseHMM([Normal(),] * state)
                 model.fit(xis)
             except ValueError:
                 continue
