@@ -8,6 +8,8 @@ import xarray as xr
 import numpy as np
 from itertools import accumulate, groupby
 import pomegranate as pg
+from pomegranate.distributions import Normal
+from pomegranate.hmm import DenseHMM
 import tqdm
 from objectlist import ObjectList
 from copy import deepcopy
@@ -106,14 +108,14 @@ def BIC(model, xis):
     float
         BIC value (-2 * log-likelihood + k * log(n))
     """
-    if isinstance(model, pg.NormalDistribution):
+    if isinstance(model, Normal):
         k = 2
         likelihood = model.probability(np.concatenate(xis)).prod()
     else:
-        state_count = (model.state_count() - 2)
+        state_count = len(model.distributions)
         k = state_count * (state_count - 1) + state_count * 2
         # likelihood = model.predict_proba(xi).max(axis=1).prod()
-        log_likelihood = np.sum([model.log_probability(xii) for xii in xis])
+        log_likelihood = np.sum([model.log_probability(xii.reshape(1, -1, 1)) for xii in xis])
 
     n = len(np.concatenate(xis))
     bic_value = -2 * log_likelihood + k * np.log(n)
@@ -168,10 +170,11 @@ def hmm1and2(input):
 
     xis = [xii for cii, xii in zip(cis, xis) if cii[0]]
 
-    dist1 = pg.NormalDistribution.from_samples(np.concatenate(xis))
-    model1 = pg.HiddenMarkovModel.from_matrix([[1]], [dist1], [1])
-    # model1 = pg.HiddenMarkovModel.from_samples(pg.NormalDistribution, n_components=1, X=[xi])
-    model2 = pg.HiddenMarkovModel.from_samples(pg.NormalDistribution, n_components=2, X=xis)
+    dist1 = Normal().fit(np.concatenate(xis))
+    model1 = DenseHMM.from_matrix([[1]], [dist1], [1])
+    # model1 = pg.HiddenMarkovModel.fit(pg.distributions.Normal, n_components=1, X=[xi])
+    model2 = DenseHMM([Normal(), Normal()])
+    model2.fit(xis)
 
     bic_model1 = BIC(model1, xis)
     bic_model2 = BIC(model2, xis)
@@ -214,6 +217,7 @@ def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule')
     """
 
     xi, classification, selected = input
+    xi = xi.astype(np.float32)
 
     if np.sum(selected) == 0:
         return None
@@ -226,6 +230,7 @@ def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule')
 
     included_frame_selection = classification >= 0
     xis, cis = split_by_classification(xi, included_frame_selection)
+    xis = [xii.reshape(-1,1) for xii in xis]
 
     if level == 'molecule':
         xis = [xii for cii, xii in zip(cis, xis) if cii[0]]
@@ -243,45 +248,33 @@ def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule')
 
     for state in range(1, n_states + 1):
         if state == 1:
-            dist1 = pg.NormalDistribution.from_samples(np.concatenate(xis))
-            model = pg.HiddenMarkovModel.from_matrix([[1]], [dist1], [1])
+            dist1 = Normal().fit(np.concatenate(xis))
+            model = DenseHMM([dist1], [[1]], [1], ends=[1])
         else:
             try:
-                model = pg.HiddenMarkovModel.from_samples(pg.NormalDistribution, n_components=state, X=xis)
+                mean1 = dist1.means[0]
+                cov1 = dist1.covs[0,0]
+                model = DenseHMM([Normal([mean1+cov1*state], [[cov1]]) for state in range(1, state+1)])
+                model.fit(xis)
             except ValueError:
                 continue
 
         bic = BIC(model, xis)
 
         if threshold_state_mean:
-            state_means = []
-            for state in model.states:
-                if state.distribution:
-                    if isinstance(state.distribution, pg.NormalDistribution):
-                        state_means.append(state.distribution.parameters[0])
-
-            def check_difference(state_means, threshold=threshold_state_mean):
-                for i in range(len(state_means)):
-                    for j in range(i + 1, len(state_means)):
-                        if abs(state_means[i] - state_means[j]) < threshold:
-                            return False
-                return True
-
-            result = check_difference(state_means, threshold_state_mean)
-
-            if bic < best_bic and result:
-                best_bic = bic
-                best_model = model
+            means = np.array([dist.means for dist in model.distributions])
+            result = bool(np.any(np.abs(means - means.T)[np.triu_indices(n_states, 1)] > threshold_state_mean))
         else:
-            if bic < best_bic:
-                best_bic = bic
-                best_model = model
+            result = True
+
+        if bic < best_bic and result:
+            best_bic = bic
+            best_model = model
 
     if best_model is not None:
         return best_model
     else:
         return None
-
 
 def fit_hmm_to_individual_traces(traces, classification, selected, parallel=False, n_states=2, threshold_state_mean=None):
     """Fit HMMs to each molecule's trace individually (optionally in parallel).
@@ -308,7 +301,7 @@ def fit_hmm_to_file(traces, classification, selected, n_states=2, threshold_stat
 def number_of_states_from_models(models):
     """Return DataArray with number of hidden states (excluding start/end) per model."""
 
-    number_of_states = [model.state_count()-2 if model is not None else 0 for model in models]
+    number_of_states = [len(model.distributions) if model is not None else 0 for model in models]
     # state_count = []
     # for model in models:
     #     if model is None:
@@ -330,7 +323,9 @@ def state_parameters_from_models(models, n_states=2):
     state_parameters = np.full((len(models), max_number_of_states, number_of_parameters), np.nan)
     for i, model in enumerate(models):
         if model is not None:
-            sp = np.vstack([state.distribution.parameters for state in model.states[:-2]])
+            means = np.array([distribution.means.item() for distribution in model.distributions])
+            stds = np.array([np.sqrt(distribution.covs.item()).item() for distribution in model.distributions])
+            sp = np.hstack([means[:, None], stds[:, None]])
             state_parameters[i, :sp.shape[0], :] = sp
     return xr.DataArray(state_parameters, dims=('molecule', 'state', 'parameter'))
 
@@ -344,12 +339,14 @@ def transition_matrices_from_models(models, n_states=2):
     transition_matrix = np.full((len(models), max_number_of_states+2, max_number_of_states+2), np.nan)
     for i, model in enumerate(models):
         if model is not None:
-            tm = model.dense_transition_matrix()
-            number_of_states = tm.shape[0]-2
+            tm = model.edges.numpy()
+            number_of_states = tm.shape[0]
             transition_matrix[i, :number_of_states, :number_of_states] = tm[:number_of_states, :number_of_states]
-            transition_matrix[i, -2:, :number_of_states] = tm[-2:, :number_of_states]
-            transition_matrix[i, :number_of_states, -2:] = tm[:number_of_states, -2:,]
-            transition_matrix[i, -2:, -2:] = tm[-2:, -2:]
+            transition_matrix[i, -2, :number_of_states] = model.starts.numpy()
+            transition_matrix[i, :number_of_states, -1] = model.ends.numpy()
+            # transition_matrix[i, -2:, -2:] = tm[-2:, -2:]
+    transition_matrix = np.exp(transition_matrix) # As apparently pomegranate give log probabilities.
+
     #         start_index = max_number_of_states+2-tm.shape[0]
     #         transition_matrix[i,start_index:,start_index:] = tm
     # transition_matrix = transition_matrix[:, [1,0,2,3],:][:,:,[1,0,2,3]] # In case of a single state this put the state at index 0.
@@ -402,7 +399,7 @@ def trace_classification_models(traces, classifications, models):
             new_classification = []
             for xii, cii in zip(xis, cis):
                 if cii[0] >= 0:
-                    new_classification.append(model.predict(xii))
+                    new_classification.append(model.predict(xii.reshape(1,-1, 1)))
                 else:
                     new_classification.append(-np.ones_like(cii))
             new_classification = np.hstack(new_classification)

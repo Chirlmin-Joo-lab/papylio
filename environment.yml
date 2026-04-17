@@ -32,7 +32,7 @@ dependencies:
 - pytest
 - pytest-datadir
 - numba
-- pomegranate
+- pomegranate=1
 - nbsphinx
 - notebook
 - jupyterlab-mathjax2

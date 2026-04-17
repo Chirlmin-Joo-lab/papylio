@@ -48,8 +48,7 @@ dependencies = [
 	"tqdm >= 4.63",
 	"pyside2 >= 5.13, <5.16",
 	"numba >= 0.56, <0.57",
-	"pomegranate == 0.14.8; sys_platform  == 'win32'",
-	"pomegranate == 0.15; sys_platform  != 'win32'",
+	"pomegranate >= 1",
 	"matchpoint >= 1.0.4, <1.1",
 	"objectlist >= 1.0, <1.1",
 ]
