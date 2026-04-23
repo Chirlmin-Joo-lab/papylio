@@ -10,6 +10,7 @@ import itertools
 import warnings
 import tqdm
 import re
+import json
 from numba import njit
 from pathlib import Path
 import pandas as pd
@@ -791,7 +792,7 @@ class Movie:
         #     output_core_dims = [['y', 'x']]
         # else:
         #     output_core_dims = [['image', 'y', 'x']]
-
+        #TODO: Check whether channel_rows and channel_columns are really necessary here.
         return xr.apply_ufunc(
             expand_axes, frames, input_core_dims=[['channel', 'y', 'x']], output_core_dims=[['y', 'x']],
             exclude_dims=set(['x', 'y']),
@@ -894,7 +895,7 @@ class Movie:
             #     tifffile.imwrite(self.writepath.joinPath(f'{self.name}_fr{frame_number}.tif'), image,  photometric='minisblack')
 
     def make_projection_image(self, projection_type='average', frame_range=(0,20), apply_corrections=True,
-                              illumination=None, overlay_channels=False):
+                              illumination=None, overlay_channels=False, flatten_channels=False):
         """ Construct a projection image
         Determine a projection image for a number_of_frames starting at start_frame.
         i.e. [start_frame, start_frame + number_of_frames)
@@ -967,19 +968,25 @@ class Movie:
 
         if overlay_channels:
             for i in self.channel_indices[1:].values:
-                image[i, :, :] = self.channel_mappings[i-1].transform_image(image[i, :, :], inverse=True)
+                image[i, :, :] = self.channel_mapping[i-1].transform_image(image[i, :, :], inverse=True)
             image = image.sum(axis=0, keepdims=True)
+
+        if flatten_channels:
+            image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
 
         return image
 
 
-    def save_projection_image(self, intensity_range=None, color_map='gray', path=None, filetype='tif', **projection_image_configuration):
+    def save_projection_image(self, intensity_range=None, color_map='gray', path=None, filename=None, filetype='tif',
+                              **projection_image_configuration):
         image = self.make_projection_image(**projection_image_configuration)
 
         if path is None:
             path = self.writepath
 
-        filename = Movie.image_info_to_filename(self.name, **projection_image_configuration)
+        if filename is None:
+            filename = Movie.image_info_to_filename(self.name, **projection_image_configuration)
+
         filepath = path.joinpath(filename)
 
         if projection_image_configuration.get('overlay_channels', False):
@@ -992,13 +999,22 @@ class Movie:
                 resolution = 1 / self.pixel_size
             else:
                 resolution = None
-            tifffile.imwrite(filepath.with_suffix('.tif'), image,
+            save_image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
+            tifffile.imwrite(filepath.with_suffix('.tif'), save_image,
                              resolution=resolution,
                              imagej=True,
                              metadata={'unit': 'um',
-                                       'axes': 'CYX',
-                                       'Labels': channel_names}
+                                       'axes': 'YX',
+                                       'channel_arrangement': str(self.channel_arrangement[0].tolist()),
+                                       'labels': channel_names}
                              )
+            # tifffile.imwrite(filepath.with_suffix('.tif'), image,
+            #                  resolution=resolution,
+            #                  imagej=True,
+            #                  metadata={'unit': 'um',
+            #                            'axes': 'CYX',
+            #                            'labels': channel_names}
+            #                  )
         elif filetype in ['png']:
             if len(image.shape) == 3:  # i.e. there is still a channel dimension
                 write_image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
@@ -1018,7 +1034,12 @@ class Movie:
         image_filepath = filepath.with_name(image_filename).with_suffix('.tif')
 
         if image_filepath.is_file():
-            return tifffile.imread(image_filepath)
+            with tifffile.TiffFile(image_filepath) as tif:
+                image = tif.asarray()
+                metadata = tif.imagej_metadata
+            channel_arrangement = np.array(json.loads(metadata['channel_arrangement']))
+            channel_rows, channel_columns = channel_arrangement.shape
+            return Movie.separate_channels(image, channel_rows, channel_columns)
         else:
             return None
             # raise FileNotFoundError(f'Projection image not found at {image_filepath}')
@@ -1456,6 +1477,7 @@ class Channel:
 
     @property
     def boundaries(self):
+        #TODO: Check whether this (and other channel methods) still works well now that the image is given with an extra channel dimension
         """np.ndarray : Bounding box coordinates as [[x_min, x_max], [y_min, y_max]]."""
         horizontal_boundaries = np.array([0, self.width]) + self.width * self.location[2]
         vertical_boundaries = np.array([0, self.height]) + self.height * self.location[1]

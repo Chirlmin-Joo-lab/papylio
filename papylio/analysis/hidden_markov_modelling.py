@@ -194,10 +194,11 @@ def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule')
             model = DenseHMM([dist1], [[1]], [1], ends=[1])
         else:
             try:
-                mean1 = dist1.means[0]
-                cov1 = dist1.covs[0,0]
-                model = DenseHMM([Normal([mean1-cov1+cov1*state/n_states], [[cov1/10]]) for state in range(1, state+1)])
-                # model = DenseHMM([Normal(),] * state)
+                # mean1 = dist1.means[0]
+                # cov1 = dist1.covs[0,0]
+                # model = DenseHMM([Normal([mean1-cov1+cov1*state/n_states], [[cov1/10]]) for state in range(1, state+1)])
+                # TODO: Improve finding initial values, or at least make it similar to pomegranate 0.14.8
+                model = DenseHMM([Normal(),] * state)
                 model.fit(xis)
             except ValueError:
                 continue

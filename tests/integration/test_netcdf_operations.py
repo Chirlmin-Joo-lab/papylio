@@ -25,7 +25,7 @@ def test_merge_datasets_sequence_only(shared_datadir, netcdf_filepaths):
     assert (ds_out['intensity'][319:319+318] == ds_in1['intensity'][(ds_in1['sequence'][:]!=b'-').all(axis=1)]).all()
 
 def test_reorder_datasets_using_sequence_subset(shared_datadir, netcdf_filepaths):
-    reorder_datasets_using_sequence_subset(netcdf_filepaths, shared_datadir, 'molecule')
+    reorder_datasets_using_sequence_subset(netcdf_filepaths, shared_datadir / 'output', 'molecule')
 
 
 

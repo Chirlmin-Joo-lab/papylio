@@ -21,20 +21,20 @@ def test_exponential_distribution():
         ExponentialDistribution(i)
 
 def test_maximum_likelihood_estimation(dwell_times_double_exponential):
-    optimal_parameters = ExponentialDistribution(2).maximum_likelihood_estimation(dwell_times_double_exponential)
+    dwell_analysis = ExponentialDistribution(2).maximum_likelihood_estimation(dwell_times_double_exponential)
 
 def test_histogram_fitting(dwell_times_double_exponential):
-    optimal_parameters, _ = ExponentialDistribution(2).histogram_fit(dwell_times_double_exponential)
+    dwell_analysis = ExponentialDistribution(2).histogram_fit(dwell_times_double_exponential)
 
 def test_cdf_fitting(dwell_times_double_exponential):
-    optimal_parameters, _ = ExponentialDistribution(2).cdf_fit(dwell_times_double_exponential)
+    dwell_analysis = ExponentialDistribution(2).cdf_fit(dwell_times_double_exponential)
 
 def test_fit_dwell_times(dwell_times_double_exponential):
     dwell_analysis = fit_dwell_times(dwell_times_double_exponential, 'maximum_likelihood_estimation', number_of_exponentials=[1,2,3])
 
     dwell_analysis = fit_dwell_times(dwell_times_double_exponential, 'maximum_likelihood_estimation',
         number_of_exponentials=[1, 2, 3], k_bounds=(0,100),
-        analyze_dwells_kwargs=dict(scipy_optimization_method='dual_annealing'))
+        fit_dwell_times_kwargs=dict(scipy_optimize_method='dual_annealing'))
 
 def test_plot_dwell_analysis_state(dwell_times_double_exponential):
     dwell_analysis = fit_dwell_times(dwell_times_double_exponential, 'maximum_likelihood_estimation',
@@ -63,9 +63,3 @@ def test_plot_dwell_analysis(dwells):
                                     state_names=None, P_bounds=(-1, 1), k_bounds=(0,10),
                                     fit_dwell_times_kwargs=dict(scipy_optimize_method='dual_annealing'))
     plot_dwell_analysis(dwell_analysis, dwells, plot_range=(0, 2), axes=None, log=False, sharey=True, plot_type='pdf')
-
-
-
-def test_parameters_to_dataset(dwell_times_double_exponential):
-    optimal_parameters, _ = ExponentialDistribution(2).histogram_fitting(dwell_times_double_exponential)
-    ExponentialDistribution(2).parameters_to_dataset(optimal_parameters, dwell_times=dwell_times_double_exponential)
