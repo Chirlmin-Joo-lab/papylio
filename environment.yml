@@ -36,7 +36,7 @@ dependencies:
 - nbsphinx
 - notebook
 - jupyterlab-mathjax2
-#- matchpoint=1.0.4
+- matchpoint=1.1
 - objectlist=1.0
 - git
 - perl
