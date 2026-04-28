@@ -8,11 +8,11 @@ from pathlib2 import Path
 
 ###################################################
 ## To enable interactive plotting with PySide2 in PyCharm 2022.3
-import PySide2
+import PySide6
 import sys
-sys.modules['PyQt5'] = sys.modules['PySide2']
+sys.modules['PyQt6'] = sys.modules['PySide6']
 from matplotlib import use
-use('Qt5Agg')
+use('qtagg')
 ###################################################
 
 import matplotlib.pyplot as plt

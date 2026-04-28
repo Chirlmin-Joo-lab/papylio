@@ -4,14 +4,14 @@ Contains Qt widgets used for creating and applying classifications to traces wit
 """
 
 import sys
-from PySide2.QtCore import Signal
-from PySide2.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
     QLabel, QLineEdit, QPushButton, QFormLayout, QSpinBox, QDoubleSpinBox,
     QTreeView, QMainWindow, QMessageBox, QCheckBox
 )
 
-from PySide2.QtGui import QStandardItem, QStandardItemModel
-from PySide2.QtCore import Qt
+from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtCore import Qt
 
 from papylio.analysis.classification_simple import classify_threshold
 from papylio.analysis.hidden_markov_modelling import classify_hmm

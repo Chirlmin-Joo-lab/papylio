@@ -18,7 +18,7 @@ class ExponentialDistribution:
     """
     A class representing a mixture of exponential distributions.
     """
-    def __init__(self, number_of_exponentials, P_bounds=(-1,1), k_bounds=(1e-9,np.inf), truncation=None,
+    def __init__(self, number_of_exponentials, P_bounds=(-1,1), k_bounds=(1e-9,np.inf), truncation=(0, np.inf),
                  sampling_interval=None):
         """
         Initializes the ExponentialDistribution.
@@ -31,7 +31,7 @@ class ExponentialDistribution:
             Bounds for probability parameters.
         k_bounds : tuple, optional
             Bounds for rate constants.
-        truncation : tuple or None, optional
+        truncation : tuple, optional
             Range for truncation.
         sampling_interval : float or None, optional
             Interval for sampling.
@@ -43,6 +43,8 @@ class ExponentialDistribution:
         self.bounds = np.array([P_bounds] * (self.number_of_exponentials - 1) + [k_bounds] * self.number_of_exponentials)
         self.truncation = list(truncation)
         self.sampling_interval = sampling_interval
+
+        #TODO: Check whether truncation is applied correctly, as sometimes only truncation[0] is changed, without an check for truncation being None
 
     def __call__(self, t, *parameters):
         """
@@ -556,7 +558,12 @@ class ExponentialDistribution:
             A dataset containing the optimal parameters, parameter uncertainties, Bayesian
             Information Criterion (BIC), and fitting metadata.
         """
-        t, ecdf = empirical_cdf(dwell_times, self.sampling_interval)
+        if self.sampling_interval is None:
+            sampling_interval = dwell_times.min()
+        else:
+            sampling_interval = self.sampling_interval
+
+        t, ecdf = empirical_cdf(dwell_times, sampling_interval)
 
         scipy_curve_fit_kwargs = dict(p0 = self.parameter_guess(dwell_times),
                                       bounds = self.bounds.T, absolute_sigma=True)
@@ -1247,7 +1254,7 @@ def plot_dwell_analysis(dwell_analysis, dwells, plot_type='pdf_binned', plot_ran
     for i, (state, dwell_analysis_state) in enumerate(dwell_analysis.groupby('state')):
 
         dwell_times = dwells.sel(dwell=dwells.state==state).duration.values
-        plot_dwell_analysis_state(dwell_analysis_state, dwell_times, plot_type=plot_type[i], plot_range=plot_range[i], bins=bins[i], log=log, ax=axes[i])
+        plot_dwell_analysis_state(dwell_analysis_state.isel(state=0), dwell_times, plot_type=plot_type[i], plot_range=plot_range[i], bins=bins[i], log=log, ax=axes[i])
         if 'state_name' in dwell_analysis_state.coords:
             axes[i].set_title(f'State {state}: {dwell_analysis_state.state_name.item()}')
         else:

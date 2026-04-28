@@ -4,14 +4,14 @@ Defines the main application window and image canvas used by the Papylio GUI.
 """
 
 import sys
-import PySide2
+import PySide6
 import platform
 
 import sys
-from PySide2.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
     QPushButton, QTabWidget, QTableWidget, QComboBox, QLineEdit
-from PySide2.QtGui import QStandardItem, QStandardItemModel, QIcon
-from PySide2.QtCore import Qt
+from PySide6.QtGui import QStandardItem, QStandardItemModel, QIcon
+from PySide6.QtCore import Qt
 
 import matplotlib as mpl
 from matplotlib.backends.backend_qtagg import (

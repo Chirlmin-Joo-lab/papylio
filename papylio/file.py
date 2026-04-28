@@ -229,6 +229,8 @@ class File:
         Returns:
             numpy.ndarray: The projection image.
         """
+        # TODO: Add option to flatten channels?
+        # TODO: Check handling of frame_range = (0, None)
         if load:
             image = Movie.load_projection_image(self.absolute_filepath, **projection_image_configuration)
         else:
@@ -593,8 +595,8 @@ class File:
 
     def use_for_darkfield_correction(self):
         """Use the average projection of this file as a darkfield correction image for the experiment."""
-        image = self.get_projection_image(projection_type='average', frame_range=(0, None), apply_corrections=False)
-        tifffile.imwrite(self.experiment.main_path / 'darkfield.tif', image, imagej=True)
+        self.movie.save_projection_image(projection_type='average', frame_range=(0, self.movie.number_of_frames),
+                                         apply_corrections=False, path=self.experiment.main_path, filename='darkfield', filetype='tif')
         self.experiment.load_darkfield_correction()
 
     def find_coordinates(self, channels=('donor', 'acceptor'),
@@ -680,7 +682,7 @@ class File:
 
         image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range,
                                           illumination=illumination_index)
-        image = self.movie.get_channel(image, channel=channel_index)
+        image = image[channel_index]
 
         coordinates = find_peaks(image=image, **peak_finding_configuration)  # .astype(int)))
         coordinates_fit, parameters = coordinates_after_gaussian_fit(coordinates, image, gaussian_width=15, return_fit_parameters=True)
@@ -1627,7 +1629,7 @@ class File:
         #TODO: Add sampling interval to File and refer to it here?
         dwell_analysis = analyze_dwells(dwells, method=method, number_of_exponentials=number_of_exponentials,
                                         state_names=state_names, P_bounds=P_bounds, k_bounds=k_bounds,
-                                        sampling_interval=None, truncation=truncation, fit_dwell_times_config=fit_dwell_times_configuration)
+                                        sampling_interval=None, truncation=truncation, fit_dwell_times_kwargs=fit_dwell_times_configuration)
 
         add_configuration_to_dataarray(dwell_analysis, File.analyze_dwells, locals())
 
@@ -2018,7 +2020,7 @@ class File:
 
         from papylio.trace_plot import TracePlotWindow
         TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
-                        dataset_path=self.absoluteFilePath.with_suffix('.nc'), save_path=save_path, **kwargs)
+                        dataset_path=self.absolute_filepath.with_suffix('.nc'), save_path=save_path, **kwargs)
 
 
 def calculate_intensity_total(intensity):

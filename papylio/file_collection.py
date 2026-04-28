@@ -13,6 +13,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 # TODO: Make sure that the collection can only contain File objects
+# TODO: perhaps add file info method that generates a table with info of the file, for example number of molecules, etc.
 class FileCollection(ObjectList):
     def __getattr__(self, item):
         """Delegate attribute access to individual files and concatenate xarray results if applicable."""
@@ -41,7 +42,7 @@ class FileCollection(ObjectList):
         """Return the experiment object from the first file."""
         return self[0].experiment
 
-    def select(self, search_string, variable='relativeFilePath'):
+    def select(self, search_string, variable='relative_filepath'):
         """Select files matching the search string on the specified variable using regex."""
         # TODO: Make this accept keyword arguments where the key is the variable and the item is the search_string.
         # TODO: Make this accept mulitple keyword arguments.

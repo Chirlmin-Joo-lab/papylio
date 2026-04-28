@@ -1,5 +1,5 @@
 import pytest
-from PySide2 import QtWidgets
+from PySide6 import QtWidgets
 import sys
 from papylio.trace_correction import TraceCorrectionWindow
 

@@ -9,7 +9,7 @@ from pytest_datadir.plugin import shared_datadir
 def experiment(shared_datadir):
     from papylio import Experiment
     experiment = Experiment(shared_datadir / 'BN_TIRF')
-    experiment.files.rotation = -1
+    experiment.files.rotation = 1
     return experiment
 
 @pytest.fixture
@@ -51,24 +51,30 @@ def test_without_logging(experiment_hj_no_logging):
     experiment_hj_no_logging.files[0].perform_mapping()
 
 def test_projection_image(file, shared_datadir):
-    image_newly_made = file.projection_image()
+    image_newly_made = file.projection_image(frame_range=(0,10), illumination=None, load=False)
+    image_newly_made = np.concatenate([image_newly_made[0], image_newly_made[1]], axis=1)
     image_from_original_file = tifffile.imread(shared_datadir / 'BN_TIRF_output_test_file' / 'TIRF 561 0001_ave_f0-10_i0.tif')
     assert (image_newly_made == image_from_original_file).all()
-    image_loaded = file.projection_image()
+    image_loaded = file.projection_image(frame_range=(0,10), illumination=None, load=True)
+    image_loaded = np.concatenate([image_loaded[0], image_loaded[1]], axis=1)
     assert (image_loaded == image_from_original_file).all()
 
 def test_average_image(file, shared_datadir):
-    image_newly_made = file.average_image()
+    image_newly_made = file.average_image(frame_range=(0,10), illumination=None, load=False)
+    image_newly_made = np.concatenate([image_newly_made[0], image_newly_made[1]], axis=1)
     image_from_original_file = tifffile.imread(shared_datadir / 'BN_TIRF_output_test_file' / 'TIRF 561 0001_ave_f0-10_i0.tif')
     assert (image_newly_made == image_from_original_file).all()
-    image_loaded = file.average_image()
+    image_loaded = file.average_image(frame_range=(0,10), illumination=None, load=True)
+    image_loaded = np.concatenate([image_loaded[0], image_loaded[1]], axis=1)
     assert (image_loaded == image_from_original_file).all()
 
 def test_maximum_projection_image(file, shared_datadir):
-    image_newly_made = file.maximum_projection_image()
+    image_newly_made = file.maximum_projection_image(frame_range=(0,10), illumination=None, load=False)
+    image_newly_made = np.concatenate([image_newly_made[0], image_newly_made[1]], axis=1)
     image_from_original_file = tifffile.imread(shared_datadir / 'BN_TIRF_output_test_file' / 'TIRF 561 0001_max_f0-10_i0.tif')
     assert (image_newly_made == image_from_original_file).all()
-    image_loaded = file.maximum_projection_image()
+    image_loaded = file.maximum_projection_image(frame_range=(0,10), illumination=None, load=True)
+    image_loaded = np.concatenate([image_loaded[0], image_loaded[1]], axis=1)
     assert (image_loaded == image_from_original_file).all()
 
 def test_show_image(file):
@@ -83,10 +89,6 @@ def test_perform_mapping(experiment, shared_datadir):
     # mapping_control = mp.MatchPoint.load(shared_datadir / 'BN_TIRF_output_test_file' / 'beads.mapping')
     # assert ((experiment.files[0].mappings[0].transformation.params - mapping_control.transformation.params) < 1e-2).all()
 
-def test_parallel_processing_mapping(experiment):
-    experiment.files.parallel.mapping.transformation
-    experiment.files.parallel.mapping.show()
-
 def test_parallel_processing(experiment):
     experiment.files.parallel.find_coordinates()
 
@@ -95,6 +97,7 @@ def test_find_molecules(file, shared_datadir):
     file.find_coordinates()
 
 def test_find_molecules_empty_dataset(file):
+    test_perform_mapping(file.experiment, shared_datadir)
     file.find_coordinates(margin=500)
 
 def test_show_coordinates(file, shared_datadir):
@@ -104,12 +107,13 @@ def test_show_coordinates(file, shared_datadir):
 def test_show_coordinates_in_image(file, shared_datadir):
     test_find_molecules(file, shared_datadir)
     file.show_coordinates_in_image()
-    file.show_coordinates_in_image(imshow_kwargs=dict(vmin=200, vmax=2500))
+    file.show_coordinates_in_image(imshow_configuration=dict(vmin=200, vmax=2500))
 
 def test_extract_traces(file):
+    file.experiment.files[0].perform_mapping()
     file.find_coordinates()
     file.extract_traces(mask_size='TIR-T')
-    file.extract_traces(mask_size='TIR-T', neighbourhood_size=None,
+    file.extract_traces(mask_size='TIR-T', neighbourhood_size=11,
                         background_correction=(-150,-30),
                         alpha_correction=0.075,
                         gamma_correction=1.2)
@@ -160,7 +164,7 @@ def test_copy_selections_to_selected_files(experiment_hj):
 
 def test_create_classification(file_output):
     file_output.create_classification(name='classification_test', classification_type='threshold',
-                                      variable='intensity_total', classification_kwargs=dict(threshold=500, rolling='median', window_size=5))
+                                      variable='intensity_total', classification_configuration=dict(threshold=500, rolling='median', window_size=5))
     file_output.create_classification(name='classification_test', classification_type='hmm', variable='FRET')
     file_output.create_classification(**json.loads(file_output.classification_test.attrs['configuration']))
 
@@ -195,7 +199,7 @@ def test_analyze_dwells(file_hj):
 def test_plot_dwell_analysis(file_hj):
     file_hj.analyze_dwells(method='maximum_likelihood_estimation', number_of_exponentials=[2],
                            state_names={0: 'Low FRET',  1:'High FRET'},
-                           plot=False, fit_dwell_times_kwargs=dict())
+                           plot=False, fit_dwell_times_configuration=dict())
     file_hj.plot_dwell_analysis(plot_type='pdf', log=False, plot_range=(0,3))
 
 def test_logging(file_hj):

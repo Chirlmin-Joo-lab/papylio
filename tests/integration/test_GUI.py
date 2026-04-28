@@ -2,7 +2,7 @@ import pytest
 import xarray as xr
 import tifffile
 import numpy as np
-from PySide2.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 import sys
 from multiprocessing import Process, freeze_support
 
