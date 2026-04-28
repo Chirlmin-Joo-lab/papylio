@@ -703,7 +703,7 @@ class Movie:
             # Perhaps remove the outermost layer from channel_configuration
             # Or add this to separate and flatten channels
 
-        frames = self.separate_channels(frames, self.channel_rows, self.channel_columns)
+        frames = self.separate_channels(frames, self.channel_arrangement)
         # frames = np.stack([channel.crop_images(images) for channel in self.channels]
 
         if apply_corrections:  # and self.correct_images
@@ -713,7 +713,7 @@ class Movie:
             frames = self.frames_to_xarray_dataarray(frames, frame_indices)
 
         if flatten_channels:
-            frames = self.flatten_channels(frames, self.channel_rows, self.channel_columns)
+            frames = self.flatten_channels(frames, self.channel_arrangement)
 
         return frames
 
@@ -728,7 +728,7 @@ class Movie:
         return len(self.channel_arrangement[0, 0])
 
     @staticmethod
-    def separate_channels(frames, channel_rows, channel_columns):
+    def separate_channels(frames, channel_arrangement):
         """Separate channels from spatial dimensions.
 
         Splits frames from single image dimension into separate channel dimension
@@ -752,12 +752,22 @@ class Movie:
         #     frames = frames[None, :, :]
         # return expand_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2))
         # return expand_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), to_axes=(0, 0))
-        return xr.apply_ufunc(
+        channel_arrangement = np.array(channel_arrangement)
+        channel_frames, channel_rows, channel_columns = channel_arrangement.shape
+
+        frames = xr.apply_ufunc(
             expand_axes, frames, input_core_dims=[['y', 'x']], output_core_dims=[['channel', 'y', 'x']],
             exclude_dims=set(['y', 'x']),
             kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
                     "to_axes": (frames.ndim,) * 2, "new_axes_positions": [-3]}
         )
+
+        order = channel_arrangement.flatten()
+        inverse_order = np.argsort(order)
+        frames = frames[..., inverse_order, :, :]
+
+        return frames
+
         # return xr.apply_ufunc(
         #     expand_axes, frames, input_core_dims=[['image', 'y', 'x'][-frames.ndim:]], output_core_dims=[['image', 'y', 'x']],
         #     exclude_dims=set(['image', 'y', 'x']),
@@ -769,7 +779,7 @@ class Movie:
         # return xr.DataArray(new, dims=['frame','y','x','channel'])
 
     @staticmethod
-    def flatten_channels(frames, channel_rows, channel_columns):
+    def flatten_channels(frames, channel_arrangement):
         """Combine channel dimension back into spatial dimensions.
 
         Parameters
@@ -793,6 +803,12 @@ class Movie:
         # else:
         #     output_core_dims = [['image', 'y', 'x']]
         #TODO: Check whether channel_rows and channel_columns are really necessary here.
+        channel_arrangement = np.array(channel_arrangement)
+        channel_frames, channel_rows, channel_columns = channel_arrangement.shape
+
+        order = channel_arrangement.flatten()
+        frames = frames[..., order, :, :]
+
         return xr.apply_ufunc(
             expand_axes, frames, input_core_dims=[['channel', 'y', 'x']], output_core_dims=[['y', 'x']],
             exclude_dims=set(['x', 'y']),
@@ -937,7 +953,7 @@ class Movie:
         frame_indices = frame_indices[self.illumination_index_per_frame.values[frame_indices] == illumination_index]
 
         # Calculate sum of frames and find mean
-        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float32'), self.channel_rows, self.channel_columns)
+        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float32'), self.channel_arrangement)
 
         frame_indices_subsets = np.array_split(frame_indices, len(frame_indices) // self.chunk_size + 1)
 
@@ -991,21 +1007,23 @@ class Movie:
 
         if projection_image_configuration.get('overlay_channels', False):
             channel_names = 'overlay'
+            channel_arrangement = np.array([[[0]]])
         else:
             channel_names = [channel.name for channel in self.channels]
+            channel_arrangement = self.channel_arrangement
 
+        save_image = self.flatten_channels(image, channel_arrangement)
         if filetype in ['tif', 'tiff']:
             if hasattr(self, 'pixel_size'):
                 resolution = 1 / self.pixel_size
             else:
                 resolution = None
-            save_image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
             tifffile.imwrite(filepath.with_suffix('.tif'), save_image,
                              resolution=resolution,
                              imagej=True,
                              metadata={'unit': 'um',
                                        'axes': 'YX',
-                                       'channel_arrangement': str(self.channel_arrangement[0].tolist()),
+                                       'channel_arrangement': str(channel_arrangement.tolist()),
                                        'labels': channel_names}
                              )
             # tifffile.imwrite(filepath.with_suffix('.tif'), image,
@@ -1016,14 +1034,10 @@ class Movie:
             #                            'labels': channel_names}
             #                  )
         elif filetype in ['png']:
-            if len(image.shape) == 3:  # i.e. there is still a channel dimension
-                write_image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
-            else:
-                write_image = image
             filepath = filepath.with_name(filepath.name + f'_v{intensity_range[0]}-{intensity_range[1]}')
             if intensity_range is None:
                 intensity_range = self.intensity_range
-            plt.imsave(filepath.with_suffix('.png'), write_image, vmin=intensity_range[0], vmax=intensity_range[1],
+            plt.imsave(filepath.with_suffix('.png'), save_image, vmin=intensity_range[0], vmax=intensity_range[1],
                        cmap=color_map)
 
         return image
@@ -1038,8 +1052,7 @@ class Movie:
                 image = tif.asarray()
                 metadata = tif.imagej_metadata
             channel_arrangement = np.array(json.loads(metadata['channel_arrangement']))
-            channel_rows, channel_columns = channel_arrangement.shape
-            return Movie.separate_channels(image, channel_rows, channel_columns)
+            return Movie.separate_channels(image, channel_arrangement)
         else:
             return None
             # raise FileNotFoundError(f'Projection image not found at {image_filepath}')

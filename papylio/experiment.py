@@ -432,7 +432,7 @@ class Experiment:
                 illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 flatfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
-                    movie.separate_channels(flatfield, movie.channel_rows, movie.channel_columns)
+                    movie.separate_channels(flatfield, movie.channel_arrangement)
 
             self.common_image_corrections['flatfield_correction'] = flatfield_correction
         else:
@@ -463,7 +463,7 @@ class Experiment:
                 # illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 darkfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
-                    movie.separate_channels(darkfield, movie.channel_rows, movie.channel_columns)
+                    movie.separate_channels(darkfield, movie.channel_arrangement)
 
             self.common_image_corrections['darkfield_correction'] = darkfield_correction
         else:
