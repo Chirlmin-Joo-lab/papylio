@@ -177,7 +177,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def absolute_filepath(self):
         """Return the absolute path to the file."""
-        return self.relative_filepath.absolute()
+        return self.experiment.main_path.joinpath(self.relativeFilePath)
 
     @property
     @return_none_when_executed_by_pycharm
