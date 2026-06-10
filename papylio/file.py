@@ -196,7 +196,7 @@ class File:
 
     @rotation.setter
     def rotation(self, rotation):
-        self.movie.rot90 = rotation
+        self.movie.rotation = rotation
         self._rotation = rotation
 
     @property

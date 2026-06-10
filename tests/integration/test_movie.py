@@ -7,7 +7,7 @@ from papylio.movie.movie import Movie
 @pytest.fixture
 def movie(shared_datadir):
     movie = Movie(shared_datadir / 'BN_TIRF' / 'TIRF 561 0001.tif')
-    movie.rot90 = 1
+    movie.rotation = 1
     return movie
 
 
@@ -22,7 +22,7 @@ def test_movie_name(movie):
 
 
 def test_make_projection_image(movie, shared_datadir):
-    image_from_method = movie.make_projection_image(projection_type='average', frame_range=(0, 20), illumination=None, write=True,
+    image_from_method = movie.save_projection_image(projection_type='average', frame_range=(0, 20), illumination=None,
                                                     return_image=True, flatten_channels=True)
     assert (shared_datadir / 'BN_TIRF' / 'TIRF 561 0001_ave_f0-20_i0.tif').is_file()
     image_from_file = tifffile.imread(shared_datadir / 'BN_TIRF' / 'TIRF 561 0001_ave_f0-20_i0.tif')

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 from nd2reader import ND2Reader
 
-from papylio.movie.movie import Movie, Illumination
+from papylio.movie.movie import Movie
 
 
 class ND2Movie(Movie):
@@ -70,8 +70,8 @@ class ND2Movie(Movie):
                           }
 
         # We should probably put this in the configuration file
-        # SHK: self.rot90 should be set before reading the header.
-        # self.rot90 = 1
+        # SHK: self.rotation should be set before reading the header.
+        # self.rotation = 1
 
         # self.read_header()
 
@@ -142,7 +142,7 @@ class ND2Movie(Movie):
             # self.number_of_fields_of_view = len(images.metadata["experiment"]["loops"])  # number of fov is now available from self.fov_info
             self.number_of_frames = len(self.file)
 
-            self.illuminations = [Illumination(name) for name in self.file.metadata["channels"]]
+            self.illuminations = [name for name in self.file.metadata["channels"]]
 
             if self.fov_index is not None:
                 self.frame_offset = self.first_frame_of_each_fov[self.fov_index] * self.number_of_illuminations

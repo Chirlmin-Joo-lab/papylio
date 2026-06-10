@@ -34,7 +34,7 @@ class NskMovie(Movie):
 
         self.writepath = self.filepath.parent
         self.name = self.filepath.with_suffix('').name
-        self.rot90 = 1
+        self.rotation = 1
 
         self.channel_arrangement = np.array([[[0, 1]]])
 

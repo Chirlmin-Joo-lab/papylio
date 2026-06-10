@@ -421,7 +421,7 @@ class Experiment:
         if file_paths:
             movie = self.files[0].movie
             flatfield_correction = xr.DataArray(np.ones((movie.number_of_illuminations, movie.number_of_channels,
-                                                         movie.channels[0].height, movie.channels[0].width)),
+                                                         movie.channel_height, movie.channel_width)),
                                                 # perhaps make the movie width and height equal to the channel width and height
                                                 dims=('illumination', 'channel', 'y', 'x'),
                                                 coords={'illumination': movie.illumination_indices,
@@ -451,7 +451,7 @@ class Experiment:
         if file_paths:
             movie = self.files[0].movie
             darkfield_correction = xr.DataArray(np.ones((movie.number_of_illuminations, movie.number_of_channels,
-                                                         movie.channels[0].height, movie.channels[0].width)),
+                                                         movie.channel_height, movie.channel_width)),
                                                 # perhaps make the movie width and height equal to the channel width and height
                                                 dims=('illumination', 'channel', 'y', 'x'),
                                                 coords={'illumination': movie.illumination_indices,
