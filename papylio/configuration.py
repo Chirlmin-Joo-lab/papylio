@@ -6,6 +6,7 @@ Call `setup_user_config()` on application startup.
 """
 
 from pathlib import Path
+import importlib.util
 import sys
 
 from platformdirs import user_config_dir
@@ -64,7 +65,7 @@ from papylio import TIFMovie
 
 
 class MyScopeMovie(TIFMovie):
-    microscope = "BN-TIRF"
+    microscope = "MyScope"
     version = "10-06-2026"
 
     rotation = 1
@@ -92,9 +93,9 @@ microscopes/
     acquisition parameters for that microscope, plus an optional
     parse_metadata() method for extracting metadata from raw files.
 
-    Papylio discovers all profiles in this directory automatically.
+    Papylio discovers all profiles (except example) in this directory automatically.
     To add a new microscope:
-      1. Copy microscopes/example.py to microscopes/my_scope.py
+      1. Copy and rename microscopes/example.py.
       2. Fill in the parameters
       3. Reload profiles in the GUI (or restart Papylio)
 
@@ -167,20 +168,18 @@ def load_user_microscope_classes() -> None:
     """Import all .py files in the user microscopes directory so their
     classes register themselves as Movie subclasses."""
 
-    print(f"Microscope profiles found: {list(MICROSCOPES_DIR.glob('*.py'))}")
-
-    import importlib.util
-    import sys
+    microscopes = []
 
     for py_file in sorted(MICROSCOPES_DIR.glob("*.py")):
-        if py_file.stem.startswith("_"):
+        if py_file.stem.startswith("example"):
             continue
         try:
             spec = importlib.util.spec_from_file_location(
-                f"papylio_microscope_{py_file.stem}", py_file
+                py_file.stem, py_file
             )
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
+            microscopes.append(py_file.stem)
         except Exception as e:
             print(
                 f"[papylio] Warning: could not load microscope class "
@@ -188,7 +187,7 @@ def load_user_microscope_classes() -> None:
                 file=sys.stderr,
             )
 
-    print('Loaded microscope classes')
+    print('Loaded microscopes:', str(microscopes).replace('[','').replace(']','').replace("'",""))
 
 # ---------------------------------------------------------------------------
 # Convenience
