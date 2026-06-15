@@ -31,47 +31,6 @@ from papylio.movie.background_correction import determine_temporal_background_co
     determine_spatial_background_correction, determine_single_value_background_correction # remove_background, get_threshold
 from papylio.timer import Timer
 from papylio.log_functions import add_configuration_to_dataarray
-#
-# class Illumination:
-#     """Represents a microscopy illumination/excitation channel.
-#
-#     Stores information about an illumination pattern including multiple
-#     name variants for flexible identification.
-#     """
-#     def __init__(self, name, short_name='', other_names=[]):
-#         """Initialize Illumination object.
-#
-#         Parameters
-#         ----------
-#         name : str
-#             Full name of the illumination (e.g., 'green', 'red')
-#         short_name : str, optional
-#             Short abbreviation (e.g., 'g', 'r') (default: '')
-#         other_names : list, optional
-#             Alternative names for this illumination (default: [])
-#         """
-#         # self.movie = movie
-#         self.name = name
-#         self.short_name = short_name
-#         self.other_names = other_names
-#
-#     def __repr__(self):
-#         """Return string representation of Illumination."""
-#         return (f'{self.__class__.__name__}({self.name})')
-#
-#     @property
-#     def names(self):
-#         """list : All names/identifiers for this illumination including index."""
-#         return [self.index, self.name, self.short_name] + self.other_names
-#
-#     @property
-#     def index(self):
-#         """int : Index of this illumination in the global illuminations list (read-only)"""
-#         try:
-#             return Movie.illuminations.index(self)
-#         except:
-#             pass
-
 
 class Movie:
     """Base class for microscopy movie/image stack handling.
@@ -173,53 +132,6 @@ class Movie:
                 return custom_movie_class
         else:
             raise ValueError('Unknown microscope')
-
-    # @classmethod
-    # def get_illumination_from_name(cls, illumination_name):
-    #     """Get illumination object by name or index.
-    #
-    #     Parameters
-    #     ----------
-    #     illumination_name : str or int
-    #         The name, short name, or index of an illumination
-    #
-    #     Returns
-    #     -------
-    #     Illumination
-    #         The matching Illumination object
-    #
-    #     Raises
-    #     ------
-    #     ValueError
-    #         If illumination name is not found
-    #     """
-    #     for illumination in cls.illuminations:
-    #         if illumination_name == illumination:
-    #             return illumination
-    #     else:
-    #         raise ValueError('Illumination name not found')
-    #
-    # @classmethod
-    # def get_illuminations_from_names(cls, illumination_names):
-    #     """Get list of illumination objects by names.
-    #
-    #     Parameters
-    #     ----------
-    #     illumination_names : str, list, or None
-    #         List of illumination names or 'all' for all illuminations
-    #
-    #     Returns
-    #     -------
-    #     list
-    #         List of Illumination objects matching the names
-    #     """
-    #     if illumination_names in [None, 'all']:
-    #         return cls.illuminations
-    #
-    #     if not isinstance(illumination_names, list):
-    #         illumination_names = [illumination_names]
-    #
-    #     return [cls.illuminations.index(illumination_name) for illumination_name in illumination_names]
 
     @classmethod
     def get_illumination_indices_from_names(cls, illuminations):
@@ -332,8 +244,6 @@ class Movie:
             image_info['overlay_channels'] = True
 
         return image_info
-
-    from papylio.helper_functions import get_default_parameters
 
     @classmethod
     def image_info_to_filename(cls, filename, fov_index=None, **projection_image_configuration):
@@ -451,26 +361,14 @@ class Movie:
         self._time = None
 
         self.channels = ['green', 'red']
-        self.channel_arrangement = [[[0, 1]]]
-        # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
-        # self.channel_arrangement = xr.DataArray([[[0,1]]], dims=('frame','y','x'))
+        self.channel_arrangement = [[[0, 1]]]  # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
 
         self.channel_mapping = [self.unit_mapping,]*(self.number_of_channels-1)
 
         self.illumination_arrangement = [self.default_illumination]  # First level: frames, second level: illumination
-        # self.illumination_arrangement = xr.DataArray([[True, False]], dims=('frame', 'illumination'), coords={'illumination': [0,1]}) # TODO: np.array([0]) >> list of list It would be good to have a default illumination_arrangement of np.array([0]), i.e. illumination 0 all the time?
         self._illumination_index_per_frame = None
 
-        # self._darkfield_correction = None
-        # self._flatfield_correction = None
-        # self._general_background_correction = None
-        # self._spatial_background_correction = None
-        # self._temporal_background_correction = None
-        # self._temporal_illumination_correction = None
-
         self._common_corrections = xr.Dataset()
-
-        # self.load_corrections()
 
         self.header_is_read = False
 
@@ -478,7 +376,6 @@ class Movie:
         """Context manager entry point. Opens file for reading."""
         if self._with_counter == 0:
             self.open()
-            # print('open')
         self._with_counter += 1
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -486,7 +383,6 @@ class Movie:
         self._with_counter -= 1
         if self._with_counter == 0:
             self.close()
-            # print('close')
 
     def __repr__(self):
         """Return string representation of Movie object."""
@@ -494,11 +390,6 @@ class Movie:
 
     def __getattr__(self, item):
         """Lazy-load header when accessing attributes before header is read."""
-        # if '_initialized' in self.__dict__ and not self.header_is_read:
-        # if item != 'header_is_read' and not self.header_is_read:
-        # if item == '_with_counter':
-        #     raise ValueError()
-        # print(item)
 
         if 'header_is_read' in self.__dict__.keys() and not self.header_is_read:
             # print(item+'2')
@@ -533,21 +424,6 @@ class Movie:
         """Set time coordinate for frames."""
         self._time = value
 
-    # @property
-    # def channel_grid(self):
-    #     """ numpy.array : number of channels in the horizontal and vertical dimension
-    #
-    #     Setting the channel_grid variable will assume equally spaced channels
-    #     """
-    #     return self._channel_grid
-    #
-    # @channel_grid.setter
-    # def channel_grid(self, channel_grid):
-    #     channel_grid = np.array(channel_grid)
-    #     # Possibly support multiple cameras by adding a third dimension
-    #     if len(channel_grid) == 2 and np.all(np.array(channel_grid) > 0):
-    #         self._channel_grid = channel_grid
-    #         self._number_of_channels = np.product(channel_grid)
     @property
     def number_of_illuminations(self):
         """int : Number of illumination channels in the movie"""
@@ -582,34 +458,9 @@ class Movie:
     def frame_indices(self):
         return xr.DataArray(np.arange(self.number_of_frames), dims='frame')
 
-    # @property
-    # def channel_arrangement(self):
-    #     return self._channel_arrangement
-    #
-    # @channel_arrangement.setter
-    # def channel_arrangement(self, channel_arrangement):
-    #     self._channel_arrangement = np.array(channel_arrangement)
-
     @property
     def channel_indices(self):
         return xr.DataArray(np.array(self.channel_arrangement).flatten(), dims='channel')
-
-    # @property
-    # def channel_indices_per_image(self):
-    #     if self._channel_indices_per_frame is None:
-    #         # frame_indices = self.frame_indices
-    #         # illumination_indices = self.illumination_indices
-    #         # self._illumination_index_per_frame = xr.DataArray(
-    #         #     np.resize(self.illumination_arrangement, (len(frame_indices), len(illumination_indices))),
-    #         #     dims=('frame', 'illumination'),
-    #         #     coords={'frame': frame_indices, 'illumination': illumination_indices})
-    #         channel_indices_flattened = self.channel_arrangement.reshape(len(self.channel_arrangement), -1)
-    #         self._channel_indices_per_frame= xr.DataArray(
-    #             np.resize(channel_indices_flattened, (self.number_of_frames, len(channel_indices_flattened[0]))),
-    #             dims=('frame', 'channel'),
-    #             coords={'frame': self.frame_indices}).stack(image=('frame','channel'))
-    #         #TODO: Add name to other indices or remove this name
-    #     return self._illumination_index_per_frame
 
     @property
     def number_of_channels_per_frame(self):
@@ -653,62 +504,6 @@ class Movie:
     def illumination_indices_in_movie(self):
         return np.unique(self.illumination_index_per_frame)
 
-    # @property
-    # def image_indices(self):
-    #     # index = pd.MultiIndex.from_arrays([*self.image_indices_from_frame_indices(self.frame_indices).T],
-    #     #                                   names=('frame', 'illumination', 'channel'))
-    #     # return xr.DataArray(index, dims='image')
-    #     return self.image_indices_from_frame_indices(xarray=True)
-
-    # def image_indices_from_frame_indices(self, frame_indices=None, xarray=False):
-    #     if frame_indices is None:
-    #         frame_indices = self.frame_indices
-    #     if isinstance(frame_indices, xr.DataArray):
-    #         frame_indices = frame_indices.values
-    #     # return self.image_indices.sel(image=self.image_indices.frame.isin(frame_indices))
-    #     image_frame_indices = np.repeat(frame_indices, self.number_of_channels_per_frame)
-    #     image_illumination_indices = np.repeat(self.illumination_index_per_frame.values[frame_indices],
-    #                                            self.number_of_channels_per_frame)
-    #     image_channel_indices = np.resize(self.channel_indices.values, len(image_frame_indices))
-    #
-    #     image_indices = np.vstack([image_frame_indices, image_illumination_indices, image_channel_indices]).T
-    #     if xarray:
-    #         image_indices = self.image_indices_to_xarray(image_indices)
-    #
-    #     return image_indices
-
-    # def image_indices_to_xarray(self, image_indices):
-    #     index = pd.MultiIndex.from_arrays([*image_indices.T], names=('frame', 'illumination', 'channel'))
-    #     return xr.DataArray(index, dims='image')
-
-    # TODO: remove this
-    # def create_frame_info(self):
-    #     # TODO: Use xarray instead of pandas
-    #     # Perhaps store time, illumination and channel separately
-    #     # files = [0] # For implementing multiple files
-    #     frames = range(self.number_of_frames)
-    #
-    #     index = pd.Index(data=frames, name='frame')
-    #     frame_info = pd.DataFrame(index=index, columns=['time', 'illumination', 'channel'])
-    #     # self.frame_info['file'] = len(self.frame_info) * [list(range(2))] # For implementing multiple files
-    #     # self.frame_info = self.frame_info.explode('file') # For implementing multiple files
-    #     frame_info['time'] = frame_info.index.to_frame()['frame'].values
-    #     if self.illumination_arrangement is not None:
-    #         if len(self.illumination_arrangement)>1:
-    #             frame_info['illumination'] = self.illumination_arrangement.tolist() * (self.number_of_frames // self.illumination_arrangement.shape[0])
-    #         else:
-    #             frame_info['illumination'] = [0] * self.number_of_frames
-    #     else:
-    #         frame_info['illumination'] = [0] * self.number_of_frames
-    #     frame_info['channel'] = self.channel_arrangement.tolist() * (self.number_of_frames // self.channel_arrangement.shape[0])
-    #
-    #     frame_info = frame_info.explode('channel').explode('channel')
-    #
-    #     categorical_columns = ['illumination', 'channel']
-    #     frame_info[categorical_columns] = frame_info[categorical_columns].astype('category')
-    #
-    #     self.frame_info = frame_info
-
     @property
     def pixel_to_stage_coordinates_transformation(self):
         #TODO: Check whether the flipping implementation is correct for different microscopes, i.e. whether the stage coordinates are flipped with respect to the pixel coordinates and whether this is correctly implemented by flipping the stage coordinates in the translation part of the transformation.
@@ -727,7 +522,7 @@ class Movie:
 
     @property
     def boundaries_metric(self):
-        # #         Formatted as two coordinates, with the lowest and highest x and y values respectively
+        # Formatted as two coordinates, with the lowest and highest x and y values respectively
         horizontal_boundaries = np.array([0, self.width_metric])
         vertical_boundaries = np.array([0, self.height_metric])
         return np.vstack([horizontal_boundaries, vertical_boundaries]).T
@@ -801,7 +596,6 @@ class Movie:
             frame_indices = self.frame_indices.values
 
         frames = self._read_frames(frame_indices)
-        # frames = xr.DataArray(frames, dims=('frame', 'y', 'x'))
         frames = np.rot90(frames, self.rotation, axes=(1, 2))
 
         if len(self.channel_arrangement) > 1:
@@ -810,7 +604,6 @@ class Movie:
             # Or add this to separate and flatten channels
 
         frames = self.separate_channels(frames, self.channel_arrangement)
-        # frames = np.stack([channel.crop_images(images) for channel in self.channels]
 
         if apply_corrections:  # and self.correct_images
             frames = self.apply_corrections(frames, frame_indices)
@@ -854,10 +647,7 @@ class Movie:
         np.ndarray or xr.DataArray
             Frames with channel as separate dimension
         """
-        # if frames.ndim == 2:
-        #     frames = frames[None, :, :]
-        # return expand_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2))
-        # return expand_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), to_axes=(0, 0))
+
         channel_arrangement = np.array(channel_arrangement)
         channel_frames, channel_rows, channel_columns = channel_arrangement.shape
 
@@ -873,16 +663,6 @@ class Movie:
         frames = frames[..., inverse_order, :, :]
 
         return frames
-
-        # return xr.apply_ufunc(
-        #     expand_axes, frames, input_core_dims=[['image', 'y', 'x'][-frames.ndim:]], output_core_dims=[['image', 'y', 'x']],
-        #     exclude_dims=set(['image', 'y', 'x']),
-        #     kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1), "to_axes": (-3, -3)}
-        # )
-
-        # frames = frames.transpose('frame', 'y', 'x', ...)
-        # new = split_along_axes(frames.values, (channel_rows, channel_columns), from_axes=(1, 2))
-        # return xr.DataArray(new, dims=['frame','y','x','channel'])
 
     @staticmethod
     def flatten_channels(frames, channel_arrangement):
@@ -902,13 +682,6 @@ class Movie:
         np.ndarray or xr.DataArray
             Frames with channels arranged spatially
         """
-        # return split_along_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), inverse=True)
-        # return split_along_axes(frames, (channel_rows, channel_columns), from_axes=(1, 2), inverse=True)
-        # if frames.shape[-3]//channel_columns//channel_rows == 1:
-        #     output_core_dims = [['y', 'x']]
-        # else:
-        #     output_core_dims = [['image', 'y', 'x']]
-        #TODO: Check whether channel_rows and channel_columns are really necessary here.
         channel_arrangement = np.array(channel_arrangement)
         channel_frames, channel_rows, channel_columns = channel_arrangement.shape
 
@@ -949,61 +722,7 @@ class Movie:
 
         return frames
 
-    # def get_channel(self, image, channel='d'):
-    #     if channel in [None, 'all']:
-    #         return image
-    #
-    #     if not isinstance(channel, Channel):
-    #         channel = self.get_channel_from_name(channel)
-    #
-    #     return channel.crop_image(image)
-
-    # def get_channel_from_name(self, channel_name):
-    #     """Get the channel index belonging to a specific channel (name)
-    #     If
-    #
-    #     Parameters
-    #     ----------
-    #     channel : str or int
-    #         The name or number of a channel
-    #
-    #     Returns
-    #     -------
-    #     i: int
-    #         The index of the channel to which the channel name belongs
-    #
-    #     """
-    #     for channel in self.channels:
-    #         if channel_name in channel.names or channel_name == channel:
-    #             return channel
-    #     else:
-    #         raise ValueError('Channel name not found')
-
-    # def get_channels_from_names(self, channel_names):
-    #     """Get the channel index belonging to a specific channel (name)
-    #     If
-    #
-    #     Parameters
-    #     ----------
-    #     channel : str or int
-    #         The name or number of a channel
-    #
-    #     Returns
-    #     -------
-    #     i: int
-    #         The index of the channel to which the channel name belongs
-    #
-    #     """
-    #     if channel_names in [None, 'all']:
-    #         return self.channels
-    #
-    #     if not isinstance(channel_names, list) and not isinstance(channel_names, tuple):
-    #         channel_names = [channel_names]
-    #
-    #     return [self.get_channel_from_name(channel_name) for channel_name in channel_names]
-
     def get_channel_indices_from_names(self, channel_names):
-        # channels = self.get_channels_from_names(channel_names)
         return [self.channels.index(channel_name) if channel_name in self.channels else None for channel_name in channel_names]
 
     def saveas_tif(self):
@@ -1013,8 +732,6 @@ class Movie:
         for i in range(self.number_of_frames):
             frame = self.read_frames([i], apply_corrections=False, xarray=False)
             tifffile.imwrite(tif_filepath, frame, append=True)
-
-            #     tifffile.imwrite(self.writepath.joinPath(f'{self.name}_fr{frame_number}.tif'), image,  photometric='minisblack')
 
     def make_projection_image(self, projection_type='average', frame_range=(0,20), apply_corrections=True,
                               illumination=None, overlay_channels=False, flatten_channels=False):
@@ -1065,28 +782,18 @@ class Movie:
 
         if projection_type == 'average':
             number_of_frames = len(frame_indices)
-            # if len(frame_indices) > 100:
-                # print(f'\n Making average image of {self.name}')
             with self:
                 for frame_indices_subset in tqdm.tqdm(frame_indices_subsets, desc='Average image'):
-                    # if len(frame_indices) > 100 and i % 13 == 0:
-                    #     sys.stdout.write(
-                    #         f'\r   Processing frame {frame_index} in {frame_indices[0]}-{frame_indices[-1]}')
                     frames = self.read_frames(frame_indices_subset, apply_corrections=apply_corrections,
                                               xarray=False, flatten_channels=False)
                     image = image + frames.sum(axis=0)
                 #TODO: Check whether this is a good way to average, i.e. do the values not get too big.
             image = (image / number_of_frames).astype('float32')
         elif projection_type == 'maximum':
-            # print(f'\n Making maximum projection image of {self.name}')
             with self:
                 for frame_indices_subset in tqdm.tqdm(frame_indices_subsets, desc='Maximum projection image'):
-                    # if i % 13 == 0:
-                    #     sys.stdout.write(
-                    #         f'\r   Processing frame {frame_index} in {frame_indices[0]}-{frame_indices[-1]}')
                     frames = self.read_frames(frame_indices_subset, xarray=False, flatten_channels=False)
                     image = np.maximum(image, frames.max(axis=0))
-            # sys.stdout.write(f'\r   Processed frames {frame_indices[0]}-{frame_indices[-1]}\n')
 
         if overlay_channels:
             for i in self.channel_indices[1:].values:
@@ -1097,7 +804,6 @@ class Movie:
             image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
 
         return image
-
 
     def save_projection_image(self, intensity_range=None, color_map='gray', path=None, filename=None, filetype='tif',
                               **projection_image_configuration):
@@ -1181,7 +887,6 @@ class Movie:
             filepath = self.writepath.joinpath(filename)
             plt.imsave(filepath.with_suffix('.png'), images_combined)
 
-
     def make_average_image(self, **kwargs):
         """ Construct an average image
         Determine average image for a number_of_frames starting at start_frame.
@@ -1253,35 +958,11 @@ class Movie:
             frame_indices_subset = (self.illumination_index_per_frame[frame_indices] == illumination).frame
             average_image = frames[frame_indices_subset, channel].mean(axis=0)
 
-            # if 'flatfield_correction' in corrections:
-            #     flatfield = corrections.flatfield_correction.sel(illumination=illumination, channel=channel).values
-            # else:
-            #     flatfield = None
-            #
-            # if 'darkfield_correction' in corrections:
-            #     darkfield = corrections.darkfield_correction.sel(illumination=illumination, channel=channel).values
-            # else:
-            #     darkfield = None
-
             correction = determine_single_value_background_correction(average_image, method)#, flatfield, darkfield)
-
-            # if 'temporal_illumination_correction' in corrections:
-            #     correction /= corrections.temporal_illumination_correction[illumination, channel].mean().item()
-            #
-            # if 'temporal_background_correction' in corrections:
-            #     correction -= corrections.temporal_background_correction[frame_indices_subset, channel].mean().item()
-            #
-            # if 'spatial_background_correction' in corrections:
-            #     correction -= corrections.spatial_background_correction[illumination, channel].mean().item()
-
             general_background_correction[dict(illumination=illumination, channel=channel)] = correction
 
         add_configuration_to_dataarray(general_background_correction, Movie.determine_general_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
-
-        # self.general_background_correction = general_background_correction
-        # self.save_corrections(general_background_correction=general_background_correction,
-        #                       temporal_background_correction=None, spatial_background_correction=None)
         self.save_corrections(general_background_correction=general_background_correction)
 
     def determine_temporal_background_correction(self, method='median', use_existing=False):
@@ -1289,7 +970,6 @@ class Movie:
         if use_existing and 'temporal_background_correction' in self.corrections:
             return
 
-        # self.spatial_background_correction = None
         self.save_corrections(temporal_illumination_correction=None,
                               temporal_background_correction=None,
                               spatial_background_correction=None,
@@ -1302,42 +982,18 @@ class Movie:
                                                               'channel': self.channel_indices},
                                                       name='temporal_background_correction')
 
-        # corrections = self.corrections
-
         for illumination, channel in itertools.product(self.illumination_indices_in_movie, np.array(self.channel_indices)):
 
             frame_indices_subset = (self.illumination_index_per_frame==illumination).frame
             frames_subset = frames[frame_indices_subset, channel]
 
-            # if 'flatfield_correction' in corrections:
-            #     flatfield = corrections.flatfield_correction.sel(illumination=illumination, channel=channel).values
-            # else:
-            #     flatfield = None
-            #
-            # if 'darkfield_correction' in corrections:
-            #     darkfield = corrections.darkfield_correction.sel(illumination=illumination, channel=channel).values
-            # else:
-            #     darkfield = None
-
             correction = determine_temporal_background_correction(frames_subset, method)#, flatfield, darkfield)
-
-            # if 'general_background_correction' in corrections:
-            #     correction -= corrections.general_background_correction[illumination, channel].item()
-
-            # if 'spatial_background_correction' in corrections:
-            #     correction -= corrections.spatial_background_correction[illumination, channel].mean().item()
-
             temporal_background_correction[dict(frame=frame_indices_subset, channel=channel)] = correction
 
         add_configuration_to_dataarray(temporal_background_correction, Movie.determine_temporal_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
 
-        # self.temporal_background_correction = temporal_background_correction
-        # self.save_corrections(temporal_background_correction=temporal_background_correction,
-        #                       spatial_background_correction=None)
-        self.save_corrections(temporal_background_correction=temporal_background_correction)#,
-                              # spatial_background_correction=None,
-                              # general_background_correction=None)
+        self.save_corrections(temporal_background_correction=temporal_background_correction)
 
     def determine_spatial_background_correction(self, method='median_filter', frame_range=(0, 20), use_existing=False,
                                                 **kwargs):
@@ -1356,40 +1012,19 @@ class Movie:
                                                              'channel': self.channel_indices, },
                                                      name='spatial_background_correction')
 
-        # corrections = self.corrections
-
         for illumination, channel in itertools.product(self.illumination_indices_in_movie,
                                                        np.array(self.channel_indices)):
             frame_selection = (self.illumination_index_per_frame[frame_indices] == illumination).values
             average_image = frames[frame_selection, channel].mean(axis=0)
-            # if 'flatfield_correction' in corrections:
-            #     flatfield = corrections.flatfield_correction.sel(illumination=illumination, channel=channel).values
-            # else:
-            #     flatfield = None
-            #
-            # if 'darkfield_correction' in corrections:
-            #     darkfield = corrections.darkfield_correction.sel(illumination=illumination, channel=channel).values
-            # else:
-            #     darkfield = None
 
-            correction = determine_spatial_background_correction(average_image, method, **kwargs) # flatfield, darkfield, **kwargs)
-
-            # if 'general_background_correction' in corrections:
-            #     correction -= corrections.general_background_correction[illumination, channel].item()
-
-            # if 'temporal_background_correction' in corrections:
-            #     correction -= corrections.temporal_background_correction[frame_indices_subset, channel].mean().item()
-
+            correction = determine_spatial_background_correction(average_image, method, **kwargs)
             spatial_background_correction[dict(illumination=illumination, channel=channel)] = correction
 
         add_configuration_to_dataarray(spatial_background_correction, Movie.determine_spatial_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
 
-        # self.spatial_background_correction = spatial_background_correction
-        # self.save_corrections(spatial_background_correction=spatial_background_correction)
         self.save_corrections(spatial_background_correction=spatial_background_correction)#,
-                              # temporal_background_correction=None,
-                              #general_background_correction=None)
+
     @property
     def corrections(self):
         if hasattr(self, 'fov_index') and self.fov_index is not None:
@@ -1403,14 +1038,6 @@ class Movie:
             corrections = xr.Dataset()
         corrections = corrections.merge(self._common_corrections, compat='override')
         return corrections
-
-    # def load_corrections(self):
-    #     corrections_filepath = self.filepath.with_name(self.name + '_corrections.nc')
-    #     if corrections_filepath.exists():
-    #         corrections = xr.load_dataset(corrections_filepath, engine='h5netcdf')
-    #         # for key, correction in corrections.data_vars.items():
-    #         #     self.__setattr__(key, correction)
-    #     return corrections
 
     @property
     def configuration(self):
@@ -1447,13 +1074,6 @@ class Movie:
                 corrections[name] = correction
         corrections.to_netcdf(corrections_filepath, mode='w', engine='h5netcdf')
 
-#     def apply_corrections(self, frames, frame_indices):
-#
-#
-#         return apply_corrections(frames, frame_indices, self.darkfield_correction.values,
-#                                  self.flatfield_correction.values, self.illumination_correction.values,
-#                                  self.background_correction.values)
-#
 # # @njit
     def apply_corrections(self, frames, frame_indices):
         illumination_indices = self.illumination_index_per_frame[frame_indices]
@@ -1495,9 +1115,6 @@ class Movie:
             image = axes[i].imshow(self.flatten_channels(correction.sel(illumination=illumination_index)), **kwargs)
             axes[i].set_title(f'Illumination {illumination_index.item()}', fontsize=8)
 
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
-        # divider = make_axes_locatable(axes[-1])
-        # cax = divider.append_axes("right", "4%", pad="15%")
         cax = axes[-1]
         figure.colorbar(image, aspect=50, cax=cax)
         cax.set_ylabel('Intensity (a.u.)')
@@ -1512,137 +1129,6 @@ class Movie:
 
         if save:
             figure.savefig(self.filepath.with_name(f'{self.name} - {correction_name}.png'), bbox_inches='tight')
-
-#
-# class Channel:
-#     """Represents a single color channel in a multi-channel microscopy image.
-#
-#     Stores channel information including name, color mapping, and spatial location
-#     within multi-channel images where channels are arranged in a grid pattern.
-#     """
-#     def __init__(self, movie, name, short_name, other_names=[], colour_map=None):
-#         """Initialize Channel object.
-#
-#         Parameters
-#         ----------
-#         movie : Movie
-#             Parent Movie object
-#         name : str
-#             Full name of the channel (e.g., 'green', 'red')
-#         short_name : str
-#             Short abbreviation for the channel
-#         other_names : list, optional
-#             Alternative names for the channel (default: [])
-#         colour_map : matplotlib.colors.Colormap, optional
-#             Color map for displaying this channel. If None, auto-generated from name
-#         """
-#         self.movie = movie
-#         self.name = name
-#         self.short_name = short_name
-#         self.other_names = other_names
-#         if colour_map is None:
-#             channel_colour = \
-#             list({'green', 'red', 'blue'}.intersection([self.name, self.short_name] + self.other_names))[0]
-#             self.colour_map = make_colour_map(channel_colour)
-#
-#     def __repr__(self):
-#         """Return string representation of Channel."""
-#         return (f'{self.__class__.__name__}({self.name})')
-#
-#     @property
-#     def names(self):
-#         """list : All names/identifiers for this channel."""
-#         return [self.index, str(self.index), self.name, self.short_name] + self.other_names
-#
-#     @property
-#     def index(self):
-#         """int : Index of this channel in the movie's channel list (read-only)"""
-#         try:
-#             return self.movie.channels.index(self)
-#         except:
-#             pass
-#
-#     @property
-#     def location(self):
-#         """list : [frame_index, row_index, column_index] position in channel arrangement."""
-#         return [int(i) for i in np.where(self.movie.channel_arrangement == self.index)]
-#
-#     @property
-#     def width(self):
-#         """int : Width of this channel in pixels (read-only)"""
-#         return self.movie.width // self.movie.channel_arrangement.shape[2]
-#
-#     @property
-#     def height(self):
-#         """int : Height of this channel in pixels (read-only)"""
-#         return self.movie.height // self.movie.channel_arrangement.shape[1]
-#         # for frame_index, frame in enumerate(self.channel_arrangement):
-#         #     for y_index, y in enumerate(frame):
-#         #         try:
-#         #             x_index = y.index(channel_index)
-#         #             return frame_index, y_index, x_index
-#         #         except ValueError:
-#         #             pass
-#
-#     @property
-#     def dimensions(self):
-#         """np.ndarray : [width, height] of the channel (read-only)"""
-#         return np.array([self.width, self.height])
-#
-#     @property
-#     def origin(self):
-#         """list : [x, y] pixel coordinates of channel origin (top-left corner)."""
-#         return [self.width * self.location[2],
-#                 self.height * self.location[1]]
-#
-#     @property
-#     def boundaries(self):
-#         #TODO: Check whether this (and other channel methods) still works well now that the image is given with an extra channel dimension
-#         """np.ndarray : Bounding box coordinates as [[x_min, x_max], [y_min, y_max]]."""
-#         horizontal_boundaries = np.array([0, self.width]) + self.width * self.location[2]
-#         vertical_boundaries = np.array([0, self.height]) + self.height * self.location[1]
-#         return np.vstack([horizontal_boundaries, vertical_boundaries]).T
-#
-#     @property
-#     def vertices(self):
-#         """np.ndarray : Four corner coordinates of the channel forming a closed shape."""
-#         channel_vertices = np.array([self.origin, ] * 4)
-#         channel_vertices[[1, 2], 0] += self.width
-#         channel_vertices[[2, 3], 1] += self.height
-#         return channel_vertices
-#
-#     def crop_image(self, image):
-#         """Crop a single image to this channel's boundaries.
-#
-#         Parameters
-#         ----------
-#         image : np.ndarray
-#             Image array to crop
-#
-#         Returns
-#         -------
-#         np.ndarray
-#             Cropped image containing only this channel
-#         """
-#         return image[self.boundaries[0, 1]:self.boundaries[1, 1],
-#                self.boundaries[0, 0]:self.boundaries[1, 0]]
-#
-#     def crop_images(self, images):
-#         """Crop multiple images to this channel's boundaries.
-#
-#         Parameters
-#         ----------
-#         images : np.ndarray
-#             Image stack array to crop (first dimension is frame)
-#
-#         Returns
-#         -------
-#         np.ndarray
-#             Cropped images containing only this channel
-#         """
-#         return images[:, self.boundaries[0, 1]:self.boundaries[1, 1],
-#                self.boundaries[0, 0]:self.boundaries[1, 0]]
-
 
 class MoviePlotter:
     # Adapted from Matplotlib Image Slices Viewer
