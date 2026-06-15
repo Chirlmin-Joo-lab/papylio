@@ -32,3 +32,7 @@ except ImportError:
                                                  root='..', relative_to=__file__)
     except (LookupError, ImportError):
         __version__ = '0.0.0'
+
+from papylio.configuration import setup_user_config, load_user_microscope_classes
+setup_user_config()
+load_user_microscope_classes()

@@ -123,10 +123,6 @@ class Movie:
 
     @classmethod
     def custom_movie_classes(cls, extension=None):
-        # TODO: place these in the microscope profile folder
-        from papylio.movie.BN_TIRF import BNTIRFMovie
-        from papylio.movie.TIR_T import TIRTMovie
-
         default_movie_classes = cls.default_movie_classes(extension)
         custom_movie_classes = []
         for default_movie_class in default_movie_classes:
@@ -439,7 +435,7 @@ class Movie:
         # self.filepaths = [Path(filepath) for filepath in filepaths] # For implementing multiple files, e.g. two channels over two files
         self.is_mapping_movie = False
 
-        self.rotation = rotation
+        # self.rotation = rotation
         # self.correct_images = False
 
         self.chunk_size = 100
