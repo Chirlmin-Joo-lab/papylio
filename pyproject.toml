@@ -61,7 +61,7 @@ Repository = "https://github.com/Chirlmin-Joo-lab/papylio"
 [project.optional-dependencies]
 sparxs = ["matplotlib-venn >= 0.11", "perl"]
 gui = []
-dev = ["pytest","pytest-datadir","build","twine","sphinx","sphinx-book-theme","setuptools_scm>=8"]
+dev = ["pytest","pytest-datadir","build","twine","sphinx","sphinx-book-theme"]
 
 [tool.pytest.ini_options]
 pythonpath = ["papylio"]

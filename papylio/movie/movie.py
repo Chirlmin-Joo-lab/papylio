@@ -4,31 +4,24 @@ Provides the Movie base class and format-specific subclasses for reading frames,
 creating projection images, and applying corrections.
 """
 
-import re
-import sys
 import itertools
 import warnings
 import tqdm
 import re
 import json
-from numba import njit
 from pathlib import Path
-import pandas as pd
 import tifffile
 import numpy as np
-from matchpoint import MatchPoint
+# from matchpoint import MatchPoint
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import xarray as xr
-import scipy.ndimage
 from skimage.transform import AffineTransform
 
 import matchpoint as mp
 
 from papylio.helper_functions import get_default_parameters
 # from papylio.movie.background_correction import rollingball
-from papylio.movie.background_correction import determine_temporal_background_correction, \
-    determine_spatial_background_correction, determine_single_value_background_correction # remove_background, get_threshold
 from papylio.timer import Timer
 from papylio.log_functions import add_configuration_to_dataarray
 
@@ -301,6 +294,11 @@ class Movie:
             filename += '_overlay'
 
         return filename
+
+    # @property
+    # def njit(self):
+    #     from numba import njit
+    #     return njit
 
     def __new__(cls, filepath, rotation=0, microscope=None):
         if cls is Movie:
@@ -936,6 +934,7 @@ class Movie:
 
     # Do we really need this?
     def determine_general_background_correction(self, method='median', frame_range=(0, 20), use_existing=False):
+        from papylio.movie.background_correction import determine_single_value_background_correction
         #Todo: pass method kwargs
         if use_existing and 'general_background_correction' in self.corrections:
             return
@@ -966,6 +965,7 @@ class Movie:
         self.save_corrections(general_background_correction=general_background_correction)
 
     def determine_temporal_background_correction(self, method='median', use_existing=False):
+        from papylio.movie.background_correction import determine_temporal_background_correction
         #Todo: pass method kwargs
         if use_existing and 'temporal_background_correction' in self.corrections:
             return
@@ -997,6 +997,7 @@ class Movie:
 
     def determine_spatial_background_correction(self, method='median_filter', frame_range=(0, 20), use_existing=False,
                                                 **kwargs):
+        from papylio.movie.background_correction import determine_spatial_background_correction
         if use_existing and 'spatial_background_correction' in self.corrections:
             return
 

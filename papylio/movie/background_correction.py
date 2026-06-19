@@ -8,7 +8,7 @@ import scipy.optimize
 import scipy.ndimage
 import tqdm
 
-from papylio.movie.shading_correction import get_photobleach
+
 
 def determine_temporal_background_correction(frames, method, flatfield=None, darkfield=None):
     """Determine background correction across multiple frames.
@@ -38,6 +38,7 @@ def determine_temporal_background_correction(frames, method, flatfield=None, dar
         If method 'BaSiC_crop' is specified
     """
     if method == 'BaSiC':
+        from papylio.movie.shading_correction import get_photobleach
         channel_dimensions = frames.shape[-2:][::-1]  # size should be given in (x,y) for get_photobleach
         size = (channel_dimensions / np.max(channel_dimensions) * 256).astype(int)
         correction = get_photobleach(frames, flatfield, darkfield, size=size).flatten()
@@ -88,6 +89,7 @@ def determine_single_value_background_correction(frame, method, flatfield=None, 
         frame_corrected = frame_corrected / flatfield
 
     if method == 'BaSiC':
+        from papylio.movie.shading_correction import get_photobleach
         channel_dimensions = frame.shape[-2:][::-1]  # size should be given in (x,y) for get_photobleach
         size = (channel_dimensions / np.max(channel_dimensions) * 256).astype(int)
         correction = get_photobleach(frame, flatfield, darkfield, size=size).flatten()

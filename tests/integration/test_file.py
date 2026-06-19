@@ -3,8 +3,6 @@ import tifffile
 import numpy as np
 import json
 
-from pytest_datadir.plugin import shared_datadir
-
 @pytest.fixture
 def experiment(shared_datadir):
     from papylio import Experiment

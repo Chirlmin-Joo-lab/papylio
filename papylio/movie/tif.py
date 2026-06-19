@@ -6,7 +6,6 @@ Provides a TifMovie subclass that uses tifffile to read multi-page TIFF stacks a
 import numpy as np
 import pandas as pd
 import xarray as xr
-import tifffile
 
 from papylio.movie.movie import Movie
 from papylio.timer import Timer
@@ -55,6 +54,7 @@ class TifMovie(Movie):
 
         Creates a tifffile.TiffFile object to access file contents.
         """
+        import tifffile
         self.file = tifffile.TiffFile(self.filepath)
 
     def close(self):
@@ -183,6 +183,7 @@ class TifMovie(Movie):
                 with self:
                     frames = np.stack([self.file.pages[i].asarray() for i in frame_indices])
             else:
+                import tifffile
                 frames = tifffile.imread(self.filepath, key=frame_indices)
 
         else:
