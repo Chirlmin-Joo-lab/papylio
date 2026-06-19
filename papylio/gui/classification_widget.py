@@ -11,10 +11,11 @@ from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, 
 )
 
 from PySide6.QtGui import QStandardItem, QStandardItemModel
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 from papylio.analysis.classification_simple import classify_threshold
 from papylio.analysis.hidden_markov_modelling import classify_hmm
+from papylio.gui.common_layouts import HelpDialog, build_control_layouts
 
 import numpy as np
 import inspect
@@ -23,7 +24,7 @@ import typing
 
 class ClassificationWidget(QWidget):
     """Widget for managing and applying molecule classifications."""
-
+    request_top_tab_change = Signal(int)  # send index of tab to activate
     classificationChanged = Signal()
 
     def __init__(self, parent=None):
@@ -32,21 +33,23 @@ class ClassificationWidget(QWidget):
         self.methods = {}
         self._file = None# name -> function
 
-        main_layout = QHBoxLayout(self)
+
 
         form = QFormLayout()
-
         # --- Classification name input ---
         self.name_edit = QLineEdit()
+        self.name_edit.setToolTip("add any relevant label")
         self.name_edit.setPlaceholderText("e.g. HMM")
         form.addRow("Name:", self.name_edit)
 
         # --- Variable selector ---
         self.variable_selector = QComboBox()
+        self.variable_selector.setToolTip("Choose trace type, except 'intensity'")
         form.addRow("Variable:", self.variable_selector)
 
         # --- Method selector ---
         self.method_selector = QComboBox()
+        self.method_selector.setToolTip("Choose classifier")
         self.method_selector.currentTextChanged.connect(self._update_method_panel)
         form.addRow("Method:", self.method_selector)
 
@@ -57,11 +60,15 @@ class ClassificationWidget(QWidget):
         form.addRow("Options:", self.stack)
 
         # --- Buttons ---
-        button_layout = QHBoxLayout()
+
+        #button_layout = QHBoxLayout()
         self.run_button = QPushButton("Classify")
         self.clear_button = QPushButton("Clear")
-        button_layout.addWidget(self.clear_button)
-        button_layout.addWidget(self.run_button)
+        self.help_button = QPushButton('Help')
+        self.help_button.clicked.connect(self.show_help)
+
+        button_widget = build_control_layouts([self.clear_button, self.run_button ,self.help_button])
+
 
         # Taborder
         # QWidget.setTabOrder(self.name_edit, self.variable_selector)
@@ -70,14 +77,13 @@ class ClassificationWidget(QWidget):
         # QWidget.setTabOrder(self.stack, self.run_button)
         # QWidget.setTabOrder(self.run_button, self.clear_button)
 
-        # --- Results table ---
+        # --- Results table shows a list of classifications made so far---
         self.tree_view = QTreeView(self)
         self.model = QStandardItemModel()
         self.root = self.model
         # self.root = self.model.invisibleRootItem()
         self.model.setHorizontalHeaderLabels(["", "States", "Name", "Method", "Variable", "Select", "Parameters"])
         self.tree_view.setModel(self.model)
-
         self.model.itemChanged.connect(self.on_item_changed)
 
         # --- Column sizing ---
@@ -89,14 +95,16 @@ class ClassificationWidget(QWidget):
         self.tree_view.setColumnWidth(5, 100)   # Select
         self.tree_view.setColumnWidth(6, 250)   # Parameters
 
-
+        #this layout combines the 'form' and the main action buttons
+        # form_buttons = QWidget()
         form_buttons_layout = QVBoxLayout()
         form_buttons_layout.addLayout(form)
-        form_buttons_layout.addStretch()
-        form_buttons_layout.addLayout(button_layout)
+        form_buttons_layout.addStretch(1)
+        form_buttons_layout.addWidget(button_widget)
+        # form_buttons.setLayout(form_buttons_layout)
 
-        main_layout.addWidget(self.tree_view, stretch=3)
-        main_layout.addLayout(form_buttons_layout, stretch=1)
+
+
         # main_layout.addLayout(button_layout)
         # self.tree_view.setColumnWidth(0, 150)
         # self.tree_view.setColumnWidth(1,100)
@@ -106,12 +114,20 @@ class ClassificationWidget(QWidget):
         self.run_button.clicked.connect(self._run_classification)
         self.clear_button.clicked.connect(self._clear_results)
 
+
+        # sequence_layout = QHBoxLayout()
+        # sequence_layout.addWidget(self.tree_view)#, stretch=3)
+        # sequence_layout.addWidget(form_buttons, stretch=1)
+
+        main_layout = QHBoxLayout()
+        main_layout.addWidget(self.tree_view, stretch=3)
+        main_layout.addLayout(form_buttons_layout, stretch=1)
+
         self.method_forms = {}  # method_name -> (widget, inputs)
         self.setLayout(main_layout)
 
         self.register_method('threshold', classify_threshold)
         self.register_method('hmm', classify_hmm)
-
         self.refresh_classifications()
 
     @property
@@ -140,7 +156,7 @@ class ClassificationWidget(QWidget):
     # -------------------------------------------------------------------------
     def register_method(self, name, func):
         """Register a classification method, introspect arguments, and build a form."""
-
+        #TODO: expand exclusion list per method to avoid listing irrelevant entries
         self.methods[name] = func
 
         # --- build the form for the function ---
@@ -150,7 +166,7 @@ class ClassificationWidget(QWidget):
 
         sig = inspect.signature(func)
         for param_name, param in sig.parameters.items():
-            if param_name in ['traces', 'classification', 'selection']:
+            if param_name in ['traces', 'classification', 'selection', 'seed','n_states', 'threshold_state_mean']:
                 continue
 
             default = param.default if param.default is not inspect.Parameter.empty else None
@@ -196,6 +212,7 @@ class ClassificationWidget(QWidget):
             self.stack_layout.addWidget(form_widget)
 
     def _run_classification(self):
+        self.request_top_tab_change.emit(2)
         method_name = self.method_selector.currentText()
         if not method_name:
             QMessageBox.warning(self, "No method", "Please select a classification method.")
@@ -264,11 +281,13 @@ class ClassificationWidget(QWidget):
         self.root.appendRow(items)
         if 'configuration' in self.file.classification.attrs.keys():
             configuration = json.loads(self.file.classification.attrs['configuration'])
+            self.model.blockSignals(True)
             if name in configuration:
                 items[0].setCheckState(Qt.Checked)
-                # text_edit.setText(str(configuration[name]))
+                items[1].setText(str(configuration[name]).replace('[','').replace(']',''))
             else:
                 items[0].setCheckState(Qt.Unchecked)
+            self.model.blockSignals(False)
 
     def refresh_classifications(self):
         """Refresh the list of available classifications from the file."""
@@ -284,6 +303,7 @@ class ClassificationWidget(QWidget):
     def _clear_results(self):
         self.file.clear_classifications()
         self.refresh_classifications()
+        self.classificationChanged.emit()
 
     def get_checked_classifications(self):
         """Return list of checked classification names."""
@@ -297,6 +317,8 @@ class ClassificationWidget(QWidget):
 
         if column in [0, 1]:
             self.apply_classifications()
+            self.classificationChanged.emit()
+
         # name = item.data()  # stored classification name
         # if not name:
         #     return
@@ -344,8 +366,70 @@ class ClassificationWidget(QWidget):
 
         self.file.apply_classifications(**apply_classifications_configuration)
 
+    def show_help(self):
+        help_text = help_text = """\
+                <html>
+                  <body style="font-family: sans-serif; font-size: 10pt;">
+                
+                    <h2>Classification</h2>
+                
+                    <p>
+                      Set a point-by-point state classification 
+                    </p>
+                
+                    <ul>
+                        <li>User can add 'classification rules', listed as single lines below</li>
+                        <li>A rule acts via thresholding or Hidden Markov Modeling (HMM)</li>
+                        <li>A rule labels each point with a numeric classification</li>
+                        <li>Labels can be user-defined in the column “states”</li>
+                        <li>Negative numbers always mean “reject point”</li>
+                        <li>Rules are stacked: each new rule applies only to non-rejected points</li>
+                        <li>Total classification is the result of applying rules in listed order</li>
+                        <li>Application is only to the first selected movie</li>
+                        <li>Checking or unchecking rules updates the stored classification</li>
+                    </ul>
+                
+                    <p>
+                      For more help, see the
+                      <a href="https://papylio.readthedocs.io/en/stable/user_guide/trace_classification.html">
+                        classification documentation
+                      </a>.
+                    </p>
+                
+                    <h3>Example settings</h3>
+                    <p>
+                     <ul>
+                        <li>1. threshold: use intensity_total, treshold=0, 'mean', window=3. 
+                                Note: avoid variable 2-channel-intensity. </li>
+                        <li>2. hmm: n_states 2, tres_mean 0, level_molecule, seed=0</li>
 
+                    </ul> 
+                    
+                    <h3>Applying rules example</h3>
+                    <p>
+                         <ul>
+                            <li>1. Threshold to reject bleached points        → labels [-1, 0]</li>
+                            <li>2. HMM on remaining points                   → labels [-1, 0, 1]</li>
+                            <li>3. Threshold to exclude early red-laser off   → labels [-2]</li>
+                         </ul> 
+                         Tip: To preserve labels assigned by step 2.(HMM) with follow up step 3, 
+                               use only lower minus labels (=rejection0 to 'states', e.g. [-2]
+                    </p>
+                   <h3>Notes</h3>
+                    <p>
+                         <ul>
+                            <li> A cleared or adapted rule is only visible in the 'traces'-tab after restarting the GUI </li>
+                            <li> Use only one-dimensional variable (i.e, not 'intensity') </li>
+                         </ul>               
+                    </p>
+                
+                  </body>
+                </html>
+                """
 
+        self.help_dialog = HelpDialog(self, help_text)
+        #dialog.exec_()  # modal
+        self.help_dialog.show()
 
     #
     #

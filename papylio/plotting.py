@@ -6,6 +6,8 @@ and simple 3D surface image visualization.
 import numpy as np #scientific computing with Python
 import xarray as xr
 import matplotlib.pyplot as plt
+from pathlib import Path
+import pandas as pd
 
 # import matplotlib.patches as patches
 # from matplotlib.collections import PatchCollection
@@ -216,3 +218,86 @@ def show_image_3d(image, figure=None):
     X, Y = np.meshgrid(X, Y)
     axis.plot_surface(X, Y, image, cmap=cm.coolwarm,
                       linewidth=0, antialiased=False)
+
+def wysiwyg_export(fig, filepath, filename, filetype="csv"):
+#Export the as-seen lines and bars of one or more figure panels [ai-generated]
+    axes = fig.get_axes()
+    export_dict = {}
+
+    for panel_index, ax in enumerate(axes, start=1):
+
+        x_min, x_max = ax.get_xlim()
+        y_min, y_max = ax.get_ylim()
+
+        # ---- Lines ----
+        for line_index, line in enumerate(ax.get_lines(), start=1):
+
+            x = np.asarray(line.get_xdata())
+            y = np.asarray(line.get_ydata())
+
+            # safer scientific default: filter only on x
+            mask = (x >= x_min) & (x <= x_max)
+
+            if np.any(mask):
+
+                suffix = f"_panel{panel_index}_line{line_index}"
+
+                export_dict[f"x{suffix}"] = x[mask]
+                export_dict[f"y{suffix}"] = y[mask]
+
+        # ---- Histograms ----
+        for rect in ax.patches:
+
+            x_left = rect.get_x()
+            width = rect.get_width()
+            height = rect.get_height()
+
+            x_center = x_left + width / 2
+
+            if x_center >= x_min and x_center <= x_max:
+
+                suffix = f"_panel{panel_index}_hist"
+
+                export_dict.setdefault(f"bin_center{suffix}", []).append(x_center)
+                export_dict.setdefault(f"count{suffix}", []).append(height)
+
+    if not export_dict:
+        print("No visible data to export.")
+        return
+
+    # Convert lists → arrays
+    for key in export_dict:
+        export_dict[key] = np.array(export_dict[key])
+
+    # Equalize lengths
+    max_len = max(len(v) for v in export_dict.values())
+    for key in export_dict:
+        if len(export_dict[key]) < max_len:
+            pad = max_len - len(export_dict[key])
+            export_dict[key] = np.concatenate(
+                [export_dict[key], np.full(pad, np.nan)]
+            )
+
+    df = pd.DataFrame(export_dict)
+
+    if filetype == "csv":
+        df.to_csv(
+            Path(filepath) / f"{filename}_dwell_time_analysis.csv",
+            index=False,
+            float_format="%.10g"
+        )
+
+    elif filetype == "txt":
+        df.to_csv(
+            Path(filepath) / f"{filename}_dwell_time_analysis.txt",
+            sep="\t",
+            index=False,
+            float_format="%.10g"
+        )
+    else:
+        raise ValueError("filetype must be 'csv' or 'txt'")
+
+    fig.savefig(Path(filepath) / f"{filename}_dwell_time_analysis.svg")
+    fig.savefig(Path(filepath) / f"{filename}_dwell_time_analysis.jpg")
+
+    print(f"Exported visible data from figure '{fig.canvas.get_window_title()}'")

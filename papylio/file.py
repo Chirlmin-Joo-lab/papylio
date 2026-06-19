@@ -27,9 +27,10 @@ import tifffile
 import netCDF4
 import json
 import papylio
+
 import matchpoint as mp
 from papylio.movie.movie import Movie
-from papylio.plotting import histogram
+from papylio.plotting import histogram, wysiwyg_export
 from papylio.peak_finding import find_peaks
 from papylio.coordinate_optimization import  coordinates_within_margin, \
                                                     coordinates_after_gaussian_fit, \
@@ -384,9 +385,11 @@ class File:
     @return_none_when_executed_by_pycharm
     def data_vars(self):
         """Return the data variables of the netCDF dataset."""
-
-        with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
-            return dataset.data_vars
+        if self.absoluteFilePath.with_suffix('.nc').exists():
+            with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+                return dataset.data_vars
+        else:
+            return xr.Dataset().data_vars
 
     @property
     @return_none_when_executed_by_pycharm

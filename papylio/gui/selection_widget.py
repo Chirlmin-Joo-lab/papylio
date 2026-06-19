@@ -5,15 +5,20 @@ Provides a small Qt widget used in the GUI to create and apply selections to mol
 
 import sys
 import json
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
+from PySide6.QtWidgets import QHeaderView, QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
     QPushButton, QTabWidget, QTableWidget, QComboBox, QLineEdit
 from PySide6.QtGui import QStandardItem, QStandardItemModel
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 import numpy as np
 
+from papylio.gui.common_layouts import (HelpDialog, Group_Box, get_button_value,
+                                        build_control_layouts, make_push_button)
+
 class SelectionWidget(QWidget):
     """Widget for selecting and filtering molecules in the dataset."""
+
+    request_top_tab_change = Signal(int)  # send index of tab to activate
 
     def __init__(self, parent=None):
         super(SelectionWidget, self).__init__(parent)
@@ -25,37 +30,14 @@ class SelectionWidget(QWidget):
         self.root = self.model.invisibleRootItem()
         self.model.setHorizontalHeaderLabels(['Variable', 'Channel', 'Aggregator', 'Operator', 'Threshold', 'Count'])
         self.tree_view.setModel(self.model)
+        header = self.tree_view.header()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
 
-        self.tree_view.setColumnWidth(0, 150)
-        self.tree_view.setColumnWidth(1,100)
+        #self.tree_view.setColumnWidth(0, 250)
+        #self.tree_view.setColumnWidth(1,250)
 
         self.model.itemChanged.connect(self.on_item_change)
-
-        # variable_item = QStandardItem()
-        # type_item = QStandardItem()
-        # comparison_item = QStandardItem()
-        # value_item = QStandardItem()
-        # add_button_item = QStandardItem()
-        # remove_button_item = QStandardItem()
-        # self.root.appendRow([
-        #     variable_item,
-        #     type_item,
-        #     comparison_item,
-        #     value_item,
-        #     add_button_item,
-        #     remove_button_item,
-        # ])
-        # variable_item.setCheckable(True)
-
-        # parentItem = self.root.child(self.root.rowCount() - 1)
-        # testitem = QStandardItem('10')
-        # selection1 = parentItem.appendRow([
-        #     testitem,
-        # ])
-
-
-
-        #
 
         variable_combobox = QComboBox()
         variables = ['intensity', 'intensity_total', 'FRET']
@@ -94,32 +76,21 @@ class SelectionWidget(QWidget):
         apply_to_selected_files_button = QPushButton('Apply to selected files')
         apply_to_selected_files_button.clicked.connect(self.apply_to_selected_files)
 
+        help_button = make_push_button('Help',self.show_dwell_help, None)
 
-        self.add_selection_layout = QHBoxLayout()
-        # self.add_selection_layout.addWidget(variable_combobox,1)
-        # self.add_selection_layout.addWidget(channel_combobox,1)
-        # self.add_selection_layout.addWidget(aggregator_combobox,1)
-        # self.add_selection_layout.addWidget(operator_combobox,1)
-        # self.add_selection_layout.addWidget(threshold_lineedit,1)
-        self.add_selection_layout.addWidget(add_button)
-        self.add_selection_layout.addWidget(clear_button)
-        self.add_selection_layout.addWidget(apply_to_selected_files_button)
+        self.add_selection_layout = build_control_layouts([add_button,clear_button,apply_to_selected_files_button, help_button])
+
+
+        #self.add_selection_layout = QHBoxLayout()
+        #self.add_selection_layout.addWidget(add_button)
+        #self.add_selection_layout.addWidget(clear_button)
+        #self.add_selection_layout.addWidget(apply_to_selected_files_button)
 
         selection_layout = QVBoxLayout()
         selection_layout.addWidget(self.tree_view)
-        selection_layout.addLayout(self.add_selection_layout)
-
+        selection_layout.addWidget(self.add_selection_layout)
         self.setLayout(selection_layout)
-
-        self.tree_view.setFixedWidth(700)
-        #
-        # self.add_button = QPushButton('Add')
-        # self.add_button.clicked.connect(self.add_selection)
-        # selection_layout = QVBoxLayout()
-        # selection_layout.addWidget(self.tree_view)
-        # selection_layout.addWidget(self.add_button)
-
-        self.setLayout(selection_layout)
+        # self.setLayout(selection_layout)
 
         self.update_final_selection = True
         self._file = None
@@ -273,6 +244,8 @@ class SelectionWidget(QWidget):
 
     def apply_to_selected_files(self):
         """Copy the current file's selections to all selected files."""
+
+        self.request_top_tab_change.emit(2)
         self.file.copy_selections_to_selected_files()
 
     def generate_selection(self, variable, channel, aggregator, operator, threshold):
@@ -290,6 +263,49 @@ class SelectionWidget(QWidget):
 
         self.file.create_selection(variable, channel, aggregator, operator, threshold)
         self.refresh_selections()
+
+    def show_dwell_help(self):
+        help_text = """
+                <html>
+                  <body style="font-family: sans-serif; font-size: 10pt;">
+
+                    <h2>Trace selection</h2>
+
+                    <p>
+                      Build and apply rules to accept or reject per trace
+                    </p>
+                    
+                    <p>
+                    <ol>
+                      <li> Select one ore more file</li>
+                      <li> If rules were already stored for the first file, they are listed</li>
+                      <li> Press 'Add' to build a new rule</li>
+                      <li> Fill in the rule's fields </li>
+                      <li> Press 'Apply' : the counts for this rule are listed </li>
+                      <li> Activate one or more rules by checking the box on the left </li>
+                      <li> Press 'Apply to selected files' to effect the rule(s) </li>
+                      <li> Total trace count is listed </li>
+                      <li> Inspect selected and unselected traces in the 'Traces' top tab </li>
+                      <li> Press 'Clear All' to clean up </li>
+                    </ul>
+                    
+                    Tip: In the 'image' tab, selected (green) and unselected (red) molecules are listed. To display a newly applied  selection: refresh, or unselect & select file 
+                    
+                    </p>
+
+                    <p>
+                      For background, see
+                      <a href="https://papylio.readthedocs.io/en/stable/user_guide/trace_selection.html">
+                        Trace selection.
+                      </a>
+                    </p>
+
+                  </body>
+                </html>
+                """
+        self.help_dialog = HelpDialog(self, help_text)
+        # dialog.exec_()  # modal
+        self.help_dialog.show()
 
 
 
