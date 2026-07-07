@@ -14,7 +14,6 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
-from nd2reader import ND2Reader
 
 from papylio.movie.movie import Movie
 
@@ -89,11 +88,14 @@ class ND2Movie(Movie):
         Creates an ND2Reader object to access file contents and configures
         the iteration order for frames and channels.
         """
-        self.file = ND2Reader(str(self.filepath))
-        if 'c' in self.file.axes:
-            self.file.iter_axes = 'tc'
-        else:
-            self.file.iter_axes = 't'
+        # from nd2reader import ND2Reader
+        # self.file = ND2Reader(str(self.filepath))
+        # if 'c' in self.file.axes:
+        #     self.file.iter_axes = 'tc'
+        # else:
+        #     self.file.iter_axes = 't'
+        import nd2
+        self.file = nd2.ND2File(self.filepath)
 
     def close(self):
         """Close the ND2 file."""
@@ -107,70 +109,35 @@ class ND2Movie(Movie):
         Automatically detects multiple fields of view based on stage position changes.
         """
         with self:
-            y_positions = self.file._parser._raw_metadata.y_data  # nikon sample stage position
-            x_positions = self.file._parser._raw_metadata.x_data  # nikon sample stage position
+            self.width = self.file.sizes['X']
+            self.height = self.file.sizes['Y']
+            self.number_of_frames = self.file.sizes['T']
+            self.pixel_size = self.file.voxel_size()[0:2]
 
-            # TODO: @Sung Hyun, I assume it doe snot matter for y and x-positions if self.file.iter_axis is called first, right?
-            # Then we can remove the commented lines below
-            # # set the image data order in the nd2 file
-            # if 'c' in self.file.axes:
-            #     self.file.iter_axes = 'tc'  # for alex measurements
-            # else:
-            #     self.file.iter_axes = 't'
+            time_ms =  np.full(self.number_of_frames, np.nan)
 
-            n_illumination = len(self.file.metadata["channels"])
-            n_frames = len(x_positions)
+            stage_coordinates_per_frame = np.full((self.number_of_frames, 2), np.nan)
+
+            for i in range(self.number_of_frames):
+                frame_metadata = self.file.frame_metadata(i)
+                time_ms[i] = frame_metadata.channels[0].time.relativeTimeMs
+                stage_coordinates_per_frame[i] = frame_metadata.channels[0].position.stagePositionUm[0:2]
+
             position_tolerance = 10  # xy tol = tolerance in um
-            first_frame_of_each_fov = [0]
-            last_frame_of_each_fov = []
-            for fri in range(n_frames - 1):
-                if abs(x_positions[fri] - x_positions[fri + 1]) > position_tolerance or abs(
-                        y_positions[fri] - y_positions[fri + 1]) > position_tolerance:
-                    first_frame_of_each_fov.append(fri + 1)
-                    last_frame_of_each_fov.append(fri)
-            last_frame_of_each_fov.append(n_frames - 1)
-
-            self.number_of_fov = len(first_frame_of_each_fov)
-            self.first_frame_of_each_fov = first_frame_of_each_fov
-            self.last_frame_of_each_fov = last_frame_of_each_fov
-
-
-            self.width = self.file.metadata['width']
-            self.height = self.file.metadata['height']
-            self.pixel_size = np.array([self.file.metadata['pixel_microns'], self.file.metadata['pixel_microns']])
-
-            # self.number_of_fields_of_view = len(images.metadata["experiment"]["loops"])  # number of fov is now available from self.fov_info
-            self.number_of_frames = len(self.file)
-
-            self.illuminations = [name for name in self.file.metadata["channels"]]
+            stage_coordinates_per_frame_round = np.round(stage_coordinates_per_frame / position_tolerance) * position_tolerance
+            stage_coordinates_round, indices, fov_per_frame = np.unique(stage_coordinates_per_frame_round, return_index=True, return_inverse=True, axis=0)
+            self.stage_coordinates = stage_coordinates_per_frame[indices] # Stage coordinates of first frame of the FOv to keep accuracy
+            self.number_of_fov = len(self.stage_coordinates)
 
             if self.fov_index is not None:
-                self.frame_offset = self.first_frame_of_each_fov[self.fov_index] * self.number_of_illuminations
-                frame_end = (self.last_frame_of_each_fov[self.fov_index]+1) * self.number_of_illuminations
-                self.number_of_frames = frame_end - self.frame_offset
+                self.fov_frames = np.where(fov_per_frame == self.fov_index)[0]
+                self.number_of_frames = len(self.fov_frames)
             else:
-                self.frame_offset = 0
-                frame_end = self.number_of_frames
+                self.fov_frames = np.where(fov_per_frame == 0)[0]
 
-                self.stage_coordinates = np.array([[x_positions[0], y_positions[0]]])
-                self.stage_coordinates_in_pixels = self.stage_coordinates / self.pixel_size
+            self.time = xr.DataArray(time_ms[self.fov_frames]/1000, dims='frame', coords={}, attrs={'units': 's'})
 
-
-            self.illumination_arrangement = np.arange(len(self.illuminations))
-
-            if self.fov_index is not None:
-                self.time = xr.DataArray(np.repeat(
-                    self.file.timesteps[self.first_frame_of_each_fov[self.fov_index]:(self.last_frame_of_each_fov[self.fov_index]+1)],
-                    self.number_of_illuminations)/1000, dims='frame', coords={}, attrs={'units': 's'})
-            else:
-                self.time = xr.DataArray(np.repeat(self.file.timesteps, self.number_of_illuminations)/1000, dims='frame',
-                                         coords={}, attrs={'units': 's'})
-
-            # self.exp_time = images.metadata['experiment']['loops'][0]['sampling_interval']
-            # self.exp_time_start=images.metadata['experiment']['loops'][0]['start']
-            # self.exp_time_duration=images.metadata['experiment']['loops'][0]['duration']
-            # self.pixelmicron=images.metadata['experiment']['pixel_microns']
-
+            self.stage_coordinates_in_pixels = self.stage_coordinates / self.pixel_size
 
 
     def _read_frame(self, frame_number):
@@ -192,13 +159,11 @@ class ND2Movie(Movie):
         - Automatically handles out-of-range requests by returning last frame
         """
         with self:
-            if frame_number < self.number_of_frames:
-                im = self.file[frame_number + self.frame_offset]
-            else:
-                im = self.file[self.number_of_frames + self.frame_offset - 1]
-                print(f'pageNb out of range. The last frame (fr#{self.number_of_frames + self.frame_offset - 1}) is loaded instead')
-            # note: im is a Frame, which is pims.frame.Frame, a np. array with additional frame number and metadata
-            return im
+            if frame_number > self.number_of_frames:
+                frame_index = self.number_of_frames - 1
+                print(f'Frame number out of range. The last frame (fr#{frame_index}) is loaded instead')
+            image = self.file.read_frame(self.fov_frames[frame_number])
+            return image
 
     def _read_frames(self, indices):
         """Read multiple frames from the ND2 file.
@@ -218,8 +183,13 @@ class ND2Movie(Movie):
         - Currently implemented by calling _read_frame iteratively
         - Could be optimized for better performance with large frame batches
         """
-        # Can probably be implemented more efficiently
-        return np.stack([self._read_frame(i) for i in indices])
+
+        with self:
+            frames = np.stack([self._read_frame(i) for i in indices])
+            # frames = self.file.to_dask()[self.fov_frames[indices]]
+            # frames = frames.compute()
+
+        return frames
 
 #
 # def get_fov_from_nd2(nd2_fullpath):

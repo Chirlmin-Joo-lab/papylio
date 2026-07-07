@@ -75,6 +75,9 @@ class Movie:
 
     @classmethod
     def custom_movie_classes(cls, extension=None):
+        # from papylio.configuration import load_user_microscope_classes
+        # load_user_microscope_classes()
+
         default_movie_classes = cls.default_movie_classes(extension)
         custom_movie_classes = []
         for default_movie_class in default_movie_classes:
@@ -97,7 +100,7 @@ class Movie:
             return custom_movie_classes[0]
         else:
             if cls.default_microscope is None:
-                custom_movie_classes = [custom_movie_class for custom_movie_class in custom_movie_classes if custom_movie_class(filepath).correct_microscope()]
+                custom_movie_classes = [custom_movie_class for custom_movie_class in custom_movie_classes if getattr(custom_movie_class(filepath), 'correct_microscope', lambda: False)()]
                 number_of_correct_microscopes = len(custom_movie_classes)
                 if number_of_correct_microscopes == 1:
                     custom_movie_class = custom_movie_classes[0]

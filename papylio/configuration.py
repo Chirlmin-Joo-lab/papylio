@@ -174,10 +174,10 @@ def load_user_microscope_classes() -> None:
         if py_file.stem.startswith("example"):
             continue
         try:
-            spec = importlib.util.spec_from_file_location(
-                py_file.stem, py_file
-            )
+            module_name = f"papylio.user_microscopes.{py_file.stem}"
+            spec = importlib.util.spec_from_file_location(module_name, py_file)
             mod = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = mod
             spec.loader.exec_module(mod)
             microscopes.append(py_file.stem)
         except Exception as e:
