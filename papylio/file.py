@@ -275,7 +275,7 @@ class File:
         for i in range(self.number_of_channels)[1:]:
             coordinates[:,i,:] = self.mappings[i-1].transform_coordinates(coordinates[:,i,:], inverse=False)
 
-        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.channels[0].boundaries, margin=0)
+        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.boundaries, margin=0)
         self.coordinates = coordinates
 
     def coordinates_from_channel(self, channel):
@@ -385,7 +385,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def data_vars(self):
         """Return the data variables of the netCDF dataset."""
-        if self.absoluteFilePath.with_suffix('.nc').exists():
+        if self.absolute_filepath.with_suffix('.nc').exists():
             with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
                 return dataset.data_vars
         else:
@@ -425,7 +425,7 @@ class File:
         dataset = dataset.reset_index('molecule', drop=True)
         dataset = dataset.assign_coords({'file': ('molecule', [str(self.relative_filepath).encode()] * number_of_molecules)})
         encoding = {'file': {'dtype': '|S'}, 'selected': {'dtype': bool}}
-        dataset.attrs['channel_arrangement'] = json.dumps(self.movie.channel_arrangement.tolist())
+        dataset.attrs['channel_arrangement'] = json.dumps(np.array(self.movie.channel_arrangement).tolist())
         dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
         self.extensions.add('.nc')
 
@@ -602,7 +602,7 @@ class File:
                                          apply_corrections=False, path=self.experiment.main_path, filename='darkfield', filetype='tif')
         self.experiment.load_darkfield_correction()
 
-    def find_coordinates(self, channels=('donor', 'acceptor'),
+    def find_coordinates(self, channels=(0, 1),
                          projection_image_configuration=None, sliding_window=None,
                          peak_finding_configuration=None, margin=10, fit_peaks=True, remove_peaks_with_close_neighbors=None):
         """
@@ -629,6 +629,8 @@ class File:
         # TODO: Perhaps it is best to always return an image with a channel dimension (when overlay_channels this can be one)
         image = self.get_projection_image(**projection_image_configuration)
         channel_index = self.movie.get_channel_indices_from_names(channels)[0]
+        # if channel_index is None:
+        #     raise ValueError('Unknown channel')
         if len(image.shape) == 3:
             image = image[channel_index]
 
@@ -1038,9 +1040,9 @@ class File:
 
         mappings = []
         for i in range(1, len(coordinates_per_channel)):
-            mapping = mp.MatchPoint(source_name=self.movie.channels[0].name,
+            mapping = mp.MatchPoint(source_name=self.movie.channels[0],
                                     source=coordinates_per_channel[0],
-                                    destination_name=self.movie.channels[1].name,
+                                    destination_name=self.movie.channels[1],
                                     destination=coordinates_per_channel[i],
                                     method=method,
                                     transformation_type=transformation_type,
@@ -1512,7 +1514,7 @@ class File:
         encoding = {
             var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
         }
-        dataset.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
 
 
     @property

@@ -94,7 +94,7 @@ def test_find_molecules(file, shared_datadir):
     test_perform_mapping(file.experiment, shared_datadir)
     file.find_coordinates()
 
-def test_find_molecules_empty_dataset(file):
+def test_find_molecules_empty_dataset(file, shared_datadir):
     test_perform_mapping(file.experiment, shared_datadir)
     file.find_coordinates(margin=500)
 

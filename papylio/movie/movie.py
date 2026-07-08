@@ -522,6 +522,12 @@ class Movie:
         return self.height * self.pixel_size[1]
 
     @property
+    def boundaries(self):
+        horizontal_boundaries = np.array([0, self.width])
+        vertical_boundaries = np.array([0, self.height])
+        return np.vstack([horizontal_boundaries, vertical_boundaries]).T
+
+    @property
     def boundaries_metric(self):
         # Formatted as two coordinates, with the lowest and highest x and y values respectively
         horizontal_boundaries = np.array([0, self.width_metric])
@@ -724,7 +730,20 @@ class Movie:
         return frames
 
     def get_channel_indices_from_names(self, channel_names):
-        return [self.channels.index(channel_name) if channel_name in self.channels else None for channel_name in channel_names]
+        if not (isinstance(channel_names, list) or isinstance(channel_names, tuple)):
+            channel_names = [channel_names]
+        channel_indices = []
+        for channel_name in channel_names:
+            if isinstance(channel_name, int):
+                if channel_name < 0 or channel_name >= len(self.channels):
+                    raise ValueError(f'Channel index "{channel_name}" out of range')
+                channel_index = channel_name
+            else:
+                if channel_name not in self.channels:
+                    raise ValueError(f'Unknown channel name "{channel_name}"')
+                channel_index = self.channels.index(channel_name)
+            channel_indices.append(channel_index)
+        return channel_indices
 
     def saveas_tif(self):
         tif_filepath = self.writepath.joinpath(self.name + '.tif')

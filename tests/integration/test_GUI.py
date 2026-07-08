@@ -44,7 +44,7 @@ def test_trace_plot_arguments_v0p9(file_hj):
 def test_trace_plot_two_illuminations(file_hj):
     ds = file_hj.dataset
     ds.illumination[:] = [0, ] * 100 + [1, ] * 200 + [0, ] * 100
-    ds.to_netcdf(file_hj.absoluteFilePath.with_suffix('.nc'))
+    ds.to_netcdf(file_hj.absolute_filepath.with_suffix('.nc'))
     file_hj.show_traces()
 
 def test_classification_widget(file_hj):
