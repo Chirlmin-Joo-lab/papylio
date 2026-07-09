@@ -371,7 +371,7 @@ class Movie:
 
         self._common_corrections = xr.Dataset()
 
-        self.header_is_read = False
+        self.metadata_is_read = False
 
     def __enter__(self):
         """Context manager entry point. Opens file for reading."""
@@ -392,9 +392,9 @@ class Movie:
     def __getattr__(self, item):
         """Lazy-load header when accessing attributes before header is read."""
 
-        if 'header_is_read' in self.__dict__.keys() and not self.header_is_read:
+        if 'metadata_is_read' in self.__dict__.keys() and not self.metadata_is_read:
             # print(item+'2')
-            self.read_header()
+            self.read_metadata()
             return getattr(self, item)
         else:
             raise AttributeError(f'Attribute {item} not found')
@@ -548,20 +548,20 @@ class Movie:
         """int : Height of this channel in pixels (read-only)"""
         return self.height // len(self.channel_arrangement[0])
 
-    def read_header(self):
+    def read_metadata(self):
         """Read and parse file header.
 
-        Calls the subclass-specific _read_header() method and applies
+        Calls the subclass-specific _read_metadata() method and applies
         image rotations if needed.
         """
-        self._read_header()
+        self._read_metadata()
         if not (self.rotation % 2 == 0):
             width = self.width
             height = self.height
             self.width = height
             self.height = width
 
-        self.header_is_read = True
+        self.metadata_is_read = True
 
     def read_frame(self, frame_index, **kwargs):
         """Read a single frame from the movie.

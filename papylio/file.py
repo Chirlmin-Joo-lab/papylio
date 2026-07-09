@@ -624,7 +624,7 @@ class File:
             projection_image_configuration['overlay_channels'] = True
 
         # TODO: copy relevant info from movie into dataset
-        self.movie.read_header()
+        self.movie.read_metadata()
 
         # TODO: Perhaps it is best to always return an image with a channel dimension (when overlay_channels this can be one)
         image = self.get_projection_image(**projection_image_configuration)

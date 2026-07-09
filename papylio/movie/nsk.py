@@ -40,12 +40,12 @@ class NskMovie(Movie):
 
         self.data_type = np.dtype(np.uint16)
 
-        # self.read_header()
+        # self.read_metadata()
         self.create_frame_info()  # Possibly move to Movie later on
 
         # self._initialized = True
 
-    def _read_header(self):
+    def _read_metadata(self):
         """Read and parse NSK file header.
 
         Extracts image dimensions (width and height as int16) from the first

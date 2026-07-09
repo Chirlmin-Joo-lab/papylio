@@ -47,11 +47,11 @@ class BinaryMovie(Movie):
         self.illumination_arrangement = np.array([1, 0])
         self.channel_arrangement = np.array([[[1]], [[0]]])
 
-        # self.read_header()
+        # self.read_metadata()
 
         self.create_frame_info() # Possibly move to Movie later on
 
-    def _read_header(self):
+    def _read_metadata(self):
         """Read header information from binary file.
 
         For binary files, there is typically no header information to parse.

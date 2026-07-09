@@ -44,7 +44,7 @@ class TifMovie(Movie):
         self.file = None # Note this is for the tif file, not the File class.
         self._time = None
 
-        # self.read_header()
+        # self.read_metadata()
         # self.create_frame_info()  # Possibly move to Movie later on
 
         # self._initialized = True
@@ -61,7 +61,7 @@ class TifMovie(Movie):
         """Close the TIFF file."""
         self.file.close()
 
-    def _read_header(self):
+    def _read_metadata(self):
         """Read and parse TIFF file header and metadata.
 
         Extracts image dimensions, data type, number of frames, and

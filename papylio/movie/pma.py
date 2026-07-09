@@ -52,7 +52,7 @@ class PmaMovie(Movie):
                             'point-selection':  (45,25)
                             }
 
-        # self.read_header()
+        # self.read_metadata()
         # self.create_frame_info()  # Possibly move to Movie later on
 
 
@@ -71,7 +71,7 @@ class PmaMovie(Movie):
         """
         pass  # TODO: implement this
 
-    def _read_header(self):
+    def _read_metadata(self):
         """Read and parse PMA file header.
 
         Extracts image dimensions from the first 4 bytes of the file

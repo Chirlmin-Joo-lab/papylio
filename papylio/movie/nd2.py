@@ -101,7 +101,7 @@ class ND2Movie(Movie):
         """Close the ND2 file."""
         self.file.close()
 
-    def _read_header(self):
+    def _read_metadata(self):
         """Read and parse ND2 file header and metadata.
 
         Extracts image dimensions, frame/FOV information, channel/illumination
