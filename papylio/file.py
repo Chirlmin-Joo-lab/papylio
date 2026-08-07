@@ -59,7 +59,7 @@ class File:
 
     unit_mapping = mp.MatchPoint()
 
-    def __init__(self, relative_filepath, extensions=None, experiment=None, perform_logging=True):
+    def __init__(self, relative_filepath, extensions=None, experiment=None, microscope=None, perform_logging=True):
 
         """
         Initialize a File object.
@@ -90,6 +90,7 @@ class File:
         # self.is_mapping_file = False
 
         self.movie = None
+        self.microscope = microscope
         # self.mapping = None
 
         self._rotation = 0
@@ -490,7 +491,7 @@ class File:
         else:
             filepath = self.absolute_filepath.with_suffix(extension)
 
-        self.movie = Movie(filepath, self.rotation)
+        self.movie = Movie(filepath, self.rotation, microscope=self.microscope)
         if 'channel_arrangement' in self.dataset_attributes.keys():
             channel_arrangement_text_string=self.dataset_attributes['channel_arrangement']
             self.movie.channel_arrangement = ast.literal_eval(channel_arrangement_text_string)

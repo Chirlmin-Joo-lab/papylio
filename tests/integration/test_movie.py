@@ -1,8 +1,6 @@
 import pytest
-import tifffile
 import numpy as np
 from papylio.movie.movie import Movie
-
 
 @pytest.fixture
 def movie(shared_datadir):
@@ -10,18 +8,16 @@ def movie(shared_datadir):
     movie.rotation = 1
     return movie
 
-
 @pytest.fixture
 def experiment(shared_datadir):
     from papylio import Experiment
     return Experiment(shared_datadir / 'BN_TIRF')
 
-
 def test_movie_name(movie):
     assert movie.name == 'TIRF 561 0001'
 
-
 def test_make_projection_image(movie, shared_datadir):
+    import tifffile
     image_from_method = movie.save_projection_image(projection_type='average', frame_range=(0, 20), illumination=None,
                                                     return_image=True, flatten_channels=True)
     assert (shared_datadir / 'BN_TIRF' / 'TIRF 561 0001_ave_f0-20_i0.tif').is_file()
@@ -64,4 +60,10 @@ def test_determine_background_correction(experiment, shared_datadir):
 
 def test_corrections(experiment):
     movie = experiment.files[1].movie
+    movie.make_projection_image()
+
+def test_nd2_fileformat(shared_datadir):
+    from papylio.movie.movie import Movie
+    # movie = Movie(shared_datadir / 'nd2' / 'Bead slide.nd2')
+    movie = Movie(shared_datadir / 'nd2' / '4 - 10 nt - 000.nd2')
     movie.make_projection_image()

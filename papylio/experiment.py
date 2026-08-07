@@ -98,7 +98,8 @@ class Experiment:
     """
 
     # TODO: Add presets for specific microscopes
-    def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None, perform_logging=True, use_colorblind_friendly_colors=True):
+    def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None,
+                 perform_logging=True, use_colorblind_friendly_colors=True, microscope=None):
         """Init method for the Experiment class
 
         Loads config file if it locates one in the main directory, otherwise it exports the default config file to the main directory.
@@ -139,7 +140,7 @@ class Experiment:
 
         ### MICROSCOPE ###
         self._channels = np.atleast_1d(np.array(channels))
-        self.microscope_name = 'TIR-T'
+        self.microscope = microscope
         # self.rotation = 1
         ##################
 
@@ -370,7 +371,7 @@ class Experiment:
 
         for file_path, extensions in tqdm.tqdm(file_paths_and_extensions.items(), 'Import files'):
             if not test_duplicates or (file_path.absolute().relative_to(self.main_path) not in self.file_paths):
-                self.files.append(File(file_path, extensions, self, perform_logging=self.perform_logging))
+                self.files.append(File(file_path, extensions, self, microscope=self.microscope, perform_logging=self.perform_logging))
             else:
                 i = self.file_paths.find(file_path.absolute().relative_to(self.main_path))
                 self.files[i].add_extensions(extensions)
