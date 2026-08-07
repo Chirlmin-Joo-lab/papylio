@@ -13,3 +13,7 @@ def experiment_hj(shared_datadir):
 def test_load_mapping(experiment_hj):
     experiment_hj.files[0].perform_mapping()
     experiment_hj.load_mappings()
+
+def test_setting_microscope_profile(shared_datadir):
+    from papylio import Experiment
+    exp = Experiment(shared_datadir / 'Papylio example dataset - analyzed', microscope='BN-TIRF')

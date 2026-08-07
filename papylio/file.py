@@ -27,9 +27,10 @@ import tifffile
 import netCDF4
 import json
 import papylio
+
 import matchpoint as mp
 from papylio.movie.movie import Movie
-from papylio.plotting import histogram
+from papylio.plotting import histogram, wysiwyg_export
 from papylio.peak_finding import find_peaks
 from papylio.coordinate_optimization import  coordinates_within_margin, \
                                                     coordinates_after_gaussian_fit, \
@@ -58,7 +59,7 @@ class File:
 
     unit_mapping = mp.MatchPoint()
 
-    def __init__(self, relative_filepath, extensions=None, experiment=None, perform_logging=True):
+    def __init__(self, relative_filepath, extensions=None, experiment=None, microscope=None, perform_logging=True):
 
         """
         Initialize a File object.
@@ -89,6 +90,7 @@ class File:
         # self.is_mapping_file = False
 
         self.movie = None
+        self.microscope = microscope
         # self.mapping = None
 
         self._rotation = 0
@@ -177,7 +179,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def absolute_filepath(self):
         """Return the absolute path to the file."""
-        return self.experiment.main_path.joinpath(self.relativeFilePath)
+        return self.experiment.main_path.joinpath(self.relative_filepath)
 
     @property
     @return_none_when_executed_by_pycharm
@@ -196,7 +198,7 @@ class File:
 
     @rotation.setter
     def rotation(self, rotation):
-        self.movie.rot90 = rotation
+        self.movie.rotation = rotation
         self._rotation = rotation
 
     @property
@@ -274,7 +276,7 @@ class File:
         for i in range(self.number_of_channels)[1:]:
             coordinates[:,i,:] = self.mappings[i-1].transform_coordinates(coordinates[:,i,:], inverse=False)
 
-        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.channels[0].boundaries, margin=0)
+        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.boundaries, margin=0)
         self.coordinates = coordinates
 
     def coordinates_from_channel(self, channel):
@@ -384,9 +386,11 @@ class File:
     @return_none_when_executed_by_pycharm
     def data_vars(self):
         """Return the data variables of the netCDF dataset."""
-
-        with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
-            return dataset.data_vars
+        if self.absolute_filepath.with_suffix('.nc').exists():
+            with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+                return dataset.data_vars
+        else:
+            return xr.Dataset().data_vars
 
     @property
     @return_none_when_executed_by_pycharm
@@ -422,7 +426,7 @@ class File:
         dataset = dataset.reset_index('molecule', drop=True)
         dataset = dataset.assign_coords({'file': ('molecule', [str(self.relative_filepath).encode()] * number_of_molecules)})
         encoding = {'file': {'dtype': '|S'}, 'selected': {'dtype': bool}}
-        dataset.attrs['channel_arrangement'] = json.dumps(self.movie.channel_arrangement.tolist())
+        dataset.attrs['channel_arrangement'] = json.dumps(np.array(self.movie.channel_arrangement).tolist())
         dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
         self.extensions.add('.nc')
 
@@ -487,7 +491,7 @@ class File:
         else:
             filepath = self.absolute_filepath.with_suffix(extension)
 
-        self.movie = Movie(filepath, self.rotation)
+        self.movie = Movie(filepath, self.rotation, microscope=self.microscope)
         if 'channel_arrangement' in self.dataset_attributes.keys():
             channel_arrangement_text_string=self.dataset_attributes['channel_arrangement']
             self.movie.channel_arrangement = ast.literal_eval(channel_arrangement_text_string)
@@ -599,7 +603,7 @@ class File:
                                          apply_corrections=False, path=self.experiment.main_path, filename='darkfield', filetype='tif')
         self.experiment.load_darkfield_correction()
 
-    def find_coordinates(self, channels=('donor', 'acceptor'),
+    def find_coordinates(self, channels=(0, 1),
                          projection_image_configuration=None, sliding_window=None,
                          peak_finding_configuration=None, margin=10, fit_peaks=True, remove_peaks_with_close_neighbors=None):
         """
@@ -621,11 +625,13 @@ class File:
             projection_image_configuration['overlay_channels'] = True
 
         # TODO: copy relevant info from movie into dataset
-        self.movie.read_header()
+        self.movie.read_metadata()
 
         # TODO: Perhaps it is best to always return an image with a channel dimension (when overlay_channels this can be one)
         image = self.get_projection_image(**projection_image_configuration)
         channel_index = self.movie.get_channel_indices_from_names(channels)[0]
+        # if channel_index is None:
+        #     raise ValueError('Unknown channel')
         if len(image.shape) == 3:
             image = image[channel_index]
 
@@ -699,7 +705,7 @@ class File:
             ax.add_patch(circle)
         ax.set_xlabel('x (pixel)')
         ax.set_ylabel('y (pixel)')
-        ax.set_title('Circles at $2\sigma$')
+        ax.set_title(r'Circles at $2\sigma$')
 
         psf_size_path = self.experiment.analysis_path.joinpath('PSF_size')
         psf_size_path.mkdir(parents=True, exist_ok=True)
@@ -1035,9 +1041,9 @@ class File:
 
         mappings = []
         for i in range(1, len(coordinates_per_channel)):
-            mapping = mp.MatchPoint(source_name=self.movie.channels[0].name,
+            mapping = mp.MatchPoint(source_name=self.movie.channels[0],
                                     source=coordinates_per_channel[0],
-                                    destination_name=self.movie.channels[1].name,
+                                    destination_name=self.movie.channels[1],
                                     destination=coordinates_per_channel[i],
                                     method=method,
                                     transformation_type=transformation_type,
@@ -1509,7 +1515,7 @@ class File:
         encoding = {
             var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
         }
-        dataset.to_netcdf(self.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
 
 
     @property

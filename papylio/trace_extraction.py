@@ -71,7 +71,7 @@ def extract_traces(movie, coordinates, mask_size, neighbourhood_size=11):
 
     coordinates['dimension'] = coordinates.dimension.astype('U')
     with movie:
-        movie.read_header()
+        movie.read_metadata()
 
         if movie.number_of_frames > 500:
             all_frames_in_memory = False

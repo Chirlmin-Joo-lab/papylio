@@ -3,8 +3,6 @@ import tifffile
 import numpy as np
 import json
 
-from pytest_datadir.plugin import shared_datadir
-
 @pytest.fixture
 def experiment(shared_datadir):
     from papylio import Experiment
@@ -96,7 +94,7 @@ def test_find_molecules(file, shared_datadir):
     test_perform_mapping(file.experiment, shared_datadir)
     file.find_coordinates()
 
-def test_find_molecules_empty_dataset(file):
+def test_find_molecules_empty_dataset(file, shared_datadir):
     test_perform_mapping(file.experiment, shared_datadir)
     file.find_coordinates(margin=500)
 

@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 import xarray as xr
-from pytest_datadir.plugin import shared_datadir
 
 from papylio.analysis.dwell_time_extraction import dwell_times_from_classification
 

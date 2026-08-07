@@ -174,6 +174,8 @@ class TracePlotWindow(QWidget):
             self.show()
             app.exec_()
 
+        self._file = None
+
         self.setFocus()
 
     def closeEvent(self, event: QCloseEvent):
@@ -198,6 +200,18 @@ class TracePlotWindow(QWidget):
     def deactivate_line_edit(self):
         """Clear focus from the molecule index line edit field."""
         self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
+
+    @property
+    def file(self):
+        return self._file
+
+    @file.setter
+    def file(self, file):
+        self._file = file
+        if file is None:
+            self.dataset = None
+        else:
+            self.dataset = file.dataset
 
     @property
     def dataset(self):
@@ -993,7 +1007,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
             self.histogram_axes[trace_artist.axis_name].hist(y.T, bins=50, orientation='horizontal',
                                                              # range=self.plot_axes[plot_variable].get_ylim(),
                                                              range=plot_settings['plot_range'],
-                                                             alpha=0.5))[2]
+                                                             color=plot_settings['color'], alpha=0.5))[2]
         if not isinstance(histogram_artists, list):
             histogram_artists = [histogram_artists]
 
@@ -1094,7 +1108,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
         for axis_name in axis_names:
             if secondary and self.twin_axes.get(axis_name) is not None:
                 self.twin_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
-            elif axis_name == plot_variable:
+            else:
                 self.plot_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
         self.init_plot_artists()
         # self.init_plots() # Perhaps this can be init_plot_artists only, but then probably the blit background needs to be updated.

@@ -43,8 +43,8 @@ class SifxMovie(Movie):
         self.folderpath = self.filepath.parent
         self.writepath = self.filepath.parent.parent
         self.name = self.filepath.parent.name
-        self.data_type = np.dtype(np.uint16) # Can we not get this from the header?
-        self.read_header()
+        self.data_type = np.dtype(np.uint16) # Can we not get this from the metadata?
+        self.read_metadata()
         self.find_filelist()
         self.threshold = {  'view':             (0,200),
                             'point-selection':  (45,25)
@@ -101,7 +101,7 @@ class SifxMovie(Movie):
         res = super().__repr__() + '\n' + res
         return res
 
-    def _read_header(self):
+    def _read_metadata(self):
         """Read and parse SIFX file header.
 
         Extracts camera parameters, acquisition settings, image dimensions,

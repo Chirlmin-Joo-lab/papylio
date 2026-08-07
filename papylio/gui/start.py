@@ -16,7 +16,6 @@ from multiprocessing import Process, freeze_support
 def start_gui():
     """Starts the Papylio GUI application."""
     freeze_support()
-
     app = QApplication(sys.argv)
     from papylio.gui.main import MainWindow
     window = MainWindow()

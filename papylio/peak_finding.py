@@ -165,11 +165,10 @@ def find_peaks_local_maximum_auto(image,
     Parameters
     ----------
     image : NxM numpy.ndarray
-
-    minimum_intensity_difference : int or float
-        Lower threshold on the intensity difference between local minimum and local maximu
-    maximum_intensity_difference : int or float, optional
-        Upper threshold on the intensity difference between local minimum and local maximum.
+    fraction_difference : float
+        Number between 0 and 1 that determines the minimum intensity difference,
+        where 0 corresponds to the background intensity and 1 to the peak intensity.
+        Default is 0.5, halfway between the background and the peak intensity.
     filter_neighbourhood_size_min : int
         Size of the minimum filter.
     filter_neighbourhood_size_max : int

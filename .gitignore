@@ -1,6 +1,7 @@
 
 
 development_not_to_be_included_in_git/
+papylio/gui/config.yml
 
 __pycache__
 __pycache__/*.pyc

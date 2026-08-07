@@ -6,216 +6,31 @@ Defines the main application window and image canvas used by the Papylio GUI.
 import sys
 import PySide6
 import platform
-
+from PySide2.QtCore import Signal
 import sys
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
-    QPushButton, QTabWidget, QTableWidget, QComboBox, QLineEdit
+                              QPushButton, QTabWidget, QHeaderView, QTableWidget, QComboBox, QLineEdit
 from PySide6.QtGui import QStandardItem, QStandardItemModel, QIcon
 from PySide6.QtCore import Qt
 
-import matplotlib as mpl
 from matplotlib.backends.backend_qtagg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+
 import matplotlib.pyplot as plt
 import numpy as np
 
 import papylio as pp
 from papylio import Experiment, File
 from papylio.trace_plot import TracePlotWindow
+from papylio.gui.setup_widget import SetUpWidget
 from papylio.gui.selection_widget import SelectionWidget
 from papylio.gui.classification_widget import ClassificationWidget
-
-# class TreeNode:
-#     def __init__(self, node_object, parent=None):
-#         self.parent = parent
-#         if isinstance(node_object, Experiment):
-#             self.experiment = node_object
-#             self.name = self.experiment.name
-#             self.type = 'experiment'
-#         elif isinstance(node_object, str):
-#             self.name = node_object
-#             self.type = 'folder'
-#         elif isinstance(node_object, File):
-#             self.file = node_object
-#             self.name = self.file.name
-#             self.type = 'file'
-#
-#         self.children = []
-#
-#     def data(self, column):
-#         # if column == 0:
-#         return self.columnValues[column]
-#         # else:
-#         #     return ''
-#         # return self._data[column]
-#
-#     def appendChild(self, node_object):
-#         node = TreeNode(node_object, self)
-#         self.children.append(node)
-#         return node
-#
-#     def child(self, row):
-#         return self.children[row]
-#
-#     def childrenCount(self):
-#         return len(self.children)
-#
-#     def hasChildren(self):
-#         if len(self.children) > 0:
-#             return True
-#         return False
-#
-#     def row(self):
-#         if self.parent is not None:
-#             return self.parent.children.index(self)
-#         else:
-#             return 0
-#
-#     @property
-#     def columnValues(self):
-#         return [self.name]
-#
-#     def columnCount(self):
-#         return len(self.columnValues)
-#
-#     def __repr__(self):
-#         return f'TreeNode: {self.name}'
-#
-#
-# class TreeModel(QAbstractItemModel):
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-#         # column_names = ['Column1','Column2']
-#         self.root = TreeNode('Name')
-#         self.createData()
-#         print('t')
-#
-#     def createData(self):
-#         for x in ['a','b','c']:
-#             self.root.appendChild(x)
-#         for y in ['q','r','s']:
-#             self.root.child(0).appendChild(y)
-#         for z in ['d','e','f']:
-#             self.root.child(2).appendChild(z)
-#
-#     def addExperiment(self, experiment):
-#         # experiment = Experiment(r'D:\SURFdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
-#         #experiment = Experiment(r'C:\Users\ivoseverins\surfdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
-#         experimentNode = self.root.appendChild(experiment)
-#         for file in experiment.files:
-#             print('addfile'+file.name)
-#             self.addFile(file, experimentNode)
-#
-#         print('add')
-#
-#     def addFile(self, file, experimentNode):
-#         # pass
-#
-#         folders = file.relativePath.parts
-#
-#         #nodeItemNames = [item.GetText() for item in experimentNode.children if item.GetData() == None]
-#
-#         parentItem = experimentNode
-#         for folder in folders:
-#
-#             # Get the folderItems and folder names for the current folderItem
-#             nodeItems = [item for item in parentItem.children if item.type == 'folder']
-#             nodeItemNames = [item.name for item in nodeItems]
-#
-#             if folder not in nodeItemNames:
-#                 # Add new item for the folder and set parentItem to this item
-#                 parentItem = parentItem.appendChild(folder)
-#             else:
-#                 # Set parent item to the found folderItem
-#                 parentItem = nodeItems[nodeItemNames.index(folder)]
-#
-#         item = parentItem.appendChild(file)
-#         #self.FileItems.append(item)
-#
-#         # self.insertDataIntoColumns(item)
-#
-#         return item
-#
-#     def columnCount(self, index=QtCore.QModelIndex()):
-#         if index.isValid():
-#             return index.internalPointer().columnCount()
-#         else:
-#             return self.root.columnCount()
-#
-#     def rowCount(self, index=QtCore.QModelIndex()):
-#         if index.row() > 0:
-#             return 0
-#         if index.isValid():
-#             item = index.internalPointer()
-#         else:
-#             item = self.root
-#         return item.childrenCount()
-#
-#     def index(self, row, column, index=QtCore.QModelIndex()):
-#         if not self.hasIndex(row, column, index):
-#             return QtCore.QModelIndex()
-#         if not index.isValid():
-#             item = self.root
-#         else:
-#             item = index.internalPointer()
-#
-#         child = item.child(row)
-#         if child:
-#             return self.createIndex(row, column, child)
-#         return QtCore.QMOdelIndex()
-#
-#     def parent(self, index):
-#         if not index.isValid():
-#             return QtCore.QModelIndex()
-#         item = index.internalPointer()
-#         if not item:
-#             return QtCore.QModelIndex()
-#
-#         parent = item.parent
-#         if parent == self.root:
-#             return QtCore.QModelIndex()
-#         else:
-#             return self.createIndex(parent.row(), 0, parent)
-#
-#     def hasChildren(self, index):
-#         if not index.isValid():
-#             item = self.root
-#         else:
-#             item = index.internalPointer()
-#         return item.hasChildren()
-#
-#     def data(self, index, role=QtCore.Qt.DisplayRole):
-#        if index.isValid() and role == QtCore.Qt.DisplayRole:
-#             return index.internalPointer().data(index.column())
-#        elif not index.isValid():
-#             return self.root.getData()
-#
-#     def headerData(self, section, orientation, role):
-#         if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
-#             return self.root.data(section)
-#
-#
-#
-# class MainWindow(QMainWindow):
-#     def __init__(self):
-#         super().__init__()
-#         # model = QFileSystemModel()
-#         # model.setRootPath(QDir.currentPath())
-#
-#
-#
-#         self.model = TreeModel()
-#
-#         self.tree = QTreeView()
-#         self.tree.setModel(self.model)
-#
-#         from papylio import Experiment
-#         experiment = Experiment(r'D:\SURFdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
-#         #experiment = Experiment(r'C:\Users\ivoseverins\surfdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
-#         #self.model.addExperiment(experiment)
-#
-#         self.setCentralWidget(self.tree)
-
+from papylio.gui.mapping_widget import MappingWidget
+from papylio.gui.extraction_widget import ExtractionWidget
+from papylio.gui.kinetics_widget import KineticsWidget
+from papylio.gui.histogram_widget import HistogramWidget
+from papylio.gui.common_layouts import HelpDialog
+from papylio.gui.image_widget import ImageWidget, ImageCanvas
 
 class MainWindow(QMainWindow):
     """Main application window.
@@ -224,23 +39,8 @@ class MainWindow(QMainWindow):
     file tree, image canvas, and various control widgets for
     interacting with the data and configuring the experiment.
     """
-
-    # def __init__(self):
-    #     super().__init__()
-    #     # model = QFileSystemModel()
-    #     # model.setRootPath(QDir.currentPath())
-    #
-    #
-    #
-    #     self.model = TreeModel()
-    #
-    #     self.tree = QTreeView()
-    #     self.tree.setModel(self.model)
-    #
-    #      #experiment = Experiment(r'C:\Users\ivoseverins\surfdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
-    #     #self.model.addExperiment(experiment)
-    #
-    #     self.setCentralWidget(self.tree)
+    pass_selected_config_to_gui_fields = Signal(int)  # send index of tab to activate
+    pass_setup_to_config_on_refresh = Signal(int)
 
     def __init__(self, main_path=None):
         super().__init__()
@@ -250,8 +50,8 @@ class MainWindow(QMainWindow):
             extension = 'ico'
         else:  # macOS or Linux
             extension = "png"
-        self.setWindowIcon(QIcon("icon."+extension))
-        self.setWindowTitle("Papylio v" + pp.__version__ )
+        self.setWindowIcon(QIcon("icon." + extension))
+        self.setWindowTitle("Papylio v" + pp.__version__)
 
         self.tree = QTreeView(self)
         layout = QVBoxLayout()
@@ -259,64 +59,31 @@ class MainWindow(QMainWindow):
         self.model = QStandardItemModel()
         self.root = self.model.invisibleRootItem()
         self.model.setHorizontalHeaderLabels(['Name', 'Count'])
-        self.tree.header().setDefaultSectionSize(180)
+        #self.tree.header().setDefaultSectionSize(180)
         self.tree.setModel(self.model)
 
-        self.tree.setFocusPolicy(Qt.NoFocus)
-        self.tree.setFixedWidth(256)
+        header = self.tree.header()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.tree.setColumnHidden(1, True)
+        self.tree.setFixedWidth(400)
         self.update = True
 
         self.model.itemChanged.connect(self.onItemChange)
 
-
-        self.image_canvas = ImageCanvas(self, width=5, height=4, dpi=100)
-
-        # Create toolbar, passing canvas as first parament, parent (self, the MainWindow) as second.
-        image_toolbar = NavigationToolbar(self.image_canvas, self)
-
-        image_layout = QVBoxLayout()
-        image_layout.addWidget(image_toolbar)
-        image_layout.addWidget(self.image_canvas)
-
-        # Create a placeholder widget to hold our toolbar and canvas.
-        self.image = QWidget()
-        self.image.setLayout(image_layout)
-
-        controls_layout = QGridLayout()
-        controls_layout.setAlignment(Qt.AlignTop)
-
-        # controls_layout.addWidget(QLabel('Minimum intensity difference'), 0, 0)
-        # mid = QLineEdit(str(self.experiment.configuration['find_coordinates']['peak_finding']['minimum_intensity_difference']))
-        # mid.textChanged.connect(self.midChange)
-        # controls_layout.addWidget(mid, 0, 1)
-
-        perform_mapping_button = QPushButton('Perform mapping')
-        perform_mapping_button.clicked.connect(self.perform_mapping)
-        controls_layout.addWidget(perform_mapping_button, 1, 0, 1, 2)
-
-        find_molecules_button = QPushButton('Find coordinates')
-        find_molecules_button.clicked.connect(self.find_coordinates)
-        controls_layout.addWidget(find_molecules_button, 2, 0, 1, 2)
-
-        extract_traces_button = QPushButton('Extract traces')
-        extract_traces_button.clicked.connect(self.extract_traces)
-        controls_layout.addWidget(extract_traces_button, 3, 0, 1, 2)
-
-        self.controls = QWidget()
-        self.controls.setLayout(controls_layout)
-        self.controls.setMinimumWidth(200)
-
-
-        extraction_layout = QHBoxLayout()
-        extraction_layout.addWidget(self.image)
-        extraction_layout.addWidget(self.controls)
-
-
-
-
-        # self.selection = QTableWidget()
-        # self.selection.setRowCount(5)
-        # self.selection.setColumnCount(4)
+        # right side has a viewing pane (top) and
+        # viewing panes
+        self.top_tabs = QTabWidget()
+        self.top_tabs.setTabPosition(QTabWidget.North)
+        self.top_tabs.setMovable(False)
+        self.top_tabs.setDocumentMode(True)
+        self.traces = TracePlotWindow(parent=self, width=4, height=5, show=False)
+        self.image = ImageWidget(parent=self)
+        self.histograms=HistogramWidget(parent=self)
+        self.kinetics_results = QWidget()
+        self.top_tabs.addTab(self.image, 'Image')
+        self.top_tabs.addTab(self.traces, 'Traces')
+        self.top_tabs.addTab(self.histograms, 'Histograms')
 
 
         tabs = QTabWidget()
@@ -324,40 +91,73 @@ class MainWindow(QMainWindow):
         tabs.setMovable(False)
         tabs.setDocumentMode(True)
 
-        tab1 = QWidget(self)
-        tab1.setLayout(extraction_layout)
-        tabs.addTab(tab1, 'Movie')
-        self.traces = TracePlotWindow(parent=self, width=4, height=3, show=False)
-        tabs.addTab(self.traces, 'Traces')
-        self.selection = SelectionWidget(parent=self)
-        tabs.addTab(self.selection, 'Selection (beta)')
-        self.classification = ClassificationWidget(parent=self)
-        self.classification.classificationChanged.connect(self.update_plots)
-        tabs.addTab(self.classification, 'Classification (beta)')
+        # tab are set to which bottom widget is used:
+        self.setup_widget = SetUpWidget(parent=self)
+        tabs.addTab(self.setup_widget, 'Start')
+        #mapping:
+        self.mapping_widget = MappingWidget(parent=self)
+        self.mapping_widget.request_top_tab_change.connect(self.top_tabs.setCurrentIndex)
+        tabs.addTab(self.mapping_widget, 'Mapping')
+        #extraction:
+        self.extraction_widget = ExtractionWidget(parent=self, top_tabs=self.top_tabs)
+        self.extraction_widget.request_top_tab_change.connect(self.top_tabs.setCurrentIndex)
+        tabs.addTab(self.extraction_widget, 'Extraction')
+        #selection:
+        self.selection_widget = SelectionWidget(parent=self)
+        self.selection_widget.request_top_tab_change.connect(self.top_tabs.setCurrentIndex)
+        tabs.addTab(self.selection_widget, 'Selection')
+        #classification:
+        self.classification_widget = ClassificationWidget(parent=self)
+        self.classification_widget.classificationChanged.connect(self.update_plots)
+        self.classification_widget.request_top_tab_change.connect(self.top_tabs.setCurrentIndex)
+        tabs.addTab(self.classification_widget, 'Classification')
+        #time analysis:
+        self.kinetics_widget = KineticsWidget(parent=self)
+        tabs.addTab(self.kinetics_widget, 'Kinetics')
         tabs.currentChanged.connect(self.setTabFocus)
 
-        experiment_layout = QVBoxLayout()
+        self.pass_selected_config_to_gui_fields.connect(self.extraction_widget.set_buttons_from_selected_file)
+        self.pass_setup_to_config_on_refresh.connect(self.setup_widget.pass_buttons_to_config_for_setup)
 
+        self.tab_widgets = [self.image, self.histograms, self.traces, self.setup_widget, self.mapping_widget, self.extraction_widget,
+                            self.selection_widget, self.classification_widget, self.kinetics_widget]
+
+        # refresh & tree
+        experiment_layout = QVBoxLayout()
         refresh_button = QPushButton('Refresh')
         refresh_button.clicked.connect(self.refresh)
         experiment_layout.addWidget(refresh_button)
-
         experiment_layout.addWidget(self.tree)
 
-        layout = QHBoxLayout()
-        layout.addLayout(experiment_layout)
-        layout.addWidget(tabs)
+        top_layout = QVBoxLayout()
+        top_layout.addWidget(self.top_tabs)
+        # ... a bottom pane (pipeline)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addWidget(tabs)
 
-        widget = QWidget()
-        widget.setLayout(layout)
-        self.setCentralWidget(widget)
+        # build main panel
+        # full left is file tree
+        left_layout = QVBoxLayout()
+        left_layout.addLayout(experiment_layout)
 
+        right_layout = QVBoxLayout()
+        right_layout.addLayout(top_layout)
+        right_layout.addLayout(bottom_layout)
+
+        super_layout = QHBoxLayout()
+        super_layout.addLayout(left_layout)
+        super_layout.addLayout(right_layout)
+
+        central_widget = QWidget()
+        central_widget.setLayout(super_layout)
+
+        self.setCentralWidget(central_widget)
         self.show()
+        self.showMaximized()
 
-        # self.experiment = Experiment(
-        #     r'D:\SURFdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
         self.experiment = pp.Experiment(main_path, main_window=self)
         self.addExperiment(self.experiment)
+        self.setup_widget.experiment = self.experiment
         self.traces.save_path = self.experiment.analysis_path.joinpath('Trace_plots')
 
     def keyPressEvent(self, e):
@@ -369,72 +169,49 @@ class MainWindow(QMainWindow):
         if e == 1:
             self.traces.setFocus()
 
-    def midChange(self, input):
-        input = int(input)
-        self.experiment.configuration['find_coordinates']['peak_finding']['minimum_intensity_difference'] = input
-        self.experiment.configuration.save()
-
-    def perform_mapping(self, t):
-        print(t)
-        selected_files = self.experiment.selected_files
-        if selected_files:
-            selected_files.serial.perform_mapping()
-            self.image_canvas.refresh()
-            plt.show()
-
-    def find_coordinates(self):
-        selected_files = self.experiment.selected_files
-        if selected_files:
-            selected_files.movie.determine_spatial_background_correction(use_existing=True)
-            selected_files.find_coordinates()
-            self.image_canvas.refresh()
-            self.update_plots()
-
-    def extract_traces(self):
-        selected_files = self.experiment.selected_files
-        if selected_files:
-            selected_files.extract_traces()
-            # self.image_canvas.refresh()
-            self.update_plots()
-
     def onItemChange(self, item):
         if isinstance(item.data(), File):
             file = item.data()
             file.is_selected = (True if item.checkState() == Qt.Checked else False)
             print(f'{file}: {file.is_selected}')
-
         else:
             self.update = False
             for i in range(item.rowCount()):
                 item.child(i).setCheckState(item.checkState())
             self.update = True
-
         if self.update:
             self.update_plots()
+            self.update_settings()
+
+    def update_settings(self):
+        #this collects the configuration of the first selected file
+        #and passes the contents  to all relevant settings buttons
+        selected_files = self.experiment.selectedFiles + [None]
+        if selected_files[0] is not None:
+            self.pass_selected_config_to_gui_fields.emit(1)
 
     def update_plots(self):
-        selected_files = self.experiment.selected_files + [None]
-        self.image_canvas.file = selected_files[0]
-        if selected_files[0] is not None:
-            self.traces.dataset = selected_files[0].dataset
-            self.selection.file = selected_files[0]
-            self.classification.file = selected_files[0]
-        else:
-            self.traces.dataset = None
-            self.selection.file = None
-            self.classification.file = None
+        selected_files = self.experiment.selectedFiles + [None]
+        for widget in self.tab_widgets:
+            widget.file = selected_files[0]
+        # self.image.file = selected_files[0]
+        # if selected_files[0] is not None:
+        #     self.traces.file = selected_files[0]
+        #     self.selection_widget.file = selected_files[0]
+        #     self.classification_widget.file = selected_files[0]
+        # else:
+        #     self.traces.file = None
+        #     self.selection_widget.file = None
+        #     self.classification_widget.file = None
 
     def addExperiment(self, experiment):
-
-        # experiment = Experiment(r'D:\SURFdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
-        #experiment = Experiment(r'C:\Users\ivoseverins\surfdrive\Promotie\Code\Python\papylio\twoColourExampleData\20141017 - Holliday junction - Copy')
         self.root.appendRow([
-                QStandardItem(experiment.name),
-                QStandardItem(0),
-            ])
+            QStandardItem(experiment.name),
+            QStandardItem(0),
+        ])
         experimentNode = self.root.child(self.root.rowCount() - 1)
         for file in experiment.files:
-            print('addfile'+file.name)
+            print('addfile' + file.name)
             self.addFile(file, experimentNode)
 
         self.tree.expandAll()
@@ -449,7 +226,7 @@ class MainWindow(QMainWindow):
         for folder in folders:
 
             # Get the folderItems and folder names for the current folderItem
-            nodeItems = [parentItem.child(i) for i in range(parentItem.rowCount())]# if item.type == 'folder']
+            nodeItems = [parentItem.child(i) for i in range(parentItem.rowCount())]  # if item.type == 'folder']
             nodeItemNames = [item.text() for item in nodeItems]
 
             if folder not in nodeItemNames:
@@ -475,63 +252,28 @@ class MainWindow(QMainWindow):
         else:
             item.setCheckState(Qt.Unchecked)
         item.setData(file)
-        #self.FileItems.append(item)
+        # self.FileItems.append(item)
 
         # self.insertDataIntoColumns(item)
 
         return item
 
     def refresh(self):
+        #TODO: pass settings from setup widget to config before doing this one
+        self.pass_setup_to_config_on_refresh.emit(1)
         self.root.removeRows(0, 1)
         self.experiment = Experiment(self.experiment.main_path)
         self.addExperiment(self.experiment)
 
 
-class ImageCanvas(FigureCanvas):
-    """Image canvas widget.
-
-    This class defines the canvas used to display images in the Papylio
-    GUI. It is responsible for rendering the image data and updating the
-    display when the underlying data changes.
-    """
-
-    def __init__(self, parent=None, width=14, height=7, dpi=100):
-        self.figure = mpl.figure.Figure(figsize=(width, height), dpi=dpi, constrained_layout=True)  # , figsize=(2, 2))
-        super().__init__(self.figure)
-        self.parent = parent
-
-        # self.axis = self.figure.gca()
-
-        self._file = None
-
-    @property
-    def file(self):
-        return self._file
-
-    @file.setter
-    def file(self, file):
-        if file is not None and file is not self._file:
-            self._file = file
-            self.refresh()
-        elif file is None:
-            self._file = None
-            self.figure.clf()
-            self.draw()
-
-    def refresh(self):
-        self.figure.clf()
-        self._file.movie.determine_spatial_background_correction(use_existing=True)
-        self._file.show_coordinates_in_image(figure=self.figure)
-        self.draw()
-
-
 if __name__ == '__main__':
     from multiprocessing import Process, freeze_support
+
     freeze_support()
-
     app = QApplication(sys.argv)
-
-    window = MainWindow()
-    window.show()
+    main_window = MainWindow()
+    main_window.show()
 
     app.exec_()
+
+
