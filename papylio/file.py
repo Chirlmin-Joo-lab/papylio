@@ -181,6 +181,17 @@ class File:
         """Return the absolute path to the file."""
         return self.experiment.main_path.joinpath(self.relative_filepath)
 
+    def open_folder(self) -> None:
+        """Open the config directory in the system file manager."""
+        import subprocess, os
+
+        if sys.platform == "win32":
+            os.startfile(self.filepath.parent)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", self.filepath.parent])
+        else:
+            subprocess.run(["xdg-open", self.filepath.parent])
+
     @property
     @return_none_when_executed_by_pycharm
     def number_of_molecules(self):
@@ -1162,6 +1173,11 @@ class File:
                 da = da.expand_dims({'name': [self.name]}, 0)
 
         return da
+
+    def set_dataset_coordinate(self, **kwargs):
+        xr.Dataset(coords=kwargs).to_netcdf(
+            self.absolute_filepath, engine='netcdf4', mode='a'
+        )
 
     def set_variable(self, data, **kwargs):
         """
