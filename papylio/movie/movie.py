@@ -35,6 +35,13 @@ class Movie:
     unit_mapping = mp.MatchPoint()
     default_microscope = None
 
+    _rotation = None
+    _channels = None
+    _channel_arrangement = None
+
+    _illumination_arrangement = None  # [self.default_illumination]  # First level: frames, second level: illumination
+    _illumination_index_per_frame = None
+
     @classmethod
     def type_dict(cls):
         """Get dictionary mapping file extensions to Movie subclasses.
@@ -346,7 +353,6 @@ class Movie:
         # self.filepaths = [Path(filepath) for filepath in filepaths] # For implementing multiple files, e.g. two channels over two files
         self.is_mapping_movie = False
 
-        # self.rotation = rotation
         # self.correct_images = False
 
         self.chunk_size = 100
@@ -361,17 +367,20 @@ class Movie:
 
         self._time = None
 
-        self.channels = ['green', 'red']
-        self.channel_arrangement = [[[0, 1]]]  # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
-
-        self.channel_mapping = [self.unit_mapping,]*(self.number_of_channels-1)
-
-        self.illumination_arrangement = [self.default_illumination]  # First level: frames, second level: illumination
-        self._illumination_index_per_frame = None
-
         self._common_corrections = xr.Dataset()
+        self._channel_mapping = None
 
         self.metadata_is_read = False
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        for base in cls.__mro__[1:]:
+            for name, attr in vars(base).items():
+                if isinstance(attr, property) and name in cls.__dict__:
+                    raw_value = cls.__dict__[name]
+                    if not isinstance(raw_value, property):
+                        delattr(cls, name)
+                        attr.fset(cls, raw_value)
 
     def __enter__(self):
         """Context manager entry point. Opens file for reading."""
@@ -392,7 +401,8 @@ class Movie:
     def __getattr__(self, item):
         """Lazy-load header when accessing attributes before header is read."""
 
-        if 'metadata_is_read' in self.__dict__.keys() and not self.metadata_is_read:
+        # if 'metadata_is_read' in self.__dict__.keys() and not self.metadata_is_read:
+        if not self.__dict__.get('metadata_is_read', True):
             # print(item+'2')
             self.read_metadata()
             return getattr(self, item)
@@ -460,6 +470,72 @@ class Movie:
         return xr.DataArray(np.arange(self.number_of_frames), dims='frame')
 
     @property
+    def rotation(self):
+        if self._rotation is None:
+            raise RuntimeError("rotation not set")
+        return self._rotation
+
+    @rotation.setter
+    def rotation(self, value):
+        self._rotation = value
+
+    @property
+    def width(self):
+        if self.rotation % 2 == 0:
+            return self._width
+        else:
+            return self._height
+
+    @width.setter
+    def width(self, value):
+        self._width = value
+
+    @property
+    def height(self):
+        if self.rotation % 2 == 0:
+            return self._height
+        else:
+            return self._width
+
+    @height.setter
+    def height(self, value):
+        self._height = value
+
+    @property
+    def channels(self):
+        if self._channels is None:
+            raise RuntimeError("channels not set")
+        return self._channels
+
+    @channels.setter
+    def channels(self, value):
+        if self._channels is not None and len(value) != len(self._channels):
+            raise ValueError("Number of channels must match existing channels")
+        self._channels = value
+
+    @property
+    def channel_arrangement(self):
+        if self._channel_arrangement is None:
+            raise RuntimeError("channel_arrangement not set")
+        return self._channel_arrangement
+
+    @channel_arrangement.setter
+    def channel_arrangement(self, value):
+        if isinstance(value, np.ndarray):
+            value = value.tolist()
+        self._channel_arrangement = value  # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
+
+    @property
+    def channel_mapping(self):
+        if self._channel_mapping is None:
+            self._channel_mapping = [self.unit_mapping, ] * (self.number_of_channels - 1)
+        return self._channel_mapping
+
+    @channel_mapping.setter
+    def channel_mapping(self, value):
+        self._channel_mapping = value
+
+    @property
     def channel_indices(self):
         return xr.DataArray(np.array(self.channel_arrangement).flatten(), dims='channel')
 
@@ -474,7 +550,17 @@ class Movie:
     @illumination_arrangement.setter
     def illumination_arrangement(self, illumination_arrangement):
         self._illumination_arrangement = np.array(illumination_arrangement)
-        self._illumination_index_per_frame = None
+        # frame_indices = self.frame_indices
+        # illumination_indices = self.illumination_indices
+        # self._illumination_index_per_frame = xr.DataArray(
+        #     np.resize(self.illumination_arrangement, (len(frame_indices), len(illumination_indices))),
+        #     dims=('frame', 'illumination'),
+        #     coords={'frame': frame_indices, 'illumination': illumination_indices})
+        self._illumination_index_per_frame = xr.DataArray(
+            np.resize(self._illumination_arrangement, (self.number_of_frames)),
+            dims=('frame'),
+            coords={'frame': self.frame_indices}, name='illumination')
+        # TODO: Add name to other indices or remove this name
 
     @property
     def illumination_indices(self):
@@ -482,18 +568,8 @@ class Movie:
 
     @property
     def illumination_index_per_frame(self):
-        if self._illumination_arrangement is not None and self._illumination_index_per_frame is None:
-            # frame_indices = self.frame_indices
-            # illumination_indices = self.illumination_indices
-            # self._illumination_index_per_frame = xr.DataArray(
-            #     np.resize(self.illumination_arrangement, (len(frame_indices), len(illumination_indices))),
-            #     dims=('frame', 'illumination'),
-            #     coords={'frame': frame_indices, 'illumination': illumination_indices})
-            self._illumination_index_per_frame = xr.DataArray(
-                np.resize(self.illumination_arrangement, (self.number_of_frames)),
-                dims=('frame'),
-                coords={'frame': self.frame_indices}, name='illumination')
-            # TODO: Add name to other indices or remove this name
+        if self._illumination_index_per_frame is None:
+            raise RuntimeError("illumination_arrangement or illumination_index_per_frame not set")
         return self._illumination_index_per_frame
 
     @illumination_index_per_frame.setter
@@ -551,16 +627,9 @@ class Movie:
     def read_metadata(self):
         """Read and parse file header.
 
-        Calls the subclass-specific _read_metadata() method and applies
-        image rotations if needed.
+        Calls the subclass-specific _read_metadata() method.
         """
         self._read_metadata()
-        if not (self.rotation % 2 == 0):
-            width = self.width
-            height = self.height
-            self.width = height
-            self.height = width
-
         self.metadata_is_read = True
 
     def read_frame(self, frame_index, **kwargs):
