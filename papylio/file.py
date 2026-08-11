@@ -1585,7 +1585,7 @@ class File:
         if 'configuration' in self.classification.attrs:
             dwells.attrs['applied_classifications'] = self.classification.attrs['configuration']
 
-        dwells.to_netcdf(self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4', mode='w')
+        self.dwells = dwells
 
     def classification_binary(self, positive_states_only=False, selected=False):
         """
@@ -1619,6 +1619,10 @@ class File:
     def dwells(self):
         """Load and return the dwell times dataset."""
         return xr.load_dataset(self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4')
+
+    @dwells.setter
+    def dwells(self, value):
+        value.to_netcdf(self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4', mode='w')
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
