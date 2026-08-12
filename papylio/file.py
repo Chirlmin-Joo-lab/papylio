@@ -1615,14 +1615,28 @@ class File:
         return number_of_states
 
     @property
+    def dwells_filepath(self):
+        return self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc')
+
+    @property
     @return_none_when_executed_by_pycharm
     def dwells(self):
         """Load and return the dwell times dataset."""
-        return xr.load_dataset(self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4')
+        if self.has_dwells:
+            return xr.load_dataset(self.dwells_filepath, engine='netcdf4')
+        else:
+            raise RuntimeError("No dwell times found in the file. Please run 'determine_dwells_from_classification' first.")
 
     @dwells.setter
     def dwells(self, value):
-        value.to_netcdf(self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc'), engine='netcdf4', mode='w')
+        if value is None:
+            self.dwells_filepath.unlink(missing_ok=True)
+        else:
+            value.to_netcdf(self.dwells_filepath, engine='netcdf4', mode='w')
+
+    @property
+    def has_dwells(self):
+        return self.dwells_filepath.exists()
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
