@@ -25,7 +25,9 @@ def experiment_hj(shared_datadir):
 @pytest.fixture
 def experiment_hj_no_logging(shared_datadir):
     from papylio import Experiment
-    return Experiment(shared_datadir / 'Papylio example dataset - analyzed', perform_logging=False)
+    experiment = Experiment(shared_datadir / 'Papylio example dataset - analyzed', perform_logging=False)
+    experiment.files.movie.illumination_arrangement = [0]
+    return experiment
 
 @pytest.fixture
 def file_hj(experiment_hj):
