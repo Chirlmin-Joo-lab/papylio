@@ -99,7 +99,7 @@ class Experiment:
 
     # TODO: Add presets for specific microscopes
     def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None,
-                 perform_logging=True, use_colorblind_friendly_colors=True, microscope=None):
+                 perform_logging=True, use_colorblind_friendly_colors=True, microscope='auto'):
         """Init method for the Experiment class
 
         Loads config file if it locates one in the main directory, otherwise it exports the default config file to the main directory.

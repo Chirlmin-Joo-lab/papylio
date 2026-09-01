@@ -53,24 +53,24 @@ class Movie:
         """
         # It is important to import all movie files to recognize them by subclasses.
         # Perhaps we can make this more elegant in some way.
-        from papylio.movie.sifx import SifxMovie
-        from papylio.movie.pma import PmaMovie
+        # from papylio.movie.sifx import SifxMovie
+        # from papylio.movie.pma import PmaMovie
         from papylio.movie.tif import TifMovie
         from papylio.movie.nd2 import ND2Movie
-        from papylio.movie.nsk import NskMovie
-        from papylio.movie.binary import BinaryMovie
+        # from papylio.movie.nsk import NskMovie
+        # from papylio.movie.binary import BinaryMovie
         return {extension: subclass for subclass in cls.__subclasses__() for extension in subclass.extensions}
 
     @classmethod
     def default_movie_classes(cls, extension=None):
         # It is important to import all movie files to recognize them by subclasses.
         # Perhaps we can make this more elegant in some way.
-        from papylio.movie.sifx import SifxMovie
-        from papylio.movie.pma import PmaMovie
+        # from papylio.movie.sifx import SifxMovie
+        # from papylio.movie.pma import PmaMovie
         from papylio.movie.tif import TifMovie
         from papylio.movie.nd2 import ND2Movie
-        from papylio.movie.nsk import NskMovie
-        from papylio.movie.binary import BinaryMovie
+        # from papylio.movie.nsk import NskMovie
+        # from papylio.movie.binary import BinaryMovie
 
         default_movie_classes = cls.__subclasses__()
         if extension is None:
@@ -95,14 +95,21 @@ class Movie:
         return custom_movie_classes
 
     @classmethod
-    def subclass_from_filepath(cls, filepath):
+    def get_subclass(cls, filepath, microscope):
         filepath = Path(filepath)
         extension = filepath.suffix.lower()
 
         default_movie_class = cls.default_movie_classes(extension)[0]
         custom_movie_classes = cls.custom_movie_classes(extension)
-        if len(custom_movie_classes) == 0:
+
+        if microscope is None or len(custom_movie_classes) == 0:
             return default_movie_class
+        elif microscope != 'auto':
+            for custom_movie_class in cls.custom_movie_classes():
+                if custom_movie_class.microscope == microscope:
+                    return custom_movie_class
+            else:
+                raise ValueError('Unknown microscope')
         elif len(custom_movie_classes) == 1:
             return custom_movie_classes[0]
         else:
@@ -125,19 +132,10 @@ class Movie:
                 raise ValueError('Default microscope not found in custom movie classes')
                 # Or: return default_movie_class, but not sure what is better.
 
-    illuminations = ['green', 'red']
-    default_illumination = 0
+    # illuminations = ['green', 'red']
+    # default_illumination = 0
 
-    @classmethod
-    def subclass_from_microscope(cls, microscope):
-        for custom_movie_class in cls.custom_movie_classes():
-            if custom_movie_class.microscope == microscope:
-                return custom_movie_class
-        else:
-            raise ValueError('Unknown microscope')
-
-    @classmethod
-    def get_illumination_indices_from_names(cls, illuminations):
+    def get_illumination_indices_from_names(self, illuminations):
         """Get list of illumination indices by illumination names.
 
         Parameters
@@ -152,15 +150,15 @@ class Movie:
         """
         # illuminations = cls.get_illuminations_from_names(illumination_names)
         if illuminations in [None, 'all']:
-            illuminations = cls.illuminations
+            illuminations = self.illuminations
 
         if not isinstance(illuminations, list):
             illuminations = [illuminations]
 
         illumination_indices = []
         for illumination in illuminations:
-            if illumination in cls.illuminations:
-                illumination_indices.append(cls.illuminations.index(illumination))
+            if illumination in self.illuminations:
+                illumination_indices.append(self.illuminations.index(illumination))
             elif isinstance(illumination, int):
                 illumination_indices.append(illumination)
             else:
@@ -312,17 +310,8 @@ class Movie:
 
     def __new__(cls, filepath, rotation=0, microscope=None):
         if cls is Movie:
-            extension = Path(filepath).suffix.lower()
-
-            if microscope is not None:
-                subclass = cls.subclass_from_microscope(microscope)
-            else:
-                subclass = cls.subclass_from_filepath(filepath)
-
-            try:
-                return object.__new__(subclass)
-            except KeyError:
-                raise NotImplementedError('Filetype not supported')
+            subclass = cls.get_subclass(filepath, microscope)
+            return object.__new__(subclass)
         else:
             return object.__new__(cls)
 
@@ -337,7 +326,7 @@ class Movie:
     def __setstate__(self, dict):
         self.__dict__.update(dict)
 
-    def __init__(self, filepath, rotation=0, microscope=None):  # , **kwargs):
+    def __init__(self, filepath, microscope=None):  # , **kwargs):
         """Initialize Movie object.
 
         Parameters

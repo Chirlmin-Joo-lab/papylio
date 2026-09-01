@@ -59,7 +59,7 @@ class File:
 
     unit_mapping = mp.MatchPoint()
 
-    def __init__(self, relative_filepath, extensions=None, experiment=None, microscope=None, perform_logging=True):
+    def __init__(self, relative_filepath, extensions=None, experiment=None, microscope='auto', perform_logging=True):
 
         """
         Initialize a File object.
@@ -89,11 +89,11 @@ class File:
         self.is_selected = False
         # self.is_mapping_file = False
 
-        self.movie = None
+        self._movie = None
         self.microscope = microscope
         # self.mapping = None
 
-        self._rotation = 0
+        # self._rotation = 0
 
         self._mappings = None
         self.mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
@@ -203,14 +203,67 @@ class File:
             return 0
 
     @property
+    def has_movie(self):
+        return self._movie is not None
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def movie(self):
+        # TODO: Perhaps upon first getting the movie, in case a dataset exists,
+        #       then the movie should be updated with the dataset information (e.g. rotation, channel arrangement, etc.)
+        if not self.has_movie:
+            raise RuntimeError('No movie found')
+        return self._movie
+
+    @movie.setter
+    def movie(self, value):
+        self._movie = value
+
+    @property
     @return_none_when_executed_by_pycharm
     def rotation(self):
-        return self._rotation
+        # TODO: If it is variable is retrieved and the dataset is present, then the value should be retrieved from the dataset and set to the movie\
+        return self.movie.rotation
 
     @rotation.setter
-    def rotation(self, rotation):
-        self.movie.rotation = rotation
-        self._rotation = rotation
+    def rotation(self, value):
+        self.movie.rotation = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def channels(self):
+        return self.movie.channels
+
+    @channels.setter
+    def channels(self, value):
+        self.movie.channels = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def channel_arrangement(self):
+        return self.movie.channel_arrangement
+
+    @channel_arrangement.setter
+    def channel_arrangement(self, value):
+        self.movie.channel_arrangement = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def illuminations(self):
+        return self.movie.illuminations
+
+    @illuminations.setter
+    def illuminations(self, value):
+        self.movie.illuminations = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def illumination_arrangement(self):
+        return self.movie.illumination_arrangement
+
+    @illumination_arrangement.setter
+    def illumination_arrangement(self, value):
+        self.movie.illumination_arrangement = value
 
     @property
     @return_none_when_executed_by_pycharm
@@ -502,7 +555,7 @@ class File:
         else:
             filepath = self.absolute_filepath.with_suffix(extension)
 
-        self.movie = Movie(filepath, self.rotation, microscope=self.microscope)
+        self.movie = Movie(filepath, microscope=self.microscope)
         if 'channel_arrangement' in self.dataset_attributes.keys():
             channel_arrangement_text_string=self.dataset_attributes['channel_arrangement']
             self.movie.channel_arrangement = ast.literal_eval(channel_arrangement_text_string)
@@ -1080,7 +1133,7 @@ class File:
     @mappings.setter
     def mappings(self, mappings):
         self._mappings = mappings
-        if self.movie is not None:
+        if self.has_movie:
             self.movie.channel_mappings = mappings
 
     def show_mapping_in_image(self, axes=None, save=True, unit='pixel', projection_image_configuration=None, imshow_configuration=None):
@@ -1921,7 +1974,7 @@ class File:
         image = self.get_projection_image(**projection_image_configuration)
 
         if axes is None:
-            figure, axes = plt.subplots(1, image.shape[0], sharex=True, sharey=True, layout='constrained')
+            figure, axes = plt.subplots(1, image.shape[0], sharex=True, sharey=True, layout='tight')
         else:
             figure = axes[0].figure
         figure.subplots_adjust(wspace=0, hspace=0)
@@ -1944,7 +1997,7 @@ class File:
             raise ValueError('Wrong unit value')
         for i, (im, axis) in enumerate(zip(image, axes.flatten())):
             axis.imshow(im, **imshow_configuration)
-            axis.set_title(f'Channel {i}')
+            axis.set_title(self.channels[i].capitalize())
             axis.set_xlabel('x'+unit_string)
             if i > 0:
                 axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
