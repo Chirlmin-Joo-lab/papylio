@@ -5,6 +5,7 @@ Provides a convenience function to start the GUI application with default option
 
 from PySide2.QtWidgets import QApplication
 import sys
+import traceback
 
 from multiprocessing import Process, freeze_support
 
@@ -22,6 +23,10 @@ def start_gui():
     window.show()
     app.exec_()
 
-
 if __name__ == '__main__':
-    start_gui()
+    try:
+        start_gui()
+    except Exception:
+        traceback.print_exc()
+    finally:
+        input("\nPress Enter to exit...")
