@@ -1,0 +1,81 @@
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: papylio
+          environment-file: environment.yml
+          auto-activate-base: false
+
+      - name: Install build dependencies
+        shell: bash -el {0}
+        run: |
+          conda install -y pyinstaller
+
+      - name: Check environment
+        shell: bash -el {0}
+        run: |
+          conda info
+          which python
+          python --version
+          python -c "import PyInstaller; print(PyInstaller.__version__)"
+
+      - name: Build application
+        shell: bash -el {0}
+        run: |
+          python -m PyInstaller installer/windows/pyinstaller_configuration_windows.spec --clean --noconfirm
+
+      # Replace this section with whatever installer generator
+      # you use, e.g. Inno Setup.
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: powershell
+        run: |
+          iscc installer\windows\inno_setup_configuration.iss
+
+      - name: Rename installer
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item `
+            "installer\Output\Papylio-Setup.exe" `
+            "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe"
+
+      - name: Upload installer as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Papylio-Windows-x64
+          path: dist/Papylio-${{ env.RELEASE_TAG }}-Windows-x64.exe
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        shell: bash -el {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            "${env:RELEASE_TAG}" \
+            "dist/Papylio-${env:RELEASE_TAG}-Windows-x64.exe" \
+            --clobber

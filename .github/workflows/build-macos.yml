@@ -1,0 +1,69 @@
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  build-macos:
+    name: Build macOS DMG
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: papylio
+          environment-file: environment.yml
+          auto-activate-base: false
+
+      - name: Install build dependencies
+        shell: bash -el {0}
+        run: |
+          conda install -y pyinstaller dmgbuild
+
+      - name: Check environment
+        shell: bash -el {0}
+        run: |
+          conda info
+          which python
+          python --version
+          python -c "import PyInstaller; print(PyInstaller.__version__)"
+
+      - name: Build application
+        shell: bash -el {0}
+        run: |
+          python -m PyInstaller installer/mac/pyinstaller_configuration_macos.spec --clean --noconfirm
+
+      - name: Build DMG
+        shell: bash -el {0}
+        run: |
+          dmgbuild -s installer/mac/dmgbuild_configuration.py \
+            "Papylio" \
+            dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg
+
+      - name: Upload DMG as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Papylio-macOS-intel
+          path: dist/Papylio-${{ env.RELEASE_TAG }}-macOS-intel.dmg
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        shell: bash -el {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            "${env:RELEASE_TAG}" \
+            "dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg" \
+            --clobber
