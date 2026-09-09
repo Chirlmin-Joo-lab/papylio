@@ -56,14 +56,15 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
-          iscc installer\windows\inno_setup_configuration.iss
+          $version = $env:RELEASE_TAG -replace '^v', ''
+          iscc /DMyAppVersion="$version" installer\windows\inno_setup_configuration.iss
 
       - name: Rename installer
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item `
-            "installer\Output\Papylio-Setup.exe" `
+            "dist\Papylio setup.exe" `
             "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe"
 
       - name: Upload installer as workflow artifact
