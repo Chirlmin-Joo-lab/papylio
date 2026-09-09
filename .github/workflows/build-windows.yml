@@ -1,3 +1,4 @@
+name: Build and Release for Windows
 
 on:
   release:
@@ -19,30 +20,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v2
         with:
-          activate-environment: papylio
-          environment-file: environment.yml
-          auto-activate-base: false
+          environment-name: papylio
+          environment-file: installer/windows/environment_windows.yml
+          cache-environment: true
+          init-shell: powershell
+          post-cleanup: 'all'
 
-      - name: Install build dependencies
-        shell: bash -el {0}
-        run: |
-          conda install -y pyinstaller
+#      - name: Install build dependencies
+#        shell: bash -el {0}
+#        run: |
+#          micromamba install -y pyinstaller
 
       - name: Check environment
-        shell: bash -el {0}
+        shell: powershell
         run: |
-          conda info
-          which python
+          micromamba info
+          Get-Command python
           python --version
-          python -c "import PyInstaller; print(PyInstaller.__version__)"
+          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
 
       - name: Build application
-        shell: bash -el {0}
+        shell: powershell
         run: |
-          python -m PyInstaller installer/windows/pyinstaller_configuration_windows.spec --clean --noconfirm
+          python -m PyInstaller installer\windows\pyinstaller_configuration_windows.spec --clean --noconfirm
 
       # Replace this section with whatever installer generator
       # you use, e.g. Inno Setup.
@@ -67,15 +70,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Papylio-Windows-x64
-          path: dist/Papylio-${{ env.RELEASE_TAG }}-Windows-x64.exe
+          path: dist\Papylio-${{ env.RELEASE_TAG }}-Windows-x64.exe
 
       - name: Upload to release
         if: github.event_name == 'release'
-        shell: bash -el {0}
+        shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload \
             "${env:RELEASE_TAG}" \
-            "dist/Papylio-${env:RELEASE_TAG}-Windows-x64.exe" \
+            "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe" \
             --clobber

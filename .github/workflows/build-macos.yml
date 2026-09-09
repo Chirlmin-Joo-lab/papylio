@@ -1,3 +1,4 @@
+name: Build and Release for macOS
 
 on:
   release:
@@ -19,17 +20,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Set up micromamba
+        uses:  mamba-org/setup-micromamba@v2
         with:
-          activate-environment: papylio
-          environment-file: environment.yml
-          auto-activate-base: false
+          environment-name: papylio
+          environment-file: installer/macos/environment_macos.yml
+          cache-environment: true
+          init-shell: bash
+          post-cleanup: 'all'
 
-      - name: Install build dependencies
-        shell: bash -el {0}
-        run: |
-          conda install -y pyinstaller dmgbuild
+#      - name: Install build dependencies
+#        shell: bash -el {0}
+#        run: |
+#          micromamba install -y pyinstaller dmgbuild
 
       - name: Check environment
         shell: bash -el {0}
