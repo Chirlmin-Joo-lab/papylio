@@ -7,9 +7,10 @@ import platform
 import sys
 import re
 from PySide2.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QTreeView, QApplication, QMainWindow, \
-    QPushButton, QTabWidget, QHeaderView, QPlainTextEdit
+    QPushButton, QTabWidget, QHeaderView, QPlainTextEdit, QAction
 from PySide2.QtGui import QStandardItem, QStandardItemModel, QIcon, QFont, QTextCursor
 from PySide2.QtCore import Qt, QObject, Signal
+from bokeh.application.handlers import directory
 
 from matplotlib.backends.backend_qtagg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
@@ -41,7 +42,7 @@ class MainWindow(QMainWindow):
     pass_selected_config_to_gui_fields = Signal(int)  # send index of tab to activate
     pass_setup_to_config_on_refresh = Signal(int)
 
-    def __init__(self, main_path=None):
+    def __init__(self):
         super().__init__()
 
         system = platform.system()
@@ -185,11 +186,118 @@ class MainWindow(QMainWindow):
         self.show()
         self.showMaximized()
 
-        self.experiment = pp.Experiment(main_path, main_window=self)
+        self._create_menu_bar()
+
+        #self.top_tabs.tabBar().currentChanged.connect(self.update_plots)
+
+    def _create_menu_bar(self):
+        menu_bar = self.menuBar()
+
+        # --- Experiment menu ---
+        experiment_menu = menu_bar.addMenu('&Experiment')
+
+        open_action = QAction("&Open", self)
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.open_experiment)
+        experiment_menu.addAction(open_action)
+
+        experiment_menu.addSeparator()
+
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        experiment_menu.addAction(exit_action)
+
+        # --- Notebook menu ---
+        experiment_menu = menu_bar.addMenu('&Notebook')
+
+        # jupyter_action = QAction("Launch &Jupyter", self)
+        # jupyter_action.setShortcut("Ctrl+J")
+        # jupyter_action.triggered.connect(self.open_jupyter)
+        # jupyter_action.setEnabled(False)
+        # self.jupyter_action = jupyter_action
+        # experiment_menu.addAction(jupyter_action)
+
+        marimo_action = QAction("Launch &Marimo", self)
+        marimo_action.setShortcut("Ctrl+M")
+        marimo_action.triggered.connect(self.open_marimo)
+        marimo_action.setEnabled(False)
+        self.marimo_action = marimo_action
+        experiment_menu.addAction(marimo_action)
+
+    def open_experiment(self):
+        self.experiment = pp.Experiment(main_window=self)
         self.addExperiment(self.experiment)
         self.setup_widget.experiment = self.experiment
         self.traces.save_path = self.experiment.analysis_path.joinpath('Trace_plots')
-        #self.top_tabs.tabBar().currentChanged.connect(self.update_plots)
+        self.jupyter_action.setEnabled(True)
+        self.marimo_action.setEnabled(True)
+
+    # def open_jupyter(self):
+    #     import subprocess
+    #     import sys
+    #
+    #     directory = self.experiment.main_path
+    #
+    #     if getattr(sys, "frozen", False):
+    #         command = [sys.executable, "--jupyter", str(directory)]
+    #     else:
+    #         command = [sys.executable, sys.argv[0], "--jupyter", str(directory)]
+    #
+    #     subprocess.Popen(command)
+
+    def open_marimo(self):
+        import subprocess
+        import sys
+
+        directory = self.experiment.main_path
+
+        if getattr(sys, "frozen", False):
+            command = [sys.executable, "--marimo", directory]
+        else:
+            command = [sys.executable, sys.argv[0], "--marimo", directory]
+
+        subprocess.Popen(command)
+
+        # subprocess.Popen([
+        #     sys.executable,
+        #     "--marimo",
+        #     str(self.experiment.main_path),
+        # ])
+        # import threading
+        # threading.Thread(
+        #     target=self._run_marimo_edit,
+        #     args=(self.experiment.main_path,),
+        #     daemon=True,
+        # ).start()
+
+    # @staticmethod
+    # def _run_marimo_edit(notebooks_dir):
+    #     import asyncio
+    #     import sys
+    #
+    #     real_stdout, real_stderr = sys.__stdout__, sys.__stderr__
+    #     # saved_stdout, saved_stderr = sys.stdout, sys.stderr
+    #     sys.stdout, sys.stderr = real_stdout, real_stderr
+    #     loop = asyncio.new_event_loop()
+    #     asyncio.set_event_loop(loop)
+    #
+    #     try:
+    #         from marimo._cli.cli import edit
+    #
+    #         edit.main(
+    #             args=[str(notebooks_dir)],
+    #             standalone_mode=False,
+    #         )
+    #     finally:
+    #         loop.close()
+
+    # def open_notebook_home(notebooks_dir):
+    #
+    #     from marimo._cli.cli import edit
+    #     edit.main(args=[str(notebooks_dir)], standalone_mode=False)
+    #
+    #     open_notebook_home(self.experiment.main_path)
 
 
     def append_text_console(self, text):
