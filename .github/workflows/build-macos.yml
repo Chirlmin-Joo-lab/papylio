@@ -45,12 +45,12 @@ jobs:
       - name: Build application
         shell: bash -el {0}
         run: |
-          python -m PyInstaller installer/mac/pyinstaller_configuration_macos.spec --clean --noconfirm
+          python -m PyInstaller installer/macos/pyinstaller_configuration_macos.spec --clean --noconfirm
 
       - name: Build DMG
         shell: bash -el {0}
         run: |
-          dmgbuild -s installer/mac/dmgbuild_configuration.py \
+          dmgbuild -s installer/macos/dmgbuild_configuration.py \
             "Papylio" \
             dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg
 
