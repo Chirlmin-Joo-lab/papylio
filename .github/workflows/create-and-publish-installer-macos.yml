@@ -1,4 +1,4 @@
-name: Build and Release for macOS
+name: Create and upload installer for macOS
 
 on:
   release:

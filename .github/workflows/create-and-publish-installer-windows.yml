@@ -1,4 +1,4 @@
-name: Build and Release for Windows
+name: Create and publish installer for Windows
 
 on:
   release:
@@ -82,4 +82,4 @@ jobs:
           gh release upload \
             "${env:RELEASE_TAG}" \
             "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe" \
-            --clobber
+            --clobbe
