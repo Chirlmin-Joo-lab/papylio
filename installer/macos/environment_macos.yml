@@ -6,6 +6,7 @@ channels:
   - https://repo.anaconda.com/pkgs/r
 dependencies:
   - altgraph=0.17.4=pyhd8ed1ab_1
+  - anyio=4.10.0=pyhe01879c_0
   - aom=3.5.0=hf0c8a7f_0
   - appnope=0.1.4=pyhd8ed1ab_1
   - asttokens=3.0.0=pyhd8ed1ab_1
@@ -43,6 +44,7 @@ dependencies:
   - decorator=5.2.1=pyhd8ed1ab_0
   - distributed=2023.3.0=pyhd8ed1ab_0
   - dmgbuild=1.6.5=pyh534df25_0
+  - docutils=0.22=pyhd8ed1ab_0
   - ds_store=1.3.1=pyhd8ed1ab_3
   - et_xmlfile=2.0.0=pyhd8ed1ab_1
   - exceptiongroup=1.3.0=pyhd8ed1ab_0
@@ -68,6 +70,7 @@ dependencies:
   - graphite2=1.3.13=h2e338ed_1001
   - gst-plugins-base=1.21.3=h37e1711_1
   - gstreamer=1.21.3=h1d18e73_1
+  - h11=0.16.0=pyhd8ed1ab_0
   - h2=4.2.0=pyhd8ed1ab_0
   - h5netcdf=1.0.2=pyhd8ed1ab_0
   - h5py=3.8.0=nompi_py39h7d40783_100
@@ -78,6 +81,7 @@ dependencies:
   - hpack=4.1.0=pyhd8ed1ab_0
   - hyperframe=6.1.0=pyhd8ed1ab_0
   - icu=70.1=h96cf925_0
+  - idna=3.11=pyhf9edf01_1
   - imagecodecs=2022.9.26=py39h8036967_4
   - imageio=2.37.0=pyhfb79c49_0
   - importlib-metadata=8.7.0=pyhe01879c_1
@@ -85,6 +89,7 @@ dependencies:
   - iniconfig=2.0.0=pyhd8ed1ab_1
   - ipykernel=6.30.1=pyh92f572d_0
   - ipython=8.18.1=pyh707e725_3
+  - itsdangerous=2.2.0=pyhd8ed1ab_1
   - jasper=2.0.33=h7c6fec8_1
   - jedi=0.19.2=pyhd8ed1ab_1
   - jinja2=3.1.5=pyhd8ed1ab_0
@@ -159,6 +164,8 @@ dependencies:
   - lz4-c=1.9.4=hf0c8a7f_0
   - mac_alias=2.2.2=pyhd8ed1ab_1
   - macholib=1.16.4=pyhd8ed1ab_0
+  - marimo=0.14.17=py39h58581e2_0
+  - markdown=3.8.2=pyhd8ed1ab_0
   - markupsafe=3.0.2=py39hd18e689_1
   - matchpoint=1.0.2=pyhd8ed1ab_1
   - matplotlib-base=3.5.3=py39h35e3ac7_2
@@ -167,6 +174,7 @@ dependencies:
   - munkres=1.1.4=pyh9f0ad1d_0
   - mysql-common=8.0.32=hc4b2c72_1
   - mysql-libs=8.0.32=h8658499_1
+  - narwhals=2.1.2=pyhe01879c_0
   - ncurses=6.4=hcec6c5f_0
   - nd2reader=3.3.1=pyhd8ed1ab_0
   - nest-asyncio=1.6.0=pyhd8ed1ab_1
@@ -210,6 +218,7 @@ dependencies:
   - pygments=2.19.2=pyhd8ed1ab_0
   - pyinstaller=6.15.0=py39hfb924e9_0
   - pyinstaller-hooks-contrib=2025.8=pyhd8ed1ab_0
+  - pymdown-extensions=10.16.1=pyhd8ed1ab_0
   - pyparsing=3.2.1=pyhd8ed1ab_0
   - pyside2=5.15.8=py39heedc0ee_2
   - pysocks=1.7.1=pyha55dd90_7
@@ -226,6 +235,7 @@ dependencies:
   - qt-main=5.15.6=haeff654_6
   - qt-webengine=5.15.9=h90a370e_7
   - readline=8.2=hca72f7f_0
+  - ruff=0.16.6=haa00350_0
   - scikit-image=0.19.3=py39hecff1ad_2
   - scikit-learn=1.0.2=py39hd4eea88_0
   - scipy=1.8.1=py39h8a15683_3
@@ -236,9 +246,11 @@ dependencies:
   - six=1.17.0=pyhd8ed1ab_0
   - slicerator=1.1.0=pyhd8ed1ab_1
   - snappy=1.1.10=h225ccf5_0
+  - sniffio=1.3.1=pyhd8ed1ab_1
   - sortedcontainers=2.4.0=pyhd8ed1ab_1
   - sqlite=3.32.3=h93121df_1
   - stack_data=0.6.3=pyhd8ed1ab_1
+  - starlette=0.47.2=pyh82d4cca_0
   - statsmodels=0.14.4=py39hff9a475_0
   - svt-av1=1.4.1=hf0c8a7f_0
   - tabulate=0.8.10=pyhd8ed1ab_0
@@ -247,15 +259,19 @@ dependencies:
   - tifffile=2022.10.10=pyhd8ed1ab_0
   - tk=8.6.13=ha6c374e_4
   - tomli=2.2.1=pyhe01879c_2
+  - tomlkit=0.13.3=pyha770c72_0
   - toolz=1.0.0=pyhd8ed1ab_1
   - tornado=6.4.2=py39h80efdc8_0
   - tqdm=4.67.1=pyhd8ed1ab_1
   - traitlets=5.14.3=pyhd8ed1ab_1
+  - typing-extensions=4.12.2=hd8ed1ab_1
   - typing_extensions=4.12.2=pyha770c72_1
   - tzdata=2025a=h04d1e81_0
   - unicodedata2=16.0.0=py39h80efdc8_0
   - urllib3=2.3.0=pyhd8ed1ab_0
+  - uvicorn=0.35.0=pyh31011fe_0
   - wcwidth=0.2.13=pyhd8ed1ab_1
+  - websockets=15.0.1=py39h7952fe9_1
   - wheel=0.45.1=py39hecd8cb5_0
   - x264=1!164.3095=h775f41a_2
   - x265=3.5=hbb4e6a2_3
