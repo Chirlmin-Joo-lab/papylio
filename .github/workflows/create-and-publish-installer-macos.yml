@@ -58,7 +58,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Papylio-macOS-intel
-          path: dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg
+          path: dist/Papylio-${{ env.RELEASE_TAG }}-macOS-intel.dmg
 
       - name: Upload to release
         if: github.event_name == 'release'
