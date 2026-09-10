@@ -79,7 +79,7 @@ jobs:
       - name: Upload installer as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Papylio-Windows-x64
+          name: Papylio-${{ env.RELEASE_TAG }}-Windows-x64
           path: dist\Papylio-${{ env.RELEASE_TAG }}-Windows-x64.exe
 
       - name: Upload to release

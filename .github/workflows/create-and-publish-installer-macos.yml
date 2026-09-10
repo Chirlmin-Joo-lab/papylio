@@ -66,7 +66,7 @@ jobs:
       - name: Upload DMG as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Papylio-macOS-intel
+          name: Papylio-${{ env.RELEASE_TAG }}-macOS-intel
           path: dist/Papylio-${{ env.RELEASE_TAG }}-macOS-intel.dmg
 
       - name: Upload to release
