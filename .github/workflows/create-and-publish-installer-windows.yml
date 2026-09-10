@@ -82,4 +82,4 @@ jobs:
           gh release upload \
             "${env:RELEASE_TAG}" \
             "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe" \
-            --clobbe
+            --clobber
