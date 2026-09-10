@@ -230,7 +230,7 @@ class MainWindow(QMainWindow):
         self.addExperiment(self.experiment)
         self.setup_widget.experiment = self.experiment
         self.traces.save_path = self.experiment.analysis_path.joinpath('Trace_plots')
-        self.jupyter_action.setEnabled(True)
+        # self.jupyter_action.setEnabled(True)
         self.marimo_action.setEnabled(True)
 
     # def open_jupyter(self):

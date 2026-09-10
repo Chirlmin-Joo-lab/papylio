@@ -1,5 +1,5 @@
 # dmg_settings.py
-app = '../../dist/mac/papylio.app'
+app = 'dist/Papylio.app'
 appname = 'Papylio'
 
 format = 'UDZO'          # compressed DMG (this is the DMG format, unrelated to your app-startup compression issue)

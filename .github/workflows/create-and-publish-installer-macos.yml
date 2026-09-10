@@ -1,4 +1,4 @@
-name: Build and Release for macOS
+name: Create and upload installer for macOS
 
 on:
   release:
@@ -37,20 +37,20 @@ jobs:
       - name: Check environment
         shell: bash -el {0}
         run: |
-          conda info
+          micromamba info
           which python
           python --version
-          python -c "import PyInstaller; print(PyInstaller.__version__)"
+          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
 
       - name: Build application
         shell: bash -el {0}
         run: |
-          python -m PyInstaller installer/mac/pyinstaller_configuration_macos.spec --clean --noconfirm
+          python -m PyInstaller installer/macos/pyinstaller_configuration_macos.spec --clean --noconfirm
 
       - name: Build DMG
         shell: bash -el {0}
         run: |
-          dmgbuild -s installer/mac/dmgbuild_configuration.py \
+          dmgbuild -s installer/macos/dmgbuild_configuration.py \
             "Papylio" \
             dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg
 
@@ -67,6 +67,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload \
-            "${env:RELEASE_TAG}" \
+            "${RELEASE_TAG}" \
             "dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg" \
             --clobber
