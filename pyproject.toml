@@ -18,8 +18,8 @@ dynamic = ["version"]
 description = "Single-molecule fluorescence data extraction and analysis."
 readme = "README.md"
 authors = [{ name = "Ivo Severins", email = "i.w.h.severins@tudelft.nl" }]
-licence = "GPL-3.0-only"
-licence-files = 'LICENSE'
+license = "GPL-3.0-only"
+license-files = 'LICENSE'
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
