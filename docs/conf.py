@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'papylio'
-copyright = '2025 - Chirlmin Joo lab'
+copyright = '2026 - Chirlmin Joo lab'
 # author = 'Ivo Severins, Sung Hyun Kim, Carolien Bastiaanssen, Iason Katechis, Margreet Docter, Roy Simons, Pim America, '
 html_logo = '_static/logo.png'
 

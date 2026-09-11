@@ -13,12 +13,21 @@ env:
 
 jobs:
   build-macos:
-    name: Build macOS DMG
+    name: Build macOS dmg
     runs-on: macos-15-intel
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Determine release tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.release.tag_name }}" ]; then
+            echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_TAG=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+          fi
 
       - name: Set up micromamba
         uses:  mamba-org/setup-micromamba@v2
@@ -57,8 +66,8 @@ jobs:
       - name: Upload DMG as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Papylio-macOS-intel
-          path: dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg
+          name: Papylio-${{ env.RELEASE_TAG }}-macOS-intel
+          path: dist/Papylio-${{ env.RELEASE_TAG }}-macOS-intel.dmg
 
       - name: Upload to release
         if: github.event_name == 'release'

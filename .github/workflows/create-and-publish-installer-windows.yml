@@ -20,6 +20,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Determine release tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.release.tag_name }}" ]; then
+            echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_TAG=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+          fi
+
       - name: Set up micromamba
         uses: mamba-org/setup-micromamba@v2
         with:
@@ -70,7 +79,7 @@ jobs:
       - name: Upload installer as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Papylio-Windows-x64
+          name: Papylio-${{ env.RELEASE_TAG }}-Windows-x64
           path: dist\Papylio-${{ env.RELEASE_TAG }}-Windows-x64.exe
 
       - name: Upload to release

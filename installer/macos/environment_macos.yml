@@ -167,7 +167,7 @@ dependencies:
   - marimo=0.14.17=py39h58581e2_0
   - markdown=3.8.2=pyhd8ed1ab_0
   - markupsafe=3.0.2=py39hd18e689_1
-  - matchpoint=1.0.2=pyhd8ed1ab_1
+  - matchpoint=1.0.4=pyhd8ed1ab_0
   - matplotlib-base=3.5.3=py39h35e3ac7_2
   - matplotlib-inline=0.1.7=pyhd8ed1ab_1
   - msgpack-python=1.0.5=py39h92daf61_0
