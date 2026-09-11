@@ -12,6 +12,9 @@ version_file = "papylio/_version.py"
 version_scheme = "only-version"
 local_scheme = "node-and-date"
 
+[tool.setuptools.packages.find]
+include = ["papylio*"]
+
 [project]
 name = "papylio"
 dynamic = ["version"]
