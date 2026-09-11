@@ -13,7 +13,7 @@ env:
 
 jobs:
   build-macos:
-    name: Build macOS DMG
+    name: Build macOS dmg
     runs-on: macos-15-intel
 
     steps:
