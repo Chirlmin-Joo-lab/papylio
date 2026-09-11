@@ -38,4 +38,5 @@ An `example dataset`_ is freely available on Zenodo.
     SPARXS <SPARXS/index>
     GUI
     API reference
+    Community
     Contributing
