@@ -278,12 +278,12 @@ class Experiment:
     @property
     def file_paths(self):
         """list of pathlib.Path : List of relative file paths for all files in experiment"""
-        return [file.relative_filepath for file in self.files]
+        return [file.relative_path for file in self.files]
 
     @property
     def nc_file_paths(self):
         """list of pathlib.Path : List of relative NetCDF file paths for all files in experiment"""
-        return [file.relative_filepath.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
+        return [file.relative_path.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
 
     def find_file_paths_and_extensions(self, paths):
         """Find unique files in all subfolders and add them to the experiment
@@ -562,7 +562,7 @@ class Experiment:
         if files is None:
             files = self.files
 
-        file_paths = [file.relative_filepath.with_suffix('.nc') for file in files if '.nc' in file.extensions]
+        file_paths = [file.relative_path.with_suffix('.nc') for file in files if '.nc' in file.extensions]
 
         with xr.open_mfdataset(file_paths, concat_dim='molecule', combine='nested') as ds:
             ds_sel = ds.query(query)  # HJ1_WT, HJ7_G116T
@@ -578,7 +578,7 @@ class Experiment:
         """
         df = pd.DataFrame(columns=['Number of molecules'])
         for i, file in enumerate(self.files):
-            n = str(file.relative_filepath)
+            n = str(file.relative_path)
             try:
                 nms = file.number_of_molecules
             except FileNotFoundError:

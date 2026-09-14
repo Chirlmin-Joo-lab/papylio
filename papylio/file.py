@@ -59,7 +59,7 @@ class File:
 
     unit_mapping = mp.MatchPoint()
 
-    def __init__(self, relative_filepath, extensions=None, experiment=None, microscope='auto', perform_logging=True):
+    def __init__(self, path, extensions=None, experiment=None, microscope='auto', perform_logging=True):
 
         """
         Initialize a File object.
@@ -75,11 +75,12 @@ class File:
         self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
                                   'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
 
-        relative_filepath = Path(relative_filepath)
+
         self.experiment = experiment
 
-        self.relativePath = relative_filepath.parent
-        self.name = relative_filepath.name
+        path = Path(path)
+        self.directory = path.parent
+        self.name = path.name
         self.extensions = set()
 
         # self.exposure_time = None  # Found from log file or should be inputted
@@ -130,19 +131,19 @@ class File:
 
     def __repr__(self):
         """Return a string representation of the File object."""
-        return (f'{self.__class__.__name__}({self.relativePath.joinpath(self.name)})')
+        return (f'{self.__class__.__name__}({self.directory.joinpath(self.name)})')
 
     @property
     @return_none_when_executed_by_pycharm
-    def _log_filepath(self):
+    def _log_path(self):
         """Return the path to the log file."""
-        return self.absolute_filepath.with_suffix(".log")
+        return self.absolute_path.with_suffix(".log")
 
     @property
     def _logger(self):
         """Create a dedicated logger per File instance."""
         if self.__logger is None:
-            logger_name = f"FileLogger.{self.relative_filepath}"
+            logger_name = f"FileLogger.{self.relative_path}"
             self.__logger = logging.getLogger(logger_name)
             self.__logger.setLevel(logging.INFO)
         return self.__logger
@@ -156,7 +157,7 @@ class File:
             message (str): The message to log.
         """
         if self.perform_logging:
-            handler = logging.FileHandler(self._log_filepath, mode="a", encoding="utf-8")
+            handler = logging.FileHandler(self._log_path, mode="a", encoding="utf-8")
             formatter = logging.Formatter(
                 "%(asctime)s [%(levelname)s]: %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S"
@@ -171,33 +172,33 @@ class File:
 
     @property
     @return_none_when_executed_by_pycharm
-    def relative_filepath(self):
+    def relative_path(self):
         """Return the path to the file relative to the experiment root."""
-        return self.relativePath.joinpath(self.name)
+        return self.directory.joinpath(self.name)
 
     @property
     @return_none_when_executed_by_pycharm
-    def absolute_filepath(self):
+    def absolute_path(self):
         """Return the absolute path to the file."""
-        return self.experiment.main_path.joinpath(self.relative_filepath)
+        return self.experiment.main_path.joinpath(self.relative_path)
 
-    def open_folder(self) -> None:
+    def open_directory(self) -> None:
         """Open the config directory in the system file manager."""
         import subprocess, os
 
         if sys.platform == "win32":
-            os.startfile(self.filepath.parent)
+            os.startfile(self.directory)
         elif sys.platform == "darwin":
-            subprocess.run(["open", self.filepath.parent])
+            subprocess.run(["open", self.directory])
         else:
-            subprocess.run(["xdg-open", self.filepath.parent])
+            subprocess.run(["xdg-open", self.directory])
 
     @property
     @return_none_when_executed_by_pycharm
     def number_of_molecules(self):
         """Return the number of molecules in the file's dataset."""
         try:
-            with netCDF4.Dataset(self.absolute_filepath.with_suffix('.nc')) as dataset:
+            with netCDF4.Dataset(self.absolute_path.with_suffix('.nc')) as dataset:
                 return dataset.dimensions['molecule'].size
         except FileNotFoundError:
             return 0
@@ -298,7 +299,7 @@ class File:
         # TODO: Add option to flatten channels?
         # TODO: Check handling of frame_range = (0, None)
         if load:
-            image = Movie.load_projection_image(self.absolute_filepath, **projection_image_configuration)
+            image = Movie.load_projection_image(self.absolute_path, **projection_image_configuration)
         else:
             image = None
 
@@ -381,7 +382,7 @@ class File:
         if item == 'dataset_variables':
             return
         if item in self.dataset_variables or item.startswith('selection') or item.startswith('classification') or item.startswith('intensity'):
-            with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
                 try:
                     return dataset[item].load()
                 except KeyError:
@@ -426,15 +427,15 @@ class File:
         Returns:
             xarray.DataArray: The retrieved data.
         """
-        with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+        with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
             return dataset[key].load()
 
     @property
     @return_none_when_executed_by_pycharm
     def dataset(self):
         """Return the full xarray dataset for this file."""
-        if self.absolute_filepath.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+        if self.absolute_path.with_suffix('.nc').exists():
+            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
                 return dataset.load()
         else:
             return None
@@ -450,8 +451,8 @@ class File:
     @return_none_when_executed_by_pycharm
     def data_vars(self):
         """Return the data variables of the netCDF dataset."""
-        if self.absolute_filepath.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+        if self.absolute_path.with_suffix('.nc').exists():
+            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
                 return dataset.data_vars
         else:
             return xr.Dataset().data_vars
@@ -460,8 +461,8 @@ class File:
     @return_none_when_executed_by_pycharm
     def dataset_attributes(self):
         """Return the global attributes of the netCDF dataset."""
-        if self.absolute_filepath.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+        if self.absolute_path.with_suffix('.nc').exists():
+            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
                 return dataset.attrs
         else:
             return {}
@@ -488,10 +489,10 @@ class File:
 
         dataset = selected.to_dataset().assign_coords(molecule_in_file=('molecule', selected.molecule.values))
         dataset = dataset.reset_index('molecule', drop=True)
-        dataset = dataset.assign_coords({'file': ('molecule', [str(self.relative_filepath).encode()] * number_of_molecules)})
+        dataset = dataset.assign_coords({'file': ('molecule', [str(self.relative_path).encode()] * number_of_molecules)})
         encoding = {'file': {'dtype': '|S'}, 'selected': {'dtype': bool}}
         dataset.attrs['channel_arrangement'] = json.dumps(np.array(self.movie.channel_arrangement).tolist())
-        dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        dataset.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
         self.extensions.add('.nc')
 
     def find_extensions(self):
@@ -501,7 +502,7 @@ class File:
         Returns:
             list: A list of found file extensions.
         """
-        file_names = [file.name for file in self.experiment.main_path.joinpath(self.relativePath).glob(self.name + '*')]
+        file_names = [file.name for file in self.experiment.main_path.joinpath(self.directory).glob(self.name + '*')]
         extensions = [file_name[len(self.name):] for file_name in file_names]
         # For the special case of a sifx file, which is located inside a folder
         if '' in extensions:
@@ -545,7 +546,7 @@ class File:
             extension (str): The file extension to import from.
         """
         if extension == '.sifx':
-            filepath = self.absolute_filepath.joinpath('Spooled files.sifx')
+            filepath = self.absolute_path.joinpath('Spooled files.sifx')
         # elif extension == '.nd2' and '_fov' in self.name:
         #     # TODO: Make this working
         #     token_position = self.name.find('_fov')
@@ -553,7 +554,7 @@ class File:
         #     filepath = self.absoluteFilePath.with_name(movie_name).with_suffix(extension)
             # self.movie = ND2Movie(imageFilePath, fov_info=self.nd2_fov_info)
         else:
-            filepath = self.absolute_filepath.with_suffix(extension)
+            filepath = self.absolute_path.with_suffix(extension)
 
         self.movie = Movie(filepath, microscope=self.microscope)
         if 'channel_arrangement' in self.dataset_attributes.keys():
@@ -571,7 +572,7 @@ class File:
         # TODO: Move this to the MatchPoint class
         from skimage.transform import AffineTransform
         if self.mapping is None: # the following only works for 'linear'transformation_type
-            file_content=np.genfromtxt(str(self.absolute_filepath) + '.coeff')
+            file_content=np.genfromtxt(str(self.absolute_path) + '.coeff')
             if len(file_content)==12:
                 [coefficients, coefficients_inverse] = np.split(file_content,2)
             elif len(file_content)==6:
@@ -619,7 +620,7 @@ class File:
         """
         # TODO: Move this to the MatchPoint class
         #coefficients = np.genfromtxt(self.absoluteFilePath.with_suffix('.map'))
-        file_content=np.genfromtxt(self.absolute_filepath.with_suffix('.map'))
+        file_content=np.genfromtxt(self.absolute_path.with_suffix('.map'))
         if len(file_content) == 64:
             [coefficients, coefficients_inverse] = np.split(file_content, 2)
         elif len(file_content) == 32:
@@ -812,8 +813,8 @@ class File:
     @return_none_when_executed_by_pycharm
     def coordinates(self):
         """Return the molecule coordinates from the netCDF dataset."""
-        if self.absolute_filepath.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+        if self.absolute_path.with_suffix('.nc').exists():
+            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
                 if hasattr(dataset, 'coordinates'):
                     return dataset['coordinates'].load()
                 else:
@@ -831,7 +832,7 @@ class File:
         """
         # Reset current .nc file
         self._init_dataset(len(coordinates.molecule))
-        coordinates.drop('file', errors='ignore').to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        coordinates.drop('file', errors='ignore').to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def extract_traces(self, mask_size, neighbourhood_size=11, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
@@ -876,12 +877,12 @@ class File:
 
         intensity = intensity.assign_coords(illumination=self.movie.illumination_index_per_frame)
 
-        intensity.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        intensity.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
         if 'intensity_raw' in self.data_vars:
             intensity_raw = self.intensity
             intensity_raw.name = 'intensity_raw'
-            intensity_raw.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+            intensity_raw.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
         if background_correction is not None or alpha_correction is not None or gamma_correction is not None:
             self.apply_trace_corrections(background_correction, alpha_correction, gamma_correction)
@@ -906,7 +907,7 @@ class File:
         else:
             intensity_raw = self.intensity
             intensity_raw.name = 'intensity_raw'
-            intensity_raw.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+            intensity_raw.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
         intensity = trace_correction(intensity_raw, background_correction, alpha_correction, gamma_correction)
         intensity.name = 'intensity'
@@ -914,7 +915,7 @@ class File:
         add_configuration_to_dataarray(intensity, File.apply_trace_corrections, locals(), units='a.u.') # TODO: Link to units in movie metadata?
         intensity.attrs['configuration'] = initial_configuration[:-1] + ', ' + intensity.attrs['configuration'][1:]
 
-        intensity.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        intensity.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
         if 'FRET' in self.data_vars:
             self.calculate_FRET()
@@ -924,7 +925,7 @@ class File:
         intensity = self.intensity
         FRET = calculate_FRET(intensity)
         FRET.attrs = intensity.attrs
-        FRET.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        FRET.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def get_traces(self, selected=False):
         """
@@ -1007,7 +1008,7 @@ class File:
     def save_dataset_selected(self):
         """Save the dataset containing only selected molecules to a new netCDF file."""
         encoding = {'file': {'dtype': '|S'}, 'selected': {'dtype': bool}}
-        self.dataset_selected.to_netcdf(self.absolute_filepath.parent / (self.name + '_selected.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        self.dataset_selected.to_netcdf(self.absolute_path.parent / (self.name + '_selected.nc'), engine='netcdf4', mode='w', encoding=encoding)
 
     def import_pks_file(self, extension):
         """
@@ -1016,24 +1017,24 @@ class File:
         Parameters:
             extension (str): The file extension.
         """
-        peaks = import_pks_file(self.absolute_filepath.with_suffix('.pks'))
+        peaks = import_pks_file(self.absolute_path.with_suffix('.pks'))
         peaks = split_dimension(peaks, 'peak', ('molecule', 'channel'), (-1, 2)).reset_index('molecule', drop=True)
         # peaks = split_dimension(peaks, 'molecule', ('molecule_in_file', 'file'), (-1, 1), (-1, [file]), to='multiindex')
 
-        if not self.absolute_filepath.with_suffix('.nc').is_file():
+        if not self.absolute_path.with_suffix('.nc').is_file():
             self._init_dataset(len(peaks.molecule))
 
         coordinates = peaks.sel(parameter=['x', 'y']).rename(parameter='dimension')
         background = peaks.sel(parameter='background', drop=True)
 
         xr.Dataset({'coordinates': coordinates, 'background': background})\
-            .to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+            .to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def export_pks_file(self):
         """Export current molecule coordinates and background to a .pks file."""
         peaks = xr.merge([self.coordinates.to_dataset('dimension'), self.background.to_dataset()])\
             .stack(peaks=('molecule', 'channel')).to_array(dim='parameter').T
-        export_pks_file(peaks, self.absolute_filepath.with_suffix('.pks'))
+        export_pks_file(peaks, self.absolute_path.with_suffix('.pks'))
         self.extensions.add('.pks')
 
     def import_traces_file(self, extension):
@@ -1043,19 +1044,19 @@ class File:
         Parameters:
             extension (str): The file extension.
         """
-        traces = import_traces_file(self.absolute_filepath.with_suffix('.traces'))
+        traces = import_traces_file(self.absolute_path.with_suffix('.traces'))
         intensity = split_dimension(traces, 'trace', ('molecule', 'channel'), (-1, 2))\
             .reset_index(['molecule','frame'], drop=True)
 
-        if not self.absolute_filepath.with_suffix('.nc').is_file():
+        if not self.absolute_path.with_suffix('.nc').is_file():
             self._init_dataset(len(intensity.molecule))
 
-        xr.Dataset({'intensity': intensity}).to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        xr.Dataset({'intensity': intensity}).to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def export_traces_file(self):
         """Export current intensity traces to a .traces file."""
         traces = self.intensity.stack(trace=('molecule', 'channel')).T
-        export_traces_file(traces, self.absolute_filepath.with_suffix('.traces'))
+        export_traces_file(traces, self.absolute_path.with_suffix('.traces'))
         self.extensions.add('.traces')
 
     def perform_mapping(self, method='icp', distance_threshold=3, transformation_type='polynomial',
@@ -1115,7 +1116,7 @@ class File:
             mapping.perform_mapping(distance_threshold=distance_threshold)
             mapping.source_channel_index = 0
             mapping.destination_channel_index = i
-            mapping.file = str(self.relative_filepath)
+            mapping.file = str(self.relative_path)
             mappings.append(mapping)
 
         self.mappings = mappings
@@ -1165,7 +1166,7 @@ class File:
             # axis.axis('off')
             # axis.set_title('')
             figure.set_size_inches(4*len(axes), 8)
-            figure.savefig(self.relativePath / (self.name + '_mapping.png'), bbox_inches="tight", pad_inches=0, dpi=300)
+            figure.savefig(self.directory / (self.name + '_mapping.png'), bbox_inches="tight", pad_inches=0, dpi=300)
 
         return figure, axis
 
@@ -1229,7 +1230,7 @@ class File:
 
     def set_dataset_coordinate(self, **kwargs):
         xr.Dataset(coords=kwargs).to_netcdf(
-            self.absolute_filepath, engine='netcdf4', mode='a'
+            self.absolute_path, engine='netcdf4', mode='a'
         )
 
     def set_variable(self, data, **kwargs):
@@ -1241,7 +1242,7 @@ class File:
             **kwargs: Additional arguments for xarray.DataArray.
         """
         da = xr.DataArray(data, **kwargs)
-        da.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        da.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     @property
     @return_none_when_executed_by_pycharm
@@ -1253,7 +1254,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def selections(self):
         """Return all selection variables from the dataset."""
-        with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+        with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
             return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
                                if key.startswith('selection_')}).load()
 
@@ -1334,7 +1335,7 @@ class File:
         encoding = {
             var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
         }
-        dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        dataset.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
 
     def selection_configurations(self, *selection_names):
         """
@@ -1417,7 +1418,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def classifications(self):
         """Return all classification variables from the dataset."""
-        with xr.open_dataset(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4') as dataset:
+        with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
             return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
                                if key.startswith('classification_')}).load()
 
@@ -1502,7 +1503,7 @@ class File:
             name = 'classification_' + name
         ds = ds.rename({'classification': name})
 
-        ds.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='a')
+        ds.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
         if apply is not None:
             self.apply_classifications(add_to_current=True, **{name: apply})
@@ -1584,7 +1585,7 @@ class File:
         encoding = {
             var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
         }
-        dataset.to_netcdf(self.absolute_filepath.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        dataset.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
 
 
     @property
@@ -1668,28 +1669,28 @@ class File:
         return number_of_states
 
     @property
-    def dwells_filepath(self):
-        return self.absolute_filepath.with_name(self.name + '_dwells').with_suffix('.nc')
+    def dwells_path(self):
+        return self.absolute_path.with_name(self.name + '_dwells').with_suffix('.nc')
 
     @property
     @return_none_when_executed_by_pycharm
     def dwells(self):
         """Load and return the dwell times dataset."""
         if self.has_dwells:
-            return xr.load_dataset(self.dwells_filepath, engine='netcdf4')
+            return xr.load_dataset(self.dwells_path, engine='netcdf4')
         else:
             raise RuntimeError("No dwell times found in the file. Please run 'determine_dwells_from_classification' first.")
 
     @dwells.setter
     def dwells(self, value):
         if value is None:
-            self.dwells_filepath.unlink(missing_ok=True)
+            self.dwells_path.unlink(missing_ok=True)
         else:
-            value.to_netcdf(self.dwells_filepath, engine='netcdf4', mode='w')
+            value.to_netcdf(self.dwells_path, engine='netcdf4', mode='w')
 
     @property
     def has_dwells(self):
-        return self.dwells_filepath.exists()
+        return self.dwells_path.exists()
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
@@ -1738,7 +1739,7 @@ class File:
             if plot:
                 self.plot_dwell_analysis(**plot_dwell_analysis_configuration)
         else:
-            dwell_analysis.to_netcdf(self.absolute_filepath.with_name(save_file_path).with_suffix('.nc'),
+            dwell_analysis.to_netcdf(self.absolute_path.with_name(save_file_path).with_suffix('.nc'),
                                      engine='netcdf4', mode='w')
             if plot:
                 plot_dwell_analysis(dwell_analysis, dwells, **plot_dwell_analysis_configuration)
@@ -1784,7 +1785,7 @@ class File:
         # TODO: Consider whether to save the dwell_analysis in an excel file instead of an nc file.
         """Load and return the dwell analysis results from the netCDF file."""
         # return pd.read_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
-        return xr.load_dataset(self.absolute_filepath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'), engine='netcdf4')
+        return xr.load_dataset(self.absolute_path.with_name(self.name + '_dwell_analysis').with_suffix('.nc'), engine='netcdf4')
 
     @dwell_analysis.setter
     def dwell_analysis(self, dwell_analysis):
@@ -1796,7 +1797,7 @@ class File:
         """
         # dwell_analysis.to_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
         # dataset = xr.DataArray(dataset, dims=('exponential', ' variable'))
-        dwell_analysis.to_netcdf(self.absolute_filepath.with_name(self.name + '_dwell_analysis').with_suffix('.nc'),
+        dwell_analysis.to_netcdf(self.absolute_path.with_name(self.name + '_dwell_analysis').with_suffix('.nc'),
                                  engine='netcdf4', mode='w')
 
     def state_count(self, selected=True, states=None):
@@ -1859,7 +1860,7 @@ class File:
         # TODO: add save
         da = self.get_variable(variable, selected=selected, frame_range=frame_range, average=average)
         figure, axis = histogram(da, axis=axis, **hist_configuration)
-        axis.set_title(str(self.relative_filepath))
+        axis.set_title(str(self.relative_path))
         return figure, axis
 
     def histogram_2D_FRET_intensity_total(self, selected=False, frame_range=None, average=False,
@@ -1984,9 +1985,9 @@ class File:
         filename = Movie.image_info_to_filename(self.name, **projection_image_configuration)
 
         if projection_image_configuration['projection_type'] == 'average':
-            figure.suptitle('Average image\n' + str(self.relativePath / filename))
+            figure.suptitle('Average image\n' + str(self.directory / filename))
         elif projection_image_configuration['projection_type'] == 'maximum':
-            figure.suptitle('Maximum projection\n' + str(self.relativePath / filename))
+            figure.suptitle('Maximum projection\n' + str(self.directory / filename))
 
         if unit == 'pixel':
             unit_string = ' (pixels)'
@@ -2113,7 +2114,7 @@ class File:
 
         from papylio.trace_plot import TracePlotWindow
         TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
-                        dataset_path=self.absolute_filepath.with_suffix('.nc'), save_path=save_path, **kwargs)
+                        dataset_path=self.absolute_path.with_suffix('.nc'), save_path=save_path, **kwargs)
 
 
 def calculate_intensity_total(intensity):

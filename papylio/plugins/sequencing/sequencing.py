@@ -313,7 +313,7 @@ class Experiment:
             files = self.files
         from objectlist import ObjectList
         return ObjectList([file for file in files
-                           if file.absolute_filepath.with_name(file.name + '_sequencing_match.nc').is_file()])
+                           if file.absolute_path.with_name(file.name + '_sequencing_match.nc').is_file()])
 
     def sequencing_matches(self, files=None):
         if files is None:

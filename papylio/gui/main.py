@@ -219,7 +219,7 @@ class MainWindow(QMainWindow):
         print('add')
 
     def addFile(self, file, experimentNode):
-        folders = file.relativePath.parts
+        folders = file.directory.parts
 
         parentItem = experimentNode
         parentItem.setCheckable(True)
