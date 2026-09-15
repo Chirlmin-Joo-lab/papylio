@@ -348,6 +348,7 @@ class Movie:
 
         # self.rotation = rotation
         # self.correct_images = False
+        self.rot90 = 0
 
         self.chunk_size = 100
         self.use_dask = False
@@ -555,7 +556,7 @@ class Movie:
         image rotations if needed.
         """
         self._read_metadata()
-        if not (self.rotation % 2 == 0):
+        if not (self.__dict__.get("rot90", 0)  % 2 == 0):
             width = self.width
             height = self.height
             self.width = height
