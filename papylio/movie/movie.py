@@ -199,9 +199,9 @@ class Movie:
             image_info['fov_index'] = int(fov_index_result.group())
 
         if '_ave' in filename:
-            image_info['projection_type'] = 'average'
+            image_info['projection'] = 'average'
         elif '_max' in filename:
-            image_info['projection_type'] = 'maximum'
+            image_info['projection'] = 'maximum'
 
         frame_start = re.search(r'(?<=_f)\d*(?=[-])', filename)
         if frame_start is not None:
@@ -247,7 +247,7 @@ class Movie:
         return image_info
 
     @classmethod
-    def image_info_to_filename(cls, filename, fov_index=None, **projection_image_configuration):
+    def image_info_to_filename(cls, filename, fov_index=None, **image_configuration):
         """Construct standardized filename from base name and image metadata.
 
         Parameters
@@ -264,22 +264,22 @@ class Movie:
             Formatted filename with metadata embedded
         """
 
-        projection_image_configuration = get_default_parameters(cls.make_projection_image) | projection_image_configuration
+        image_configuration = get_default_parameters(cls.get_image) | image_configuration
 
         # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
         if fov_index is not None:
             # filename += f'_fov{self.fov_info["fov_chosen"]:03d}'
             filename += f'_fov{fov_index:03d}'
 
-        projection_type = projection_image_configuration.get('projection_type', None)
-        if projection_type is not None:
-            filename += '_' + projection_type[:3]
+        projection = image_configuration.get('projection', None)
+        if projection is not None:
+            filename += '_' + projection[:3]
 
-        frame_range = projection_image_configuration.get('frame_range', None)
+        frame_range = image_configuration.get('frame_range', None)
         if frame_range is not None:
             filename += str(range(*frame_range)).replace('range(', '_f').replace(', ', '-').replace(')', '')
 
-        illumination = projection_image_configuration.get('illumination', None)
+        illumination = image_configuration.get('illumination', None)
         if illumination is not None:  # and self.number_of_illuminations_in_movie > 1:
             if isinstance(illumination, str):
                 illumination_index = cls.illuminations.index(illumination)
@@ -289,15 +289,16 @@ class Movie:
                 raise ValueError('Invalid illumination type')
             filename += f'_i{illumination_index}'
 
-        # if channel is not None:  # and self.number_of_illuminations_in_movie > 1:
-        #     channel_index = cls.get_channel_from_name(channel).index
-        #     filename += f'_i{channel_index}'
+        channels = image_configuration.get('channels', None)
+        if channels is not None:  # and self.number_of_illuminations_in_movie > 1:
+            channel_index = cls.get_channel_indices_from_names(channels)
+            filename += f'_i{channel_index}'
 
-        apply_corrections = projection_image_configuration.get('apply_corrections', False)
+        apply_corrections = image_configuration.get('apply_corrections', False)
         if apply_corrections is False:
             filename += '_raw'
 
-        overlay_channels = projection_image_configuration.get('overlay_channels', False)
+        overlay_channels = image_configuration.get('overlay_channels', False)
         if overlay_channels:
             filename += '_overlay'
 
@@ -456,7 +457,7 @@ class Movie:
 
     @property
     def frame_indices(self):
-        return xr.DataArray(np.arange(self.number_of_frames), dims='frame')
+        return np.arange(self.number_of_frames)
 
     @property
     def rotation(self):
@@ -788,6 +789,10 @@ class Movie:
         return frames
 
     def get_channel_indices_from_names(self, channel_names):
+        if channel_names in [None, 'all']:
+            channel_indices = np.arange(len(self.channels))
+            return channel_indices
+
         if not (isinstance(channel_names, list) or isinstance(channel_names, tuple)):
             channel_names = [channel_names]
         channel_indices = []
@@ -811,15 +816,46 @@ class Movie:
             frame = self.read_frames([i], apply_corrections=False, xarray=False)
             tifffile.imwrite(tif_filepath, frame, append=True)
 
-    def make_projection_image(self, projection_type='average', frame_range=(0,20), apply_corrections=True,
-                              illumination=None, overlay_channels=False, flatten_channels=False):
+    def project_frames(self, frame_indices, projection='average', **read_frames_kwargs):
+        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float64'), self.channel_arrangement)
+        frame_indices_subsets = np.array_split(frame_indices, len(frame_indices) // self.chunk_size + 1)
+
+        if projection == 'average':
+            number_of_frames = len(frame_indices)
+            with self:
+                for frame_indices_subset in tqdm.tqdm(frame_indices_subsets, desc='Average image'):
+                    frames = self.read_frames(frame_indices_subset, **read_frames_kwargs)
+                    image = image + frames.sum(axis=0)
+                # TODO: Check whether this is a good way to average, i.e. do the values not get too big.
+            image = (image / number_of_frames).astype('float32')
+        elif projection == 'maximum':
+            with self:
+                for frame_indices_subset in tqdm.tqdm(frame_indices_subsets, desc='Maximum projection image'):
+                    frames = self.read_frames(frame_indices_subset, **read_frames_kwargs)
+                    image = np.maximum(image, frames.max(axis=0))
+        return image
+
+    def overlay_channels(self, image):
+        """Overlay channels on top of image."""
+
+        if image.ndim == 3:
+            image = image[None, ...]
+
+        for i in range(image.shape[0]):
+            for j in self.channel_indices[1:].values:
+                image[i, j, :, :] = self.channel_mapping[j - 1].transform_image(image[i, j, :, :], inverse=True)
+        image = image.sum(axis=0, keepdims=True)
+        return image
+
+    def get_image(self, frames=slice(0, 20), channels=None, illumination=None,
+                  projection=None, apply_corrections=True, overlay_channels=False, flatten_channels=False):
         """ Construct a projection image
         Determine a projection image for a number_of_frames starting at start_frame.
         i.e. [start_frame, start_frame + number_of_frames)
 
         Parameters
         ----------
-        projection_type : str
+        projection : str
             'average' for average image
             'maximum' for maximum projection image
         start_frame : int
@@ -835,17 +871,19 @@ class Movie:
             2d image array with the projected image
         """
 
-        frame_range = list(frame_range)
-        # Make suitable for negative values
-        if frame_range[0] > self.number_of_frames:
-            raise ValueError(f'Invalid frame range {frame_range}')
-        if frame_range[1] is None:
-            frame_range = (frame_range[0], self.number_of_frames)
-        if frame_range[1] > self.number_of_frames:
-            frame_range[1] = self.number_of_frames
-            warnings.warn(f'Frame range exceeds available frames, used frame range {frame_range} instead')
+        if frames is None:
+            frame_indices = self.frame_indices
+        elif isinstance(frames, slice):
+            frame_indices = self.frame_indices[frames]
+        elif isinstance(frames, range):
+            frame_indices = list(frames)
+        else:
+            frame_indices = frames
 
-        frame_indices = self.frame_indices.values[slice(*frame_range)]
+        if np.max(frame_indices) > self.number_of_frames-1:
+            raise ValueError(f'Incorrect frame indices, choose frames between 0 and {self.number_of_frames - 1}')
+
+        channel_indices = self.get_channel_indices_from_names(channels)
 
         illumination_indices = self.get_illumination_indices_from_names(illumination)
         illumination_index = np.intersect1d(illumination_indices, self.illumination_indices_in_movie)[0]
@@ -853,49 +891,36 @@ class Movie:
         # Select frame_indices with illumination
         frame_indices = frame_indices[self.illumination_index_per_frame.values[frame_indices] == illumination_index]
 
-        # Calculate sum of frames and find mean
-        image = self.separate_channels(np.zeros((self.height, self.width)).astype('float32'), self.channel_arrangement)
 
-        frame_indices_subsets = np.array_split(frame_indices, len(frame_indices) // self.chunk_size + 1)
+        if projection is None:
+            image = self.read_frames(frame_indices, apply_corrections=apply_corrections, xarray=xarray, flatten_channels=flatten_channels)
+        else:
+            image = self.project_frames(frame_indices, projection=projection, apply_corrections=apply_corrections,
+                                         xarray=xarray, flatten_channels=flatten_channels)
 
-        if projection_type == 'average':
-            number_of_frames = len(frame_indices)
-            with self:
-                for frame_indices_subset in tqdm.tqdm(frame_indices_subsets, desc='Average image'):
-                    frames = self.read_frames(frame_indices_subset, apply_corrections=apply_corrections,
-                                              xarray=False, flatten_channels=False)
-                    image = image + frames.sum(axis=0)
-                #TODO: Check whether this is a good way to average, i.e. do the values not get too big.
-            image = (image / number_of_frames).astype('float32')
-        elif projection_type == 'maximum':
-            with self:
-                for frame_indices_subset in tqdm.tqdm(frame_indices_subsets, desc='Maximum projection image'):
-                    frames = self.read_frames(frame_indices_subset, xarray=False, flatten_channels=False)
-                    image = np.maximum(image, frames.max(axis=0))
+        image = image[...,channel_indices,:,:]
 
         if overlay_channels:
-            for i in self.channel_indices[1:].values:
-                image[i, :, :] = self.channel_mapping[i-1].transform_image(image[i, :, :], inverse=True)
-            image = image.sum(axis=0, keepdims=True)
+            image = self.overlay_channels(image)
 
         if flatten_channels:
             image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
 
         return image
 
-    def save_projection_image(self, intensity_range=None, color_map='gray', path=None, filename=None, filetype='tif',
-                              **projection_image_configuration):
-        image = self.make_projection_image(**projection_image_configuration)
+    def save_image(self, intensity_range=None, color_map='gray', path=None, filename=None, filetype='tif',
+                   **image_configuration):
+        image = self.get_image(**image_configuration)
 
         if path is None:
             path = self.writepath
 
         if filename is None:
-            filename = Movie.image_info_to_filename(self.name, **projection_image_configuration)
+            filename = Movie.image_info_to_filename(self.name, **image_configuration)
 
         filepath = path.joinpath(filename)
 
-        if projection_image_configuration.get('overlay_channels', False):
+        if image_configuration.get('overlay_channels', False):
             channel_names = 'overlay'
             channel_arrangement = np.array([[[0]]])
         else:
@@ -933,8 +958,8 @@ class Movie:
         return image
 
     @staticmethod
-    def load_projection_image(filepath, **projection_image_configuration):
-        image_filename = Movie.image_info_to_filename(filepath.name, **projection_image_configuration)
+    def load_image(filepath, **image_configuration):
+        image_filename = Movie.image_info_to_filename(filepath.name, **image_configuration)
         image_filepath = filepath.with_name(image_filename).with_suffix('.tif')
 
         if image_filepath.is_file():
@@ -947,67 +972,67 @@ class Movie:
             return None
             # raise FileNotFoundError(f'Projection image not found at {image_filepath}')
 
-    def make_projection_images(self, projection_type='average', frame_range=(0, 20)):
-        # Perhaps put this in make_projection_image as a special type of cmap
-        for illumination_index in range(self.number_of_illuminations_in_movie):
-            image = self.make_projection_image(projection_type, frame_range=(0,20), illumination=illumination_index,
-                                               flatten_channels=False)
-            channel_images = []
-            for channel_index in range(self.number_of_channels):
-                channel_image = image[channel_index]
-                channel_image = (channel_image - self.intensity_range[0]) / (self.intensity_range[1] - self.intensity_range[0]) # TODO: make separate intensity range for each channel
-                # channel_images.append(self.channels[channel_index].colour_map(channel_image, bytes=True))
-                channel_images.append(channel_image)
+    # def make_projection_images(self, projection='average', frame_range=(0, 20)):
+    #     # Perhaps put this in make_projection_image as a special type of cmap
+    #     for illumination_index in range(self.number_of_illuminations_in_movie):
+    #         image = self.make_projection_image(projection, frame_range=(0,20), illumination=illumination_index,
+    #                                            flatten_channels=False)
+    #         channel_images = []
+    #         for channel_index in range(self.number_of_channels):
+    #             channel_image = image[channel_index]
+    #             channel_image = (channel_image - self.intensity_range[0]) / (self.intensity_range[1] - self.intensity_range[0]) # TODO: make separate intensity range for each channel
+    #             # channel_images.append(self.channels[channel_index].colour_map(channel_image, bytes=True))
+    #             channel_images.append(channel_image)
+    #
+    #         images_combined = np.hstack(channel_images)
+    #         filename = Movie.image_info_to_filename(self.name, fov_index=self.fov_index, projection=projection,
+    #                                                 frame_range=frame_range, illumination=illumination_index)
+    #         filepath = self.writepath.joinpath(filename)
+    #         plt.imsave(filepath.with_suffix('.png'), images_combined)
 
-            images_combined = np.hstack(channel_images)
-            filename = Movie.image_info_to_filename(self.name, fov_index=self.fov_index, projection_type=projection_type,
-                                                    frame_range=frame_range, illumination=illumination_index)
-            filepath = self.writepath.joinpath(filename)
-            plt.imsave(filepath.with_suffix('.png'), images_combined)
-
-    def make_average_image(self, **kwargs):
-        """ Construct an average image
-        Determine average image for a number_of_frames starting at start_frame.
-        i.e. [start_frame, start_frame + number_of_frames)
-
-        Parameters
-        ----------
-        start_frame : int
-            Frame to start with
-        number_of_frames : int
-            Number of frames to average over
-        write : bool
-            If true, the a tif file will be saved in the writepath
-
-        Returns
-        -------
-        np.ndarray
-            2d image array with the average image
-
-        """
-        return self.make_projection_image('average', **kwargs)
-
-    def make_maximum_projection(self, **kwargs):
-        """ Construct a maximum projection image
-        Determine maximum projection image for a number_of_frames starting at start_frame.
-        i.e. [start_frame, start_frame + number_of_frames)
-
-        Parameters
-        ----------
-        start_frame : int
-            Frame to start with
-        number_of_frames : int
-            Number of frames to average over
-        write : bool
-            If true, the a tif file will be saved in the writepath
-
-        Returns
-        -------
-        np.ndarray
-            2d image array with the maximum projection image
-        """
-
-        return self.make_projection_image('maximum', **kwargs)
+    # def make_average_image(self, **kwargs):
+    #     """ Construct an average image
+    #     Determine average image for a number_of_frames starting at start_frame.
+    #     i.e. [start_frame, start_frame + number_of_frames)
+    #
+    #     Parameters
+    #     ----------
+    #     start_frame : int
+    #         Frame to start with
+    #     number_of_frames : int
+    #         Number of frames to average over
+    #     write : bool
+    #         If true, the a tif file will be saved in the writepath
+    #
+    #     Returns
+    #     -------
+    #     np.ndarray
+    #         2d image array with the average image
+    #
+    #     """
+    #     return self.make_projection_image('average', **kwargs)
+    #
+    # def make_maximum_projection(self, **kwargs):
+    #     """ Construct a maximum projection image
+    #     Determine maximum projection image for a number_of_frames starting at start_frame.
+    #     i.e. [start_frame, start_frame + number_of_frames)
+    #
+    #     Parameters
+    #     ----------
+    #     start_frame : int
+    #         Frame to start with
+    #     number_of_frames : int
+    #         Number of frames to average over
+    #     write : bool
+    #         If true, the a tif file will be saved in the writepath
+    #
+    #     Returns
+    #     -------
+    #     np.ndarray
+    #         2d image array with the maximum projection image
+    #     """
+    #
+    #     return self.make_projection_image('maximum', **kwargs)
 
     def show(self):
         return MoviePlotter(self)
