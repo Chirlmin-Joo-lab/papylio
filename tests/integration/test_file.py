@@ -81,7 +81,7 @@ def test_maximum_projection_image(file, shared_datadir):
     assert (image_loaded == image_from_original_file).all()
 
 def test_show_image(file):
-    file.get_projection_image(load=False)
+    file.get_image(load=False)
     file.show_image()
 
 def test_perform_mapping(experiment, shared_datadir):

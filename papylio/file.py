@@ -273,19 +273,7 @@ class File:
         #TODO this needs to be independent from Experiment and should probably be set.
         return self.experiment.number_of_channels
 
-    def projection_image(self, **kwargs):
-        """Return the default projection image."""
-        return self.get_projection_image(**kwargs)
-
-    def average_image(self, **kwargs):
-        """Return the average projection image."""
-        return self.get_projection_image(projection_type='average', **kwargs)
-
-    def maximum_projection_image(self, **kwargs):
-        """Return the maximum projection image."""
-        return self.get_projection_image(projection_type='maximum', **kwargs)
-
-    def get_projection_image(self, load=True, **projection_image_configuration):
+    def get_image(self, load=True, **image_configuration):
         """
         Get or generate a projection image.
 
@@ -299,12 +287,12 @@ class File:
         # TODO: Add option to flatten channels?
         # TODO: Check handling of frame_range = (0, None)
         if load:
-            image = Movie.load_projection_image(self.absolute_path, **projection_image_configuration)
+            image = Movie.load_image(self.absolute_path, **image_configuration)
         else:
             image = None
 
         if image is None:
-            image = self.movie.save_projection_image(**projection_image_configuration)
+            image = self.movie.save_image(**image_configuration)
 
         return image
 
@@ -664,8 +652,8 @@ class File:
 
     def use_for_darkfield_correction(self):
         """Use the average projection of this file as a darkfield correction image for the experiment."""
-        self.movie.save_projection_image(projection_type='average', frame_range=(0, self.movie.number_of_frames),
-                                         apply_corrections=False, path=self.experiment.main_path, filename='darkfield', filetype='tif')
+        self.movie.save_image(projection='average', frame_range=(0, self.movie.number_of_frames),
+                              apply_corrections=False, path=self.experiment.main_path, filename='darkfield', filetype='tif')
         self.experiment.load_darkfield_correction()
 
     def find_coordinates(self, channels=(0, 1),
@@ -693,7 +681,7 @@ class File:
         self.movie.read_metadata()
 
         # TODO: Perhaps it is best to always return an image with a channel dimension (when overlay_channels this can be one)
-        image = self.get_projection_image(**projection_image_configuration)
+        image = self.get_image(**projection_image_configuration)
         channel_index = self.movie.get_channel_indices_from_names(channels)[0]
         # if channel_index is None:
         #     raise ValueError('Unknown channel')
@@ -733,14 +721,15 @@ class File:
 
         self.set_coordinates_of_channel(coordinates, channel=channel_index)
 
-    def determine_psf_size(self, method='gaussian_fit', projection_type='average', frame_range=(0,20), channel_index=0, illumination_index=0,
+    # TODO: update with new image_configuration
+    def determine_psf_size(self, method='gaussian_fit', projection='average', frame_range=(0, 20), channel_index=0, illumination_index=0,
                            peak_finding_configuration={'minimum_intensity_difference': 150}, maximum_radius=5):
         """
         Determine the Point Spread Function (PSF) size by fitting Gaussians to detected peaks.
 
         Parameters:
             method (str, optional): Method to determine PSF size ('gaussian_fit' or 'median'). Default is 'gaussian_fit'.
-            projection_type (str, optional): Type of image projection to use. Default is 'average'.
+            projection (str, optional): Type of image projection to use. Default is 'average'.
             frame_range (tuple, optional): Range of frames to use for projection. Default is (0, 20).
             channel_index (int, optional): Index of the channel to use. Default is 0.
             illumination_index (int, optional): Index of the illumination to use. Default is 0.
@@ -751,8 +740,8 @@ class File:
             float: The determined PSF size.
         """
 
-        image = self.get_projection_image(projection_type=projection_type, frame_range=frame_range,
-                                          illumination=illumination_index)
+        image = self.get_image(projection=projection, frame_range=frame_range,
+                               illumination=illumination_index)
         image = image[channel_index]
 
         coordinates = find_peaks(image=image, **peak_finding_configuration)  # .astype(int)))
@@ -774,7 +763,7 @@ class File:
 
         psf_size_path = self.experiment.analysis_path.joinpath('PSF_size')
         psf_size_path.mkdir(parents=True, exist_ok=True)
-        filename = Movie.image_info_to_filename('fits_in_image', projection_type=projection_type, frame_range=frame_range,
+        filename = Movie.image_info_to_filename('fits_in_image', projection=projection, frame_range=frame_range,
                                                 illumination=illumination_index) + f'_c{channel_index}.png'
         fig.savefig(psf_size_path / filename, bbox_inches='tight')
 
@@ -803,7 +792,7 @@ class File:
         ax.vlines(psf_size, *y_range, color='r')
         ax.set_ylim(y_range)
         ax.set_title(f'psf_size = {psf_size}')
-        filename = Movie.image_info_to_filename('sigma_plot', projection_type=projection_type, frame_range=frame_range,
+        filename = Movie.image_info_to_filename('sigma_plot', projection=projection, frame_range=frame_range,
                                                 illumination=illumination_index) + f'_c{channel_index}.png'
         fig.savefig(psf_size_path / filename, bbox_inches='tight')
 
@@ -1065,14 +1054,14 @@ class File:
         #TODO: Update this for the new image style and for multiple mappings
 
         if projection_image_configuration is None:
-            projection_image_configuration = dict(frame_range=(0,20), projection_type='average')
+            projection_image_configuration = dict(frame_range=(0,20), projection='average')
 
         if peak_finding_configuration is None:
             #TODO: Also make it possible to input just a dict, instead of a list of dicts
             peak_finding_configuration =[{'method': 'local-maximum-auto', 'filter_neighbourhood_size_min': 10,
                                                       'filter_neighbourhood_size_max': 5}] * self.movie.number_of_channels
 
-        image = self.get_projection_image(**projection_image_configuration)
+        image = self.get_image(**projection_image_configuration)
 
         print(transformation_type)
 
@@ -1149,10 +1138,10 @@ class File:
             raise RuntimeError('File does not contain a mapping.')
 
         if projection_image_configuration is None:
-            projection_image_configuration = dict(frame_range=(0, 20), projection_type='average')
+            projection_image_configuration = dict(frame_range=(0, 20), projection='average')
 
         #TODO: Update this after updating show_image
-        figure, axes = self.show_image(axes=axes, unit=unit, projection_image_configuration=projection_image_configuration)
+        figure, axes = self.show_image(axes=axes, unit=unit, image_configuration=projection_image_configuration)
         for i, axis in enumerate(axes):
             if i==0:
                 self.mappings[0].show(axis=axes[0], show_source=True, show_destination=False, show_transformed_coordinates=False)
@@ -1955,7 +1944,7 @@ class File:
 
         return axes
 
-    def show_image(self, axes=None, unit='pixel', projection_image_configuration=None, imshow_configuration=None):
+    def show_image(self, axes=None, unit='pixel', image_configuration=None, imshow_configuration=None):
         #TODO: Finish docstring
         """
         Show a projection image of the movie.
@@ -1966,13 +1955,13 @@ class File:
         # TODO: Show two channels separately and connect axes
         # Split configuration based on inspect??
 
-        if projection_image_configuration is None:
-            projection_image_configuration = {}
+        if image_configuration is None:
+            image_configuration = {}
 
         if imshow_configuration is None:
             imshow_configuration = {}
 
-        image = self.get_projection_image(**projection_image_configuration)
+        image = self.get_image(**image_configuration)
 
         if axes is None:
             figure, axes = plt.subplots(1, image.shape[0], sharex=True, sharey=True, layout='tight')
@@ -1980,13 +1969,13 @@ class File:
             figure = axes[0].figure
         figure.subplots_adjust(wspace=0, hspace=0)
 
-        projection_image_configuration_defaults = get_default_parameters(Movie.make_projection_image)
-        projection_image_configuration = (projection_image_configuration_defaults | projection_image_configuration)
-        filename = Movie.image_info_to_filename(self.name, **projection_image_configuration)
+        image_configuration_defaults = get_default_parameters(Movie.get_image)
+        image_configuration = (image_configuration_defaults | image_configuration)
+        filename = Movie.image_info_to_filename(self.name, **image_configuration)
 
-        if projection_image_configuration['projection_type'] == 'average':
+        if image_configuration['projection'] == 'average':
             figure.suptitle('Average image\n' + str(self.directory / filename))
-        elif projection_image_configuration['projection_type'] == 'maximum':
+        elif image_configuration['projection'] == 'maximum':
             figure.suptitle('Maximum projection\n' + str(self.directory / filename))
 
         if unit == 'pixel':
@@ -2093,7 +2082,7 @@ class File:
         Show projection image with overlaid molecule coordinates.
         """
 
-        figure, axes = self.show_image(axes=axes, unit=unit, projection_image_configuration=projection_image_configuration,
+        figure, axes = self.show_image(axes=axes, unit=unit, image_configuration=projection_image_configuration,
                                        imshow_configuration=imshow_configuration)
         self.show_coordinates(axes=axes, annotate=annotate, unit=unit, scatter_configuration=scatter_configuration)
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
