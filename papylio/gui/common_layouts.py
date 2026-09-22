@@ -71,11 +71,12 @@ class Group_Box(QGroupBox):
     def __init__(self, parent=None, title="title", highlight=False):
         super().__init__(parent)
         self.setTitle(title)
+        self.setMaximumWidth(250)
 
         base_style = """
         QGroupBox {
             border: 1px solid gray;
-            border-radius: 3px;
+            border-radius: 5px;
             margin-top: 10px;  /* space for title */
         }
 
@@ -92,6 +93,8 @@ class Group_Box(QGroupBox):
             font-weight: bold;
         }
         """
+
+
 
         if highlight:
             self.setStyleSheet(base_style + highlight_style)
@@ -152,7 +155,7 @@ def get_input_type(annotation, default):
             widget.setText(str(default))
     return widget
 
-def build_form(func, skip_inputs=['image']):
+def build_form(func, skip_inputs=['image'], defaults={}):
     # --- build form for a function with fitting input parameters.
     # inputs to be skipped can be specified
     form_widget = QWidget()
@@ -167,8 +170,11 @@ def build_form(func, skip_inputs=['image']):
         default = param.default if param.default is not inspect.Parameter.empty else None
         annotation = param.annotation
         widget = get_input_type(annotation=annotation, default=default)
+        if param_name in defaults:
+            widget.setText(defaults[param_name])
         form.addRow(f"{param_name}:", widget)
         inputs[param_name] = widget
+
 
     return form_widget, inputs
 

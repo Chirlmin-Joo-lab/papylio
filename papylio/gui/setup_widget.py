@@ -1,18 +1,12 @@
 
 from PySide2.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
-    QComboBox, QLineEdit, QSpinBox, QFormLayout, QButtonGroup, QRadioButton, QLabel, QMessageBox
+    QComboBox, QLineEdit, QSpinBox, QFormLayout, QButtonGroup, QRadioButton, QCheckBox, QMessageBox
 from PySide2.QtCore import Qt, Signal
 from papylio import File
 from papylio.gui.common_layouts import (Expander, HelpDialog,Group_Box,
                                         build_control_layouts,make_push_button,
                                         build_form,build_parameters_input, get_button_value)
 from papylio.movie.movie import Channel
-#for registry:
-from papylio.peak_finding import (find_peaks_absolute_threshold,
-                                  find_peaks_adaptive_threshold,
-                                  find_peaks_local_maximum,
-                                  find_peaks_local_maximum_auto,
-                                  find_peaks_relative_local_maximum)
 
 #from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import (
@@ -72,21 +66,67 @@ class SetUpWidget(QWidget):
         movie_setup_layout.addRow("Number of channels", channel_layout)
 
 
-        advanced_layout = QHBoxLayout()
-        advanced_layout.setAlignment(Qt.AlignLeft)
-        advanced_layout.addWidget(frame_movie)
+
+        # movie corrections box 1: darkfield ---------------------------------
+        frame_darkfield = Group_Box(title="Darkfield", highlight=False)
+        frame_darkfield.setToolTip('"see help')
+        shading_correction_layout = QFormLayout(frame_darkfield)
+        # method:
+        self.method_shading = QComboBox()
+        self.method_shading.setToolTip("Choose method")
+        self.method_shading.addItems(['any', 'any'])
+        # frame range:
+        self.button_frame_range = QLineEdit()
+        self.button_frame_range.setText("[0, 20]")
+        # skipbox:
+        self.skip_shading_checkbox = QCheckBox()
+        # fill box:
+        shading_correction_layout.addRow("method:", self.method_shading)
+        # shading_correction_layout.addRow("frame range:", self.button_frame_range)
+        shading_correction_layout.addRow("skip", self.skip_shading_checkbox)
+
+        # movie corrections box 2: flatfield ---------------------------------
+        frame_flatfield = Group_Box(title="Flatfield", highlight=False)
+        frame_flatfield.setToolTip('"see help')
+        frame_flatfield_layout = QFormLayout(frame_flatfield)
+        # method:
+        self.method_flatfield = QComboBox()
+        self.method_flatfield.setToolTip("Choose method")
+        self.method_flatfield.addItems(['any', 'any'])
+        # frame range:
+        self.button_frame_range_flatfield = QLineEdit()
+        self.button_frame_range_flatfield.setText("[0, 20]")
+        # fill box:
+        frame_flatfield_layout.addRow("method:", self.method_flatfield)
+
+
+        #basic:
+        setup_layout = QHBoxLayout()
+        setup_layout.setAlignment(Qt.AlignLeft)
+        setup_layout.addWidget(frame_movie)
+        #advanced:
+        setup_layout_advanced = QHBoxLayout()
+        setup_layout_advanced.setAlignment(Qt.AlignLeft)
+        setup_layout_advanced.addWidget(frame_darkfield)
+        setup_layout_advanced.addWidget(frame_flatfield)
 
         # build panel layout:
-        # setup_advanced = Expander("Advanced")
-        # setup_advanced.setContentLayout(advanced_layout)
+        setup_advanced = Expander("Advanced")
+        setup_advanced.setContentLayout(setup_layout_advanced)
+
 
         start_help_button = build_control_layouts([
+            make_push_button('About', self.show_about, None),
             make_push_button('Help', self.show_main_help, None)])
 
+
         start_tab_layout = QVBoxLayout()
-        #TODO: development: keep invisible as long as it doesn't function:
-        # start_tab_layout.addWidget(setup_advanced)
-        start_tab_layout.addLayout(advanced_layout)
+        start_tab_layout.addLayout(setup_layout)
+
+        #advanced:-------------------------------------------
+        #TODO: placeholder for possible later addition, currently hidden
+        #start_tab_layout.addWidget(setup_advanced)
+        #----------------------------------------------------
         start_tab_layout.addStretch()
         start_tab_layout.addWidget(start_help_button)
         self.setLayout(start_tab_layout)
@@ -143,7 +183,7 @@ class SetUpWidget(QWidget):
                                        Channel(file.movie, 'red', 'r', other_names=['acceptor', 'a'])]
                 file.movie.channel_arrangement = [[[0, 1]]]
 
-    def show_main_help(self):
+    def show_about(self):
         help_text = """
                 <html>
                   <body style="font-family: sans-serif; font-size: 10pt;">
@@ -157,6 +197,9 @@ class SetUpWidget(QWidget):
                     <ul>
                       <li>Select and view movies and variables in the top panel</li>
                       <li>Walk the pipeline via the tabs in the bottom panel</li>
+                      <li>Blue tabs contain general procedures (such as global background treatment)</li>
+                      <li>Other tabs contain per-movie procedures </li>
+                      
                     </ul>
 
                     <p>
@@ -174,11 +217,11 @@ class SetUpWidget(QWidget):
                         <li>Hover over buttons for help notes.</li>
                         <li>Find more detailed info under the 'Help' buttons per tab</li>
                     </ul>
-                    
+
                     [1] Note: as-loaded settings may have different sources. All used settings can be found per movie in the corresponding .log files
 
                     </p>
-                    
+
                     <h3>Known Issues</h3>
 
                     <p>
@@ -186,11 +229,29 @@ class SetUpWidget(QWidget):
                       <a href="https://github.com/Chirlmin-Joo-lab/papylio/issues">
                         Papylio Issues
                       </a>.
+                    </p>
 
+                  </body>
+                </html>
+                """
+        self.help_dialog = HelpDialog(self, help_text)
+        # dialog.exec_()  # modal
+        self.help_dialog.show()
+
+    def show_main_help(self):
+        help_text = """
+                <html>
+                  <body style="font-family: sans-serif; font-size: 10pt;">
+
+                    <h2>Setup</h2>
                     
-                    <h3>This tab (Start)</h3>
                     <p>
-                      Settings in this panel require extra actions to take effect: 
+                    General presets
+                    </p>
+                    
+                    <h3>Movie panel</h3>
+                    <p>
+                      Settings in the 'movie' panel require extra actions to take effect: 
                     </p>
 
                     <p>
@@ -201,12 +262,52 @@ class SetUpWidget(QWidget):
                         <li> Unselect-select or 'refresh' </li>
                       </ol>
                     </p>
-                    
-                    </p>
-
                   </body>
                 </html>
                 """
         self.help_dialog = HelpDialog(self, help_text)
         # dialog.exec_()  # modal
         self.help_dialog.show()
+
+# < h3 > Darkfield < / h3 >
+# < p >
+# Darkfield
+# image: used
+# to
+# correct
+# for unevenness of camera field, holds for all data movies.
+# It is assumed
+# that
+# a
+# proper
+# experimental
+# file
+# was
+# acquired.
+# < / p >
+#
+# < h3 > Flatfield < / h3 >
+# < p >
+# Flatfield
+# image: used
+# to
+# correct
+# for unevenness of illumination per illumination channel, holds for all data movies.
+# It is assumed
+# that
+# proper
+# experimental
+# files
+# were
+# acquired
+# to
+# determine
+# these
+# corrections.
+# < / p >
+# < / p >
+#
+#
+#
+#
+#
