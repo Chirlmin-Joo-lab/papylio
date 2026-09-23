@@ -9,6 +9,7 @@ import warnings
 import tqdm
 import re
 import json
+from dataclasses import dataclass
 from pathlib import Path
 import tifffile
 import numpy as np
@@ -32,7 +33,7 @@ class Movie:
     image data from various microscopy file formats.
     """
 
-    unit_mapping = mp.MatchPoint()
+    unit_mapping = None #mp.MatchPoint() # Is set first time in Movie init.
     default_microscope = None
 
     _rotation = None
@@ -166,88 +167,88 @@ class Movie:
 
         return illumination_indices
 
+    # @classmethod
+    # def image_info_from_filename(cls, filename):
+    #     """Extract image metadata from filename using regex patterns.
+    #
+    #     Parses standardized filename format to extract FOV index, projection type,
+    #     frame range, illumination index, and correction flags.
+    #
+    #     Parameters
+    #     ----------
+    #     filename : str
+    #         Image filename to parse
+    #
+    #     Returns
+    #     -------
+    #     dict
+    #         Dictionary containing extracted image metadata
+    #
+    #     Notes
+    #     -----
+    #     Filename format patterns recognized:
+    #     - _fov{N}: Field of view index
+    #     - _ave/_max: Projection type
+    #     - _f{start}-{end}-{interval}: Frame range
+    #     - _i{N}: Illumination index
+    #     - _raw: Indicates raw (uncorrected) image
+    #     """
+    #     image_info = {}
+    #
+    #     fov_index_result = re.search(r'(?<=_fov)\d*(?=[_.])', filename)
+    #     if fov_index_result is not None:
+    #         image_info['fov_index'] = int(fov_index_result.group())
+    #
+    #     if '_ave' in filename:
+    #         image_info['projection'] = 'average'
+    #     elif '_max' in filename:
+    #         image_info['projection'] = 'maximum'
+    #
+    #     frame_start = re.search(r'(?<=_f)\d*(?=[-])', filename)
+    #     if frame_start is not None:
+    #         frame_end = re.search(rf'(?<=_f{frame_start.group()}-)\d*(?=[-_.])', filename)
+    #         frame_interval = re.search(rf'(?<=_f{frame_start.group()}-{frame_end.group()}-)\d*(?=[_.])', filename)
+    #         if frame_end is not None:
+    #             frame_range = (int(frame_start.group()), int(frame_end.group()))
+    #         else:
+    #             raise ValueError('Invalid filename')
+    #         if frame_interval is not None:
+    #             frame_range += (int(frame_interval.group()),)
+    #         image_info['frame_range'] = frame_range
+    #
+    #     illumination_result = re.search(r'(?<=_i)\d*(?=[_.])', filename)
+    #     if illumination_result is None:
+    #         image_info['illumination_index'] = None  # list(self.illumination_indices.values)
+    #     else:
+    #         image_info['illumination_index'] = int(illumination_result.group())
+    #
+    #     # channel_result = re.search('(?<=_c)\d*(?=[_.])', filename)
+    #     # if channel_result is None:
+    #     #     image_info['channel_indices'] = list(self.channel_indices.values)
+    #     # else:
+    #     #     image_info['channel_indices'] = int(channel_result.group())
+    #
+    #     # fov_index = re.search('(?<=_fov)\d*(?=[_.])', filename)
+    #     # if fov_index is not None:
+    #     #     fov_index = int(fov_index)
+    #     #     image_info['fov_index'] = fov_index
+    #
+    #     illumination_result = re.search('_raw', filename)
+    #     if illumination_result is None:
+    #         image_info['apply_corrections'] = True
+    #     else:
+    #         image_info['apply_corrections'] = False
+    #
+    #     overlay_result = re.search('_overlay', filename)
+    #     if overlay_result is None:
+    #         image_info['overlay_channels'] = False
+    #     else:
+    #         image_info['overlay_channels'] = True
+    #
+    #     return image_info
+
     @classmethod
-    def image_info_from_filename(cls, filename):
-        """Extract image metadata from filename using regex patterns.
-
-        Parses standardized filename format to extract FOV index, projection type,
-        frame range, illumination index, and correction flags.
-
-        Parameters
-        ----------
-        filename : str
-            Image filename to parse
-
-        Returns
-        -------
-        dict
-            Dictionary containing extracted image metadata
-
-        Notes
-        -----
-        Filename format patterns recognized:
-        - _fov{N}: Field of view index
-        - _ave/_max: Projection type
-        - _f{start}-{end}-{interval}: Frame range
-        - _i{N}: Illumination index
-        - _raw: Indicates raw (uncorrected) image
-        """
-        image_info = {}
-
-        fov_index_result = re.search(r'(?<=_fov)\d*(?=[_.])', filename)
-        if fov_index_result is not None:
-            image_info['fov_index'] = int(fov_index_result.group())
-
-        if '_ave' in filename:
-            image_info['projection'] = 'average'
-        elif '_max' in filename:
-            image_info['projection'] = 'maximum'
-
-        frame_start = re.search(r'(?<=_f)\d*(?=[-])', filename)
-        if frame_start is not None:
-            frame_end = re.search(rf'(?<=_f{frame_start.group()}-)\d*(?=[-_.])', filename)
-            frame_interval = re.search(rf'(?<=_f{frame_start.group()}-{frame_end.group()}-)\d*(?=[_.])', filename)
-            if frame_end is not None:
-                frame_range = (int(frame_start.group()), int(frame_end.group()))
-            else:
-                raise ValueError('Invalid filename')
-            if frame_interval is not None:
-                frame_range += (int(frame_interval.group()),)
-            image_info['frame_range'] = frame_range
-
-        illumination_result = re.search(r'(?<=_i)\d*(?=[_.])', filename)
-        if illumination_result is None:
-            image_info['illumination_index'] = None  # list(self.illumination_indices.values)
-        else:
-            image_info['illumination_index'] = int(illumination_result.group())
-
-        # channel_result = re.search('(?<=_c)\d*(?=[_.])', filename)
-        # if channel_result is None:
-        #     image_info['channel_indices'] = list(self.channel_indices.values)
-        # else:
-        #     image_info['channel_indices'] = int(channel_result.group())
-
-        # fov_index = re.search('(?<=_fov)\d*(?=[_.])', filename)
-        # if fov_index is not None:
-        #     fov_index = int(fov_index)
-        #     image_info['fov_index'] = fov_index
-
-        illumination_result = re.search('_raw', filename)
-        if illumination_result is None:
-            image_info['apply_corrections'] = True
-        else:
-            image_info['apply_corrections'] = False
-
-        overlay_result = re.search('_overlay', filename)
-        if overlay_result is None:
-            image_info['overlay_channels'] = False
-        else:
-            image_info['overlay_channels'] = True
-
-        return image_info
-
-    @classmethod
-    def image_info_to_filename(cls, filename, fov_index=None, **image_configuration):
+    def image_configuration_to_filename(cls, filename, fov_index=None, **image_configuration):
         """Construct standardized filename from base name and image metadata.
 
         Parameters
@@ -275,27 +276,27 @@ class Movie:
         if projection is not None:
             filename += '_' + projection[:3]
 
-        frame_range = image_configuration.get('frame_range', None)
-        if frame_range is not None:
-            filename += str(range(*frame_range)).replace('range(', '_f').replace(', ', '-').replace(')', '')
-
-        illumination = image_configuration.get('illumination', None)
-        if illumination is not None:  # and self.number_of_illuminations_in_movie > 1:
-            if isinstance(illumination, str):
-                illumination_index = cls.illuminations.index(illumination)
-            elif isinstance(illumination, int):
-                illumination_index = illumination
-            else:
-                raise ValueError('Invalid illumination type')
-            filename += f'_i{illumination_index}'
+        frames = image_configuration.get('frames', None)
+        if isinstance(frames, slice) or isinstance(frames, range):
+            start = "0" if frames.start is None else frames.start
+            stop = "end" if frames.stop is None else frames.stop
+            step = '' if frames.step in (None, 1) else f'-{frames.step}'
+            filename += f'_f{start}-{stop}{step}'
+        else:
+            filename += f'_f-custom'
 
         channels = image_configuration.get('channels', None)
         if channels is not None:  # and self.number_of_illuminations_in_movie > 1:
-            channel_index = cls.get_channel_indices_from_names(channels)
-            filename += f'_i{channel_index}'
+            # channels = cls.get_channel_indices_from_names(channels)
+            filename += f'_c-{''.join(channel + '+' for channel in channels)}'[:-1]
 
-        apply_corrections = image_configuration.get('apply_corrections', False)
-        if apply_corrections is False:
+        illuminations = image_configuration.get('illuminations', None)
+        if illuminations is not None:  # and self.number_of_illuminations_in_movie > 1:
+            # illuminations = cls.get_illuminations_indices_from_names(illuminations)
+            filename += f'_i-{''.join(illumination + '+' for illumination in illuminations)}'[:-1]
+
+        apply_corrections = image_configuration.get('apply_corrections', True)
+        if not apply_corrections:
             filename += '_raw'
 
         overlay_channels = image_configuration.get('overlay_channels', False)
@@ -337,6 +338,8 @@ class Movie:
         rotation : int, optional
             Number of 90-degree rotations to apply to images (default: 0)
         """
+        if self.__class__.unit_mapping is None:
+            self.unit_mapping = mp.MatchPoint()
         self.filepath = Path(filepath)
         self._with_counter = 0
         self.fov_index = None
@@ -539,7 +542,7 @@ class Movie:
 
     @illumination_arrangement.setter
     def illumination_arrangement(self, illumination_arrangement):
-        self._illumination_arrangement = np.array(illumination_arrangement)
+        self._illumination_arrangement = list(illumination_arrangement)
         # frame_indices = self.frame_indices
         # illumination_indices = self.illumination_indices
         # self._illumination_index_per_frame = xr.DataArray(
@@ -565,7 +568,7 @@ class Movie:
     @illumination_index_per_frame.setter
     def illumination_index_per_frame(self, illumination_index_per_frame):
         self._illumination_index_per_frame = illumination_index_per_frame
-        self._illumination_arrangement = None
+        self._illumination_arrangement = list(illumination_index_per_frame)
 
     @property
     def illumination_indices_in_movie(self):
@@ -781,7 +784,7 @@ class Movie:
                               dims=('frame', 'channel', 'y', 'x'),
                               coords={'frame': frame_indices,
                                       'illumination': self.illumination_index_per_frame[frame_indices],
-                                      'channel': self.channel_indices})
+                                      'channel': self.channels})
 
         if self.time is not None:
             frames = frames.assign_coords(time=self.time[frames.frame])
@@ -843,12 +846,13 @@ class Movie:
 
         for i in range(image.shape[0]):
             for j in self.channel_indices[1:].values:
-                image[i, j, :, :] = self.channel_mapping[j - 1].transform_image(image[i, j, :, :], inverse=True)
+                image[i, j, :, :] = self.channel_mapping[j - 1].transform_image(image[i, j, :, :].values, inverse=True)
         image = image.sum(axis=0, keepdims=True)
         return image
 
     def get_image(self, frames=slice(0, 20), channels=None, illumination=None,
-                  projection=None, apply_corrections=True, overlay_channels=False, flatten_channels=False):
+                  projection=None, apply_corrections=True, overlay_channels=False,# flatten_channels=False,
+                  xarray=False):
         """ Construct a projection image
         Determine a projection image for a number_of_frames starting at start_frame.
         i.e. [start_frame, start_frame + number_of_frames)
@@ -891,34 +895,39 @@ class Movie:
         # Select frame_indices with illumination
         frame_indices = frame_indices[self.illumination_index_per_frame.values[frame_indices] == illumination_index]
 
-
         if projection is None:
-            image = self.read_frames(frame_indices, apply_corrections=apply_corrections, xarray=xarray, flatten_channels=flatten_channels)
+            image = self.read_frames(frame_indices, apply_corrections=apply_corrections, xarray=True, flatten_channels=False)
         else:
             image = self.project_frames(frame_indices, projection=projection, apply_corrections=apply_corrections,
-                                         xarray=xarray, flatten_channels=flatten_channels)
+                                         xarray=False, flatten_channels=False)
+            image = self.frames_to_xarray_dataarray(image[None,:,:,:], [0])
+            image = image.drop_vars(['frame', 'illumination', 'time'])
 
         image = image[...,channel_indices,:,:]
 
         if overlay_channels:
             image = self.overlay_channels(image)
 
-        if flatten_channels:
-            image = self.flatten_channels(image, self.channel_rows, self.channel_columns)
+        # if flatten_channels:
+        #     image = self.flatten_channels(image, self.channel_arrangement)
+
+        image.attrs['movie_configuration'] = json.dumps(self.configuration)
+        image = add_configuration_to_dataarray(image, Movie.get_image, locals(), units='a.u.')
+        image.attrs["image_configuration"] = image.attrs.pop("configuration")
 
         return image
 
-    def save_image(self, intensity_range=None, color_map='gray', path=None, filename=None, filetype='tif',
+    def save_image(self, intensity_range=None, color_map='gray', directory=None, filename=None, filetype='tif',
                    **image_configuration):
         image = self.get_image(**image_configuration)
 
-        if path is None:
-            path = self.writepath
+        if directory is None:
+            directory = self.writepath
 
         if filename is None:
-            filename = Movie.image_info_to_filename(self.name, **image_configuration)
+            filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
 
-        filepath = path.joinpath(filename)
+        filepath = directory / filename
 
         if image_configuration.get('overlay_channels', False):
             channel_names = 'overlay'
@@ -935,11 +944,17 @@ class Movie:
                 resolution = None
             tifffile.imwrite(filepath.with_suffix('.tif'), save_image,
                              resolution=resolution,
+                             # resolutionunit='MICROMETER',
+                             software='Papylio',
                              imagej=True,
-                             metadata={'unit': 'um',
-                                       'axes': 'YX',
+                             metadata={'axes': 'TYX',
+                                       'unit': 'um',
                                        'channel_arrangement': str(channel_arrangement),
-                                       'labels': channel_names}
+                                       'labels': channel_names,
+                                       'papylio_version' : image.attrs['version'],
+                                       'datetime': image.attrs['datetime'],
+                                       'movie_configuration': image.attrs['movie_configuration'],
+                                       'image_configuration': image.attrs['image_configuration']}
                              )
             # tifffile.imwrite(filepath.with_suffix('.tif'), image,
             #                  resolution=resolution,
@@ -959,7 +974,7 @@ class Movie:
 
     @staticmethod
     def load_image(filepath, **image_configuration):
-        image_filename = Movie.image_info_to_filename(filepath.name, **image_configuration)
+        image_filename = Movie.image_configuration_to_filename(filepath.name, **image_configuration)
         image_filepath = filepath.with_name(image_filename).with_suffix('.tif')
 
         if image_filepath.is_file():
@@ -967,7 +982,17 @@ class Movie:
                 image = tif.asarray()
                 metadata = tif.imagej_metadata
             channel_arrangement = np.array(json.loads(metadata['channel_arrangement']))
-            return Movie.separate_channels(image, channel_arrangement)
+            image = Movie.separate_channels(image, channel_arrangement)
+            if image.ndim == 3:
+                image = image[None, ...]
+            image_configuration_metadata = json.loads(metadata['image_configuration'])
+            from papylio.log_functions import function_arguments_json
+            image_configuration_json = function_arguments_json(Movie.get_image, image_configuration)
+            if image_configuration_metadata != image_configuration_json:
+                warnings.warn(f'Image configuration in metadata does not match requested configuration. '
+                              f'Metadata: {image_configuration_metadata}, Requested: {image_configuration_json}')
+                return None
+            return image
         else:
             return None
             # raise FileNotFoundError(f'Projection image not found at {image_filepath}')
@@ -1108,7 +1133,7 @@ class Movie:
 
         self.save_corrections(spatial_background_correction=None, general_background_correction=None)
 
-        frame_indices = self.frame_indices[slice(*frame_range)].values
+        frame_indices = self.frame_indices[slice(*frame_range)]#.values
         with self:
             frames = self.read_frames(frame_indices=frame_indices, apply_corrections=True, xarray=False)
 
@@ -1147,7 +1172,7 @@ class Movie:
 
     @property
     def configuration(self):
-        configuration = dict(rotation=self.rotation)
+        configuration = {name: getattr(self, name) for name in ['rotation', 'channels', 'channel_arrangement', 'illuminations', 'illumination_arrangement']}
         for name, correction in self.corrections.data_vars.items():
             if 'configuration' in correction.attrs:
                 configuration[name] = correction.attrs['configuration']
@@ -1424,3 +1449,179 @@ def expand_axes(frames, expand_into, from_axes=-1, to_axes=None, new_axes_positi
 
     return frames
 
+# from collections.abc import Mapping
+#
+# @dataclass(frozen=True)
+# class ImageConfiguration(Mapping):
+#     frames: object = slice(0, 20)
+#     channels: tuple | str | None = None
+#     illuminations: tuple | str | None = None
+#     projection: str | None = "average"
+#     apply_corrections: bool = True
+#     overlay_channels: bool = False
+#     flatten_channels: bool = False
+#
+#     def __post_init__(self):
+#         if self.channels is not None:
+#             if isinstance(self.channels, str):
+#                 channels = (self.channels,)
+#             else:
+#                 channels = tuple(self.channels)
+#
+#             object.__setattr__(self, "channels", channels)
+#
+#         if self.illuminations is not None:
+#             if isinstance(self.illuminations, str):
+#                 illuminations = (self.illuminations,)
+#             else:
+#                 illuminations = tuple(self.illuminations)
+#
+#             object.__setattr__(self, "illuminations", illuminations)
+#
+#         if self.projection not in {None, "average", "maximum"}:
+#             raise ValueError(
+#                 f"Unknown projection: {self.projection}"
+#             )
+#
+#     # def __getitem__(self, key):
+#     #     return getattr(self, key)
+#     #
+#     # def __iter__(self):
+#     #     return iter(self.__dataclass_fields__)
+#     #
+#     # def __len__(self):
+#     #     return len(self.__dataclass_fields__)
+#
+#     def to_filename(self):
+#         """Construct standardized filename from base name and image metadata.
+#
+#         Parameters
+#         ----------
+#         filename : str
+#             Base filename
+#         fov_index : int, optional
+#             Field of view index (default: None)
+#         projection_image_configuration : keyword arguments
+#
+#         Returns
+#         -------
+#         str
+#             Formatted filename with metadata embedded
+#         """
+#
+#         # image_configuration = get_default_parameters(Movie.get_image) | self
+#
+#         # # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
+#         # if fov_index is not None:
+#         #     # filename += f'_fov{self.fov_info["fov_chosen"]:03d}'
+#         #     filename += f'_fov{fov_index:03d}'
+#
+#         identifier = ''
+#
+#         if self.projection is not None:
+#             identifier += '_' + self.projection[:3]
+#
+#         if isinstance(self.frames, slice) or isinstance(self.frames, range):
+#             start = "0" if self.frames.start is None else self.frames.start
+#             stop = "end" if self.frames.stop is None else self.frames.stop
+#             step = '' if self.frames.step in (None, 1) else f'-{self.frames.step}'
+#             identifier += f'_f{start}-{stop}{step}'
+#         else:
+#             identifier += f'_f-custom'
+#
+#         if self.channels is not None:  # and self.number_of_illuminations_in_movie > 1:
+#             # channels = Movie.get_channel_indices_from_names(channels)
+#             identifier += f'_c-{''.join(channel + '+' for channel in self.channels)}'[:-1]
+#
+#         if self.illuminations is not None:  # and self.number_of_illuminations_in_movie > 1:
+#             # illuminations = Movie.get_illuminations_indices_from_names(illuminations)
+#             identifier += f'_i-{''.join(illumination + '+' for illumination in self.illuminations)}'[:-1]
+#
+#         if not self.apply_corrections:
+#             identifier += '_raw'
+#
+#         if self.overlay_channels:
+#             identifier += '_overlay'
+#
+#         return identifier
+
+
+    # @classmethod
+    # def from_filename(cls, filename):
+    #     """Extract image metadata from filename using regex patterns.
+    #
+    #     Parses standardized filename format to extract FOV index, projection type,
+    #     frame range, illumination index, and correction flags.
+    #
+    #     Parameters
+    #     ----------
+    #     filename : str
+    #         Image filename to parse
+    #
+    #     Returns
+    #     -------
+    #     dict
+    #         Dictionary containing extracted image metadata
+    #
+    #     Notes
+    #     -----
+    #     Filename format patterns recognized:
+    #     - _fov{N}: Field of view index
+    #     - _ave/_max: Projection type
+    #     - _f{start}-{end}-{interval}: Frame range
+    #     - _i{N}: Illumination index
+    #     - _raw: Indicates raw (uncorrected) image
+    #     """
+    #     image_info = {}
+    #
+    #     # fov_index_result = re.search(r'(?<=_fov)\d*(?=[_.])', filename)
+    #     # if fov_index_result is not None:
+    #     #     image_info['fov_index'] = int(fov_index_result.group())
+    #
+    #     if '_ave' in filename:
+    #         image_info['projection'] = 'average'
+    #     elif '_max' in filename:
+    #         image_info['projection'] = 'maximum'
+    #
+    #     frame_start = re.search(r'(?<=_f)\d*(?=[-])', filename)
+    #     if frame_start is not None:
+    #         frame_end = re.search(rf'(?<=_f{frame_start.group()}-)\d*(?=[-_.])', filename)
+    #         frame_interval = re.search(rf'(?<=_f{frame_start.group()}-{frame_end.group()}-)\d*(?=[_.])', filename)
+    #         if frame_end is not None:
+    #             frame_range = (int(frame_start.group()), int(frame_end.group()))
+    #         else:
+    #             raise ValueError('Invalid filename')
+    #         if frame_interval is not None:
+    #             frame_range += (int(frame_interval.group()),)
+    #         image_info['frame_range'] = frame_range
+    #
+    #     illumination_result = re.search(r'(?<=_i)\d*(?=[_.])', filename)
+    #     if illumination_result is None:
+    #         image_info['illumination_index'] = None  # list(self.illumination_indices.values)
+    #     else:
+    #         image_info['illumination_index'] = int(illumination_result.group())
+    #
+    #     channel_result = re.search('(?<=_c)\d*(?=[_.])', filename)
+    #     if channel_result is None:
+    #         image_info['channel_indices'] = list(self.channel_indices.values)
+    #     else:
+    #         image_info['channel_indices'] = int(channel_result.group())
+    #
+    #     # fov_index = re.search('(?<=_fov)\d*(?=[_.])', filename)
+    #     # if fov_index is not None:
+    #     #     fov_index = int(fov_index)
+    #     #     image_info['fov_index'] = fov_index
+    #
+    #     illumination_result = re.search('_raw', filename)
+    #     if illumination_result is None:
+    #         image_info['apply_corrections'] = True
+    #     else:
+    #         image_info['apply_corrections'] = False
+    #
+    #     overlay_result = re.search('_overlay', filename)
+    #     if overlay_result is None:
+    #         image_info['overlay_channels'] = False
+    #     else:
+    #         image_info['overlay_channels'] = True
+    #
+    #     return image_info

@@ -54,21 +54,25 @@ def test_without_logging(experiment_hj_no_logging):
     experiment_hj_no_logging.files[0].perform_mapping()
 
 def test_projection_image(file, shared_datadir):
-    image_newly_made = file.projection_image(frame_range=(0,10), illumination=None, load=False)
+    image_newly_made = file.get_image(frames=slice(0,10), projection='average', illumination=None, load=False)[0]
     image_newly_made = np.concatenate([image_newly_made[0], image_newly_made[1]], axis=1)
     image_from_original_file = tifffile.imread(shared_datadir / 'BN_TIRF_output_test_file' / 'TIRF 561 0001_ave_f0-10_i0.tif')
-    assert (image_newly_made == image_from_original_file).all()
-    image_loaded = file.projection_image(frame_range=(0,10), illumination=None, load=True)
+
+    image_loaded = file.get_image(frames=slice(0,10), projection='average', illumination=None, load=True)[0]
     image_loaded = np.concatenate([image_loaded[0], image_loaded[1]], axis=1)
+
+    assert (image_newly_made == image_from_original_file).all()
     assert (image_loaded == image_from_original_file).all()
 
 def test_average_image(file, shared_datadir):
     image_newly_made = file.average_image(frame_range=(0,10), illumination=None, load=False)
     image_newly_made = np.concatenate([image_newly_made[0], image_newly_made[1]], axis=1)
     image_from_original_file = tifffile.imread(shared_datadir / 'BN_TIRF_output_test_file' / 'TIRF 561 0001_ave_f0-10_i0.tif')
-    assert (image_newly_made == image_from_original_file).all()
+
     image_loaded = file.average_image(frame_range=(0,10), illumination=None, load=True)
     image_loaded = np.concatenate([image_loaded[0], image_loaded[1]], axis=1)
+
+    assert (image_newly_made == image_from_original_file).all()
     assert (image_loaded == image_from_original_file).all()
 
 def test_maximum_projection_image(file, shared_datadir):

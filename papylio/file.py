@@ -286,13 +286,17 @@ class File:
         """
         # TODO: Add option to flatten channels?
         # TODO: Check handling of frame_range = (0, None)
+        images_directory = self.directory / (self.name + '_images')
+        if not images_directory.exists():
+            images_directory.mkdir(parents=True, exist_ok=True)
+
         if load:
-            image = Movie.load_image(self.absolute_path, **image_configuration)
+            image = Movie.load_image(images_directory / self.name, **image_configuration)
         else:
             image = None
 
         if image is None:
-            image = self.movie.save_image(**image_configuration)
+            image = self.movie.save_image(**image_configuration, directory=images_directory)
 
         return image
 
@@ -763,8 +767,8 @@ class File:
 
         psf_size_path = self.experiment.analysis_path.joinpath('PSF_size')
         psf_size_path.mkdir(parents=True, exist_ok=True)
-        filename = Movie.image_info_to_filename('fits_in_image', projection=projection, frame_range=frame_range,
-                                                illumination=illumination_index) + f'_c{channel_index}.png'
+        filename = Movie.image_configuration_to_filename('fits_in_image', projection=projection, frame_range=frame_range,
+                                                         illumination=illumination_index) + f'_c{channel_index}.png'
         fig.savefig(psf_size_path / filename, bbox_inches='tight')
 
         bins = 100
@@ -792,8 +796,8 @@ class File:
         ax.vlines(psf_size, *y_range, color='r')
         ax.set_ylim(y_range)
         ax.set_title(f'psf_size = {psf_size}')
-        filename = Movie.image_info_to_filename('sigma_plot', projection=projection, frame_range=frame_range,
-                                                illumination=illumination_index) + f'_c{channel_index}.png'
+        filename = Movie.image_configuration_to_filename('sigma_plot', projection=projection, frame_range=frame_range,
+                                                         illumination=illumination_index) + f'_c{channel_index}.png'
         fig.savefig(psf_size_path / filename, bbox_inches='tight')
 
         return psf_size
@@ -1971,7 +1975,7 @@ class File:
 
         image_configuration_defaults = get_default_parameters(Movie.get_image)
         image_configuration = (image_configuration_defaults | image_configuration)
-        filename = Movie.image_info_to_filename(self.name, **image_configuration)
+        filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
 
         if image_configuration['projection'] == 'average':
             figure.suptitle('Average image\n' + str(self.directory / filename))
@@ -1985,6 +1989,7 @@ class File:
             unit_string = f' ({self.movie.pixel_size_unit})'
         else:
             raise ValueError('Wrong unit value')
+
         for i, (im, axis) in enumerate(zip(image, axes.flatten())):
             axis.imshow(im, **imshow_configuration)
             axis.set_title(self.channels[i].capitalize())

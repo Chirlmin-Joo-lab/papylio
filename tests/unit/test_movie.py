@@ -17,6 +17,6 @@ def test_image_info_to_filename():
     # movie.illumination_arrangement = [0, 1]
     image_info = {'fov_index': 5, 'image_type': 'average', 'frame_range': (10, 50, 2),
                   'illumination_index': 0}
-    filename = Movie.image_info_to_filename(**image_info)
+    filename = Movie.image_configuration_to_filename(**image_info)
     filename_expected = 'Abc_ave_fov005_f10-50-2_i0'
     assert filename == filename_expected

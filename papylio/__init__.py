@@ -59,6 +59,7 @@ except ImportError:
     except (LookupError, ImportError):
         __version__ = '0.0.0'
 
+#TODO: Perhaps put in Experiment init? Although then when loading just a file it wouldn't work.
 from papylio.configuration import setup_user_config, load_user_microscope_classes
 setup_user_config()
 load_user_microscope_classes()

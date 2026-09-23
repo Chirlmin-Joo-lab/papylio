@@ -6,6 +6,10 @@ from papylio.movie.movie import Movie
 def movie(shared_datadir):
     movie = Movie(shared_datadir / 'BN_TIRF' / 'TIRF 561 0001.tif')
     movie.rotation = 1
+    movie.channels = ['green', 'red']
+    movie.channel_arrangement = [[[0, 1]]]  # For splitting in the horizontal dimension, with the green and red channels left and right, respectively.
+    movie.illuminations = ['green', 'red']
+    movie.illumination_arrangement = [0]
     return movie
 
 @pytest.fixture
@@ -18,8 +22,7 @@ def test_movie_name(movie):
 
 def test_make_projection_image(movie, shared_datadir):
     import tifffile
-    image_from_method = movie.save_projection_image(projection_type='average', frame_range=(0, 20), illumination=None,
-                                                    return_image=True, flatten_channels=True)
+    image_from_method = movie.save_image(projection='average', frames=slice(0, 20), illumination=None)
     assert (shared_datadir / 'BN_TIRF' / 'TIRF 561 0001_ave_f0-20_i0.tif').is_file()
     image_from_file = tifffile.imread(shared_datadir / 'BN_TIRF' / 'TIRF 561 0001_ave_f0-20_i0.tif')
     assert (image_from_file == image_from_method).all()
