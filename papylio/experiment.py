@@ -127,12 +127,13 @@ class Experiment:
         self.perform_logging = perform_logging
 
         ### CONFIGURATION ###
+        #TODO: Load configuration from configuration file
         self.excluded_extensions = ['pdf', 'dat', 'db', 'py', 'yml', 'png', 'pdf', 'xlsx', 'md', 'txt']
         self.included_extensions = ['.nc']
         self.filename_suffixes = ['_ave', '_max', '_corrections', '_dwells', '_dwell_analysis']
         self.filename_suffixes += ['_sequencing_data', '_sequencing_match'] # TODO: Move sequencing related terms to sequencing.py
         self.excluded_names = ['darkfield', 'flatfield']
-        self.excluded_paths = ['Analysis', 'Sequencing data', 'Results']
+        self.excluded_paths = ['Analysis', 'Sequencing data', 'Results', '_images']
         #####################
 
 
