@@ -1948,7 +1948,7 @@ class File:
 
         return axes
 
-    def show_image(self, axes=None, unit='pixel', image_configuration=None, imshow_configuration=None):
+    def show_image(self, figure=None, unit='pixel', image_configuration=None, imshow_configuration=None):
         #TODO: Finish docstring
         """
         Show a projection image of the movie.
@@ -1962,16 +1962,7 @@ class File:
         if image_configuration is None:
             image_configuration = {}
 
-        if imshow_configuration is None:
-            imshow_configuration = {}
-
         image = self.get_image(**image_configuration)
-
-        if axes is None:
-            figure, axes = plt.subplots(1, image.shape[0], sharex=True, sharey=True, layout='tight')
-        else:
-            figure = axes[0].figure
-        figure.subplots_adjust(wspace=0, hspace=0)
 
         image_configuration_defaults = get_default_parameters(Movie.get_image)
         image_configuration = (image_configuration_defaults | image_configuration)
@@ -1990,14 +1981,8 @@ class File:
         else:
             raise ValueError('Wrong unit value')
 
-        for i, (im, axis) in enumerate(zip(image, axes.flatten())):
-            axis.imshow(im, **imshow_configuration)
-            axis.set_title(self.channels[i].capitalize())
-            axis.set_xlabel('x'+unit_string)
-            if i > 0:
-                axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
+        figure, axes = show_single_image(image[0], figure=figure, imshow_configuration=imshow_configuration)
 
-        axes.flatten()[0].set_ylabel('y'+unit_string)
         return figure, axes
 
     def show_coordinates(self, axes=None, annotate=False, unit='pixel', scatter_configuration=None):
@@ -2109,6 +2094,26 @@ class File:
         from papylio.trace_plot import TracePlotWindow
         TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
                         dataset_path=self.absolute_path.with_suffix('.nc'), save_path=save_path, **kwargs)
+
+#TODO: Perhaps move to Movie?
+def show_single_image(image, figure=None, imshow_configuration=None):
+    if figure is None:
+        figure = plt.figure()
+    figure.set_layout_engine('compressed')
+    axes = figure.subplots(1, image.shape[0], sharex=True, sharey=True)
+
+    if imshow_configuration is None:
+        imshow_configuration = {}
+
+    for i, (im, axis) in enumerate(zip(image, list(axes))):
+        axis.imshow(im, **imshow_configuration)
+        axis.set_title(image.channel[i].item().capitalize())
+        axis.set_xlabel('x')# + unit_string)
+        if i > 0:
+            axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
+    axes[0].set_ylabel('y')  # ['+unit_string+']')
+
+    return figure, axes
 
 
 def calculate_intensity_total(intensity):

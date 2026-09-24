@@ -11,13 +11,13 @@ import ast
 from matplotlib.backends.backend_qtagg import (
     FigureCanvas)
 
-from PySide2.QtWidgets import (QFormLayout, QDoubleSpinBox,QSpinBox, QComboBox,
+from PySide6.QtWidgets import (QFormLayout, QDoubleSpinBox,QSpinBox, QComboBox,
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,QToolButton, QTextBrowser,
     QLabel, QSizePolicy, QGroupBox, QGridLayout, QDialog, QPushButton, QTextEdit, QDialog, QLineEdit
 )
 
 
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 import sys
 
 

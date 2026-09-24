@@ -1060,7 +1060,8 @@ class Movie:
     #     return self.make_projection_image('maximum', **kwargs)
 
     def show(self):
-        return MoviePlotter(self)
+        from papylio.gui.image_widget import ImageWidgetSingle
+        ImageWidgetSingle(image=self)
 
     # Do we really need this?
     def determine_general_background_correction(self, method='median', frame_range=(0, 20), use_existing=False):
@@ -1260,55 +1261,6 @@ class Movie:
 
         if save:
             figure.savefig(self.filepath.with_name(f'{self.name} - {correction_name}.png'), bbox_inches='tight')
-
-class MoviePlotter:
-    # Adapted from Matplotlib Image Slices Viewer
-    """Interactive image viewer for movie frames with scroll wheel navigation.
-
-    Displays frames from a Movie object with ability to navigate using scroll wheel.
-    """
-    def __init__(self, movie):
-        """Initialize MoviePlotter.
-
-        Parameters
-        ----------
-        movie : Movie
-            Movie object to visualize
-        """
-        fig, ax = plt.subplots(1, 1)
-        fig.canvas.mpl_connect('scroll_event', self.on_scroll)
-        plt.show()
-
-        self.ax = ax
-        ax.set_title('use scroll wheel to navigate images')
-
-        self.movie = movie
-        self.slices, rows, cols = (movie.number_of_frames, movie.height, movie.width)
-        self.ind = self.slices // 2
-
-        self.im = ax.imshow(self.movie.read_frame(self.ind, flatten_channels=True, xarray=False))
-        self.update()
-
-    def on_scroll(self, event):
-        """Handle scroll wheel events to navigate frames.
-
-        Parameters
-        ----------
-        event : matplotlib.backend_bases.ScrollEvent
-            Scroll event from matplotlib
-        """
-        print("%s %s" % (event.button, event.step))
-        if event.button == 'up':
-            self.ind = (self.ind + 1) % self.slices
-        else:
-            self.ind = (self.ind - 1) % self.slices
-        self.update()
-
-    def update(self):
-        """Update displayed frame."""
-        self.im.set_data(self.movie.read_frame(self.ind, flatten_channels=True, xarray=False))
-        self.ax.set_ylabel('slice %s' % self.ind)
-        self.im.axes.figure.canvas.draw()
 
 
 def make_colour_map(colour, N=256):

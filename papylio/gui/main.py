@@ -6,7 +6,7 @@ Defines the main application window and image canvas used by the Papylio GUI.
 import sys
 import PySide6
 import platform
-from PySide2.QtCore import Signal
+from PySide6.QtCore import Signal
 import sys
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
                               QPushButton, QTabWidget, QHeaderView, QTableWidget, QComboBox, QLineEdit
