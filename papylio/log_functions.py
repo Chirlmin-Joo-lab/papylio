@@ -9,6 +9,7 @@ import functools
 import sys
 from datetime import datetime
 import papylio
+import numpy as np
 
 def function_arguments(function, function_locals):
     """Extract function arguments from local variables.
@@ -56,6 +57,8 @@ def function_arguments_json(function, function_locals):
     for keyword, argument in arguments.items():
         if isinstance(arguments[keyword], (slice, range)):
             arguments[keyword] = str(argument)
+        elif isinstance(arguments[keyword], np.ndarray):
+            arguments[keyword] = arguments[keyword].tolist()
     return json.dumps(arguments)
 
 def get_current_datetime():
