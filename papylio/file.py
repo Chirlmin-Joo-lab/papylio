@@ -273,7 +273,7 @@ class File:
         #TODO this needs to be independent from Experiment and should probably be set.
         return self.experiment.number_of_channels
 
-    def get_image(self, load=True, **image_configuration):
+    def get_image(self, load=True, only_save_projections=True, **image_configuration):
         """
         Get or generate a projection image.
 
@@ -296,7 +296,8 @@ class File:
             image = None
 
         if image is None:
-            image = self.movie.save_image(**image_configuration, directory=images_directory)
+            image = self.movie.save_image(**image_configuration, directory=images_directory,
+                                          only_save_projections=only_save_projections)
 
         return image
 
@@ -1948,7 +1949,7 @@ class File:
 
         return axes
 
-    def show_image(self, figure=None, unit='pixel', image_configuration=None, imshow_configuration=None):
+    def show_image(self, figure=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
         #TODO: Finish docstring
         """
         Show a projection image of the movie.
@@ -1959,19 +1960,14 @@ class File:
         # TODO: Show two channels separately and connect axes
         # Split configuration based on inspect??
 
-        if image_configuration is None:
-            image_configuration = {}
+        # if image_configuration is None:
+        #     image_configuration = {}
 
         image = self.get_image(**image_configuration)
 
         image_configuration_defaults = get_default_parameters(Movie.get_image)
         image_configuration = (image_configuration_defaults | image_configuration)
         filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
-
-        if image_configuration['projection'] == 'average':
-            figure.suptitle('Average image\n' + str(self.directory / filename))
-        elif image_configuration['projection'] == 'maximum':
-            figure.suptitle('Maximum projection\n' + str(self.directory / filename))
 
         if unit == 'pixel':
             unit_string = ' (pixels)'
@@ -1981,9 +1977,20 @@ class File:
         else:
             raise ValueError('Wrong unit value')
 
-        figure, axes = show_single_image(image[0], figure=figure, imshow_configuration=imshow_configuration)
+        if interactive:
+            from papylio.gui.image_widget import ImageWidgetSingle
+            image_widget = ImageWidgetSingle(image)
+            return
+        else:
+            figure, axes = show_single_image(image[0], figure=figure, imshow_configuration=imshow_configuration)
 
-        return figure, axes
+            if image_configuration['projection'] == 'average':
+                figure.suptitle('Average image\n' + str(self.directory / filename))
+            elif image_configuration['projection'] == 'maximum':
+                figure.suptitle('Maximum projection\n' + str(self.directory / filename))
+
+            return figure, axes
+
 
     def show_coordinates(self, axes=None, annotate=False, unit='pixel', scatter_configuration=None):
         # TODO: Consider making this a QWidget
@@ -2100,18 +2107,18 @@ def show_single_image(image, figure=None, imshow_configuration=None):
     if figure is None:
         figure = plt.figure()
     figure.set_layout_engine('compressed')
-    axes = figure.subplots(1, image.shape[0], sharex=True, sharey=True)
+    axes = figure.subplots(1, image.shape[0], sharex=True, sharey=True, squeeze=False)
 
     if imshow_configuration is None:
         imshow_configuration = {}
 
-    for i, (im, axis) in enumerate(zip(image, list(axes))):
+    for i, (im, axis) in enumerate(zip(image, axes.flatten())):
         axis.imshow(im, **imshow_configuration)
         axis.set_title(image.channel[i].item().capitalize())
         axis.set_xlabel('x')# + unit_string)
         if i > 0:
             axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
-    axes[0].set_ylabel('y')  # ['+unit_string+']')
+    axes[0,0].set_ylabel('y')  # ['+unit_string+']')
 
     return figure, axes
 

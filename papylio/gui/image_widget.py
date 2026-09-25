@@ -52,6 +52,9 @@ class ImageWidgetSingle(QWidget):
     """A QSlider that controls a line plot embedded in a matplotlib canvas."""
 
     def __init__(self, image, parent=None, figure=None):
+        from papylio.experiment import get_QApplication
+        # TODO: Use selection only if it is present.
+        app = get_QApplication()
         super().__init__(parent)
 
         # --- Matplotlib figure/canvas ---
@@ -92,6 +95,8 @@ class ImageWidgetSingle(QWidget):
 
         self.image = image
 
+        self.show()
+        app.exec_()
 
     @property
     def image(self):

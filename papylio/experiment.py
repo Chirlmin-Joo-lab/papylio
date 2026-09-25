@@ -430,7 +430,7 @@ class Experiment:
                                                         'channel': movie.channel_indices})
             for file_path in file_paths:
                 flatfield = tifffile.imread(file_path)
-                image_info = Movie.image_info_from_filename(file_path.name)
+                image_info = Movie.image_configuration_from_filename(file_path.name)
                 illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 flatfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
