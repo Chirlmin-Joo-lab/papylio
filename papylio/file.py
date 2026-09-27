@@ -133,224 +133,6 @@ class File:
         """Return a string representation of the File object."""
         return (f'{self.__class__.__name__}({self.directory.joinpath(self.name)})')
 
-    @property
-    @return_none_when_executed_by_pycharm
-    def _log_path(self):
-        """Return the path to the log file."""
-        return self.absolute_path.with_suffix(".log")
-
-    @property
-    def _logger(self):
-        """Create a dedicated logger per File instance."""
-        if self.__logger is None:
-            logger_name = f"FileLogger.{self.relative_path}"
-            self.__logger = logging.getLogger(logger_name)
-            self.__logger.setLevel(logging.INFO)
-        return self.__logger
-
-    def _log(self, log_type, message):
-        """
-        Log a message to the file's log.
-
-        Parameters:
-            log_type (str): The logging level (e.g., 'info', 'warning', 'error').
-            message (str): The message to log.
-        """
-        if self.perform_logging:
-            handler = logging.FileHandler(self._log_path, mode="a", encoding="utf-8")
-            formatter = logging.Formatter(
-                "%(asctime)s [%(levelname)s]: %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S"
-            )
-            handler.setFormatter(formatter)
-            self._logger.addHandler(handler)
-
-            getattr(self._logger, log_type)(message)
-
-            handler.close()
-            self._logger.removeHandler(handler)
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def relative_path(self):
-        """Return the path to the file relative to the experiment root."""
-        return self.directory.joinpath(self.name)
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def absolute_path(self):
-        """Return the absolute path to the file."""
-        return self.experiment.main_path.joinpath(self.relative_path)
-
-    def open_directory(self) -> None:
-        """Open the config directory in the system file manager."""
-        import subprocess, os
-
-        if sys.platform == "win32":
-            os.startfile(self.directory)
-        elif sys.platform == "darwin":
-            subprocess.run(["open", self.directory])
-        else:
-            subprocess.run(["xdg-open", self.directory])
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def number_of_molecules(self):
-        """Return the number of molecules in the file's dataset."""
-        try:
-            with netCDF4.Dataset(self.absolute_path.with_suffix('.nc')) as dataset:
-                return dataset.dimensions['molecule'].size
-        except FileNotFoundError:
-            return 0
-
-    @property
-    def has_movie(self):
-        return self._movie is not None
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def movie(self):
-        # TODO: Perhaps upon first getting the movie, in case a dataset exists,
-        #       then the movie should be updated with the dataset information (e.g. rotation, channel arrangement, etc.)
-        if not self.has_movie:
-            raise RuntimeError('No movie found')
-        return self._movie
-
-    @movie.setter
-    def movie(self, value):
-        self._movie = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def rotation(self):
-        # TODO: If it is variable is retrieved and the dataset is present, then the value should be retrieved from the dataset and set to the movie\
-        return self.movie.rotation
-
-    @rotation.setter
-    def rotation(self, value):
-        self.movie.rotation = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def channels(self):
-        return self.movie.channels
-
-    @channels.setter
-    def channels(self, value):
-        self.movie.channels = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def channel_arrangement(self):
-        return self.movie.channel_arrangement
-
-    @channel_arrangement.setter
-    def channel_arrangement(self, value):
-        self.movie.channel_arrangement = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def illuminations(self):
-        return self.movie.illuminations
-
-    @illuminations.setter
-    def illuminations(self, value):
-        self.movie.illuminations = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def illumination_arrangement(self):
-        return self.movie.illumination_arrangement
-
-    @illumination_arrangement.setter
-    def illumination_arrangement(self, value):
-        self.movie.illumination_arrangement = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def number_of_channels(self):
-        """Return the number of channels in the experiment."""
-        #TODO this needs to be independent from Experiment and should probably be set.
-        return self.experiment.number_of_channels
-
-    def get_image(self, load=True, only_save_projections=True, **image_configuration):
-        """
-        Get or generate a projection image.
-
-        Parameters:
-            load (bool, optional): Whether to try loading an existing image from disk. Default is True.
-            **kwargs: Additional configuration parameters for image projection.
-
-        Returns:
-            numpy.ndarray: The projection image.
-        """
-        # TODO: Add option to flatten channels?
-        # TODO: Check handling of frame_range = (0, None)
-        images_directory = self.directory / (self.name + '_images')
-        if not images_directory.exists():
-            images_directory.mkdir(parents=True, exist_ok=True)
-
-        if load:
-            image = Movie.load_image(images_directory / self.name, **image_configuration)
-        else:
-            image = None
-
-        if image is None:
-            image = self.movie.save_image(**image_configuration, directory=images_directory,
-                                          only_save_projections=only_save_projections)
-
-        return image
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def coordinates_metric(self):
-        """Return the molecule coordinates in metric units (e.g., nanometers)."""
-        return self.coordinates * self.movie.pixel_size
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def coordinates_stage(self):
-        """Return the molecule coordinates in stage units."""
-        coordinates = self.coordinates.sel(channel=0)
-        coordinates_stage = self.movie.pixel_to_stage_coordinates_transformation(coordinates)
-        return xr.DataArray(coordinates_stage, coords=coordinates.coords)
-
-    def set_coordinates_of_channel(self, coordinates, channel):
-        """
-        Set coordinates for a specific channel and update other channels using mapping.
-
-        Parameters:
-            coordinates (numpy.ndarray or xarray.DataArray): The coordinates to set.
-            channel (int or str): The channel index or name.
-        """
-        if not isinstance(coordinates, xr.DataArray):
-            coordinates = xr.DataArray(coordinates, dims=('molecule', 'dimension'))
-        channel_index = self.movie.get_channel_indices_from_names(channel)[0]
-        if channel_index > 0:
-            coordinates = self.mappings[channel_index-1].transform_coordinates(coordinates, inverse=True)
-
-        coordinates = coordinates.expand_dims(channel=np.arange(self.number_of_channels), axis=1).copy()
-
-        for i in range(self.number_of_channels)[1:]:
-            coordinates[:,i,:] = self.mappings[i-1].transform_coordinates(coordinates[:,i,:], inverse=False)
-
-        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.boundaries, margin=0)
-        self.coordinates = coordinates
-
-    def coordinates_from_channel(self, channel):
-        """
-        Get coordinates for a specific channel.
-
-        Parameters:
-            channel (int or str): The channel index or name.
-
-        Returns:
-            xarray.DataArray: The coordinates for the specified channel.
-        """
-
-        channel = self.movie.get_channel_from_name(channel).index
-        return self.coordinates.sel(channel=channel)
-
     def __getstate__(self):
         """Return the object's state for pickling."""
         return self.__dict__.copy()
@@ -409,6 +191,268 @@ class File:
             # if not isinstance(caller, File):
             if caller is not self:
                 self._log('info', f"Set attribute {name} = {value!r}")
+
+    ## Paths, directories ###
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def relative_path(self):
+        """Return the path to the file relative to the experiment root."""
+        return self.directory.joinpath(self.name)
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def absolute_path(self):
+        """Return the absolute path to the file."""
+        return self.experiment.main_path.joinpath(self.relative_path)
+
+    def open_directory(self) -> None:
+        """Open the config directory in the system file manager."""
+        import subprocess, os
+
+        if sys.platform == "win32":
+            os.startfile(self.directory)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", self.directory])
+        else:
+            subprocess.run(["xdg-open", self.directory])
+
+    ### Logging ###
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def _log_path(self):
+        """Return the path to the log file."""
+        return self.absolute_path.with_suffix(".log")
+
+    @property
+    def _logger(self):
+        """Create a dedicated logger per File instance."""
+        if self.__logger is None:
+            logger_name = f"FileLogger.{self.relative_path}"
+            self.__logger = logging.getLogger(logger_name)
+            self.__logger.setLevel(logging.INFO)
+        return self.__logger
+
+    def _log(self, log_type, message):
+        """
+        Log a message to the file's log.
+
+        Parameters:
+            log_type (str): The logging level (e.g., 'info', 'warning', 'error').
+            message (str): The message to log.
+        """
+        if self.perform_logging:
+            handler = logging.FileHandler(self._log_path, mode="a", encoding="utf-8")
+            formatter = logging.Formatter(
+                "%(asctime)s [%(levelname)s]: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            )
+            handler.setFormatter(formatter)
+            self._logger.addHandler(handler)
+
+            getattr(self._logger, log_type)(message)
+
+            handler.close()
+            self._logger.removeHandler(handler)
+
+    @property
+    def has_movie(self):
+        return self._movie is not None
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def movie(self):
+        # TODO: Perhaps upon first getting the movie, in case a dataset exists,
+        #       then the movie should be updated with the dataset information (e.g. rotation, channel arrangement, etc.)
+        if not self.has_movie:
+            raise RuntimeError('No movie found')
+        return self._movie
+
+    @movie.setter
+    def movie(self, value):
+        self._movie = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def rotation(self):
+        # TODO: If it is variable is retrieved and the dataset is present, then the value should be retrieved from the dataset and set to the movie\
+        return self.movie.rotation
+
+    @rotation.setter
+    def rotation(self, value):
+        self.movie.rotation = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def channels(self):
+        return self.movie.channels
+
+    @channels.setter
+    def channels(self, value):
+        self.movie.channels = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def number_of_channels(self):
+        return len(self.channels)
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def channel_arrangement(self):
+        return self.movie.channel_arrangement
+
+    @channel_arrangement.setter
+    def channel_arrangement(self, value):
+        self.movie.channel_arrangement = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def illuminations(self):
+        return self.movie.illuminations
+
+    @illuminations.setter
+    def illuminations(self, value):
+        self.movie.illuminations = value
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def illumination_arrangement(self):
+        return self.movie.illumination_arrangement
+
+    @illumination_arrangement.setter
+    def illumination_arrangement(self, value):
+        self.movie.illumination_arrangement = value
+
+    def get_image(self, load=True, only_save_projections=True, **image_configuration):
+        """
+        Get or generate a projection image.
+
+        Parameters:
+            load (bool, optional): Whether to try loading an existing image from disk. Default is True.
+            **kwargs: Additional configuration parameters for image projection.
+
+        Returns:
+            numpy.ndarray: The projection image.
+        """
+        # TODO: Add option to flatten channels?
+        # TODO: Check handling of frame_range = (0, None)
+        images_directory = self.directory / (self.name + '_images')
+        if not images_directory.exists():
+            images_directory.mkdir(parents=True, exist_ok=True)
+
+        if load:
+            image = Movie.load_image(images_directory / self.name, **image_configuration)
+        else:
+            image = None
+
+        if image is None:
+            image = self.movie.save_image(**image_configuration, directory=images_directory,
+                                          only_save_projections=only_save_projections)
+
+        return image
+
+    def show_image(self, figure=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
+        #TODO: Finish docstring
+        """
+        Show a projection image of the movie.
+
+        Returns:
+            tuple: (figure, axes)
+        """
+        # TODO: Show two channels separately and connect axes
+        # Split configuration based on inspect??
+
+        # if image_configuration is None:
+        #     image_configuration = {}
+
+        image = self.get_image(**image_configuration)
+
+        image_configuration_defaults = get_default_parameters(Movie.get_image)
+        image_configuration = (image_configuration_defaults | image_configuration)
+        filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
+
+        if unit == 'pixel':
+            unit_string = ' (pixels)'
+        elif unit == 'metric':
+            imshow_configuration['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
+            unit_string = f' ({self.movie.pixel_size_unit})'
+        else:
+            raise ValueError('Wrong unit value')
+
+        if interactive:
+            from papylio.gui.image_widget import ImageWidgetSingle
+            image_widget = ImageWidgetSingle(image)
+            return
+        else:
+            figure, axes = show_single_image(image[0], figure=figure, imshow_configuration=imshow_configuration)
+
+            if image_configuration['projection'] == 'average':
+                figure.suptitle('Average image\n' + str(self.directory / filename))
+            elif image_configuration['projection'] == 'maximum':
+                figure.suptitle('Maximum projection\n' + str(self.directory / filename))
+
+            return figure, axes
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def number_of_molecules(self):
+        """Return the number of molecules in the file's dataset."""
+        try:
+            with netCDF4.Dataset(self.absolute_path.with_suffix('.nc')) as dataset:
+                return dataset.dimensions['molecule'].size
+        except FileNotFoundError:
+            return 0
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def coordinates_metric(self):
+        """Return the molecule coordinates in metric units (e.g., nanometers)."""
+        return self.coordinates * self.movie.pixel_size
+
+    @property
+    @return_none_when_executed_by_pycharm
+    def coordinates_stage(self):
+        """Return the molecule coordinates in stage units."""
+        coordinates = self.coordinates.sel(channel=0)
+        coordinates_stage = self.movie.pixel_to_stage_coordinates_transformation(coordinates)
+        return xr.DataArray(coordinates_stage, coords=coordinates.coords)
+
+    def set_coordinates_of_channel(self, coordinates, channel):
+        """
+        Set coordinates for a specific channel and update other channels using mapping.
+
+        Parameters:
+            coordinates (numpy.ndarray or xarray.DataArray): The coordinates to set.
+            channel (int or str): The channel index or name.
+        """
+        if not isinstance(coordinates, xr.DataArray):
+            coordinates = xr.DataArray(coordinates, dims=('molecule', 'dimension'))
+        channel_index = self.movie.get_channel_indices_from_names(channel)[0]
+        if channel_index > 0:
+            coordinates = self.mappings[channel_index-1].transform_coordinates(coordinates, inverse=True)
+
+        coordinates = coordinates.expand_dims(channel=np.arange(self.number_of_channels), axis=1).copy()
+
+        for i in range(self.number_of_channels)[1:]:
+            coordinates[:,i,:] = self.mappings[i-1].transform_coordinates(coordinates[:,i,:], inverse=False)
+
+        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.boundaries, margin=0)
+        self.coordinates = coordinates
+
+    def coordinates_from_channel(self, channel):
+        """
+        Get coordinates for a specific channel.
+
+        Parameters:
+            channel (int or str): The channel index or name.
+
+        Returns:
+            xarray.DataArray: The coordinates for the specified channel.
+        """
+
+        channel = self.movie.get_channel_from_name(channel).index
+        return self.coordinates.sel(channel=channel)
 
     def get_data(self, key):
         """
@@ -1949,47 +1993,6 @@ class File:
 
         return axes
 
-    def show_image(self, figure=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
-        #TODO: Finish docstring
-        """
-        Show a projection image of the movie.
-
-        Returns:
-            tuple: (figure, axes)
-        """
-        # TODO: Show two channels separately and connect axes
-        # Split configuration based on inspect??
-
-        # if image_configuration is None:
-        #     image_configuration = {}
-
-        image = self.get_image(**image_configuration)
-
-        image_configuration_defaults = get_default_parameters(Movie.get_image)
-        image_configuration = (image_configuration_defaults | image_configuration)
-        filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
-
-        if unit == 'pixel':
-            unit_string = ' (pixels)'
-        elif unit == 'metric':
-            imshow_configuration['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
-            unit_string = f' ({self.movie.pixel_size_unit})'
-        else:
-            raise ValueError('Wrong unit value')
-
-        if interactive:
-            from papylio.gui.image_widget import ImageWidgetSingle
-            image_widget = ImageWidgetSingle(image)
-            return
-        else:
-            figure, axes = show_single_image(image[0], figure=figure, imshow_configuration=imshow_configuration)
-
-            if image_configuration['projection'] == 'average':
-                figure.suptitle('Average image\n' + str(self.directory / filename))
-            elif image_configuration['projection'] == 'maximum':
-                figure.suptitle('Maximum projection\n' + str(self.directory / filename))
-
-            return figure, axes
 
 
     def show_coordinates(self, axes=None, annotate=False, unit='pixel', scatter_configuration=None):
