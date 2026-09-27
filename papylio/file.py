@@ -97,7 +97,7 @@ class File:
         # self._rotation = 0
 
         self._mappings = None
-        self.mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
+        # self.mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
 
         # I think it will be easier if we have import functions for specific data instead of specific files.
         # For example. the sifx, pma and tif files can better be handled in the Movie class. Here we then just have a method import_movie.
@@ -1167,6 +1167,8 @@ class File:
 
     @property
     def mappings(self):
+        if self._mappings is None:
+            self.mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
         return self._mappings
 
     @mappings.setter
