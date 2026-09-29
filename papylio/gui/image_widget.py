@@ -130,7 +130,7 @@ class ImageWidgetSingle(QWidget):
         self.update_frame(self.slider.value())
 
     def update_frame(self, value: int):
-        for channel, axis in enumerate(self.axes):
+        for channel, axis in enumerate(self.axes.flatten()):
             axis.images[0].set_data(self.get_frame(value)[channel])
         self.slider_label.setText(f"f = {value}")
         self.canvas.draw_idle()
