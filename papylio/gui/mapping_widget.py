@@ -12,7 +12,7 @@ from papylio.peak_finding import (find_peaks_absolute_threshold,
                                   find_peaks_local_maximum,
                                   find_peaks_local_maximum_auto,
                                   find_peaks_relative_local_maximum)
-from papylio.gui.image_widget import ImageCanvas
+from papylio.gui.show_image_widget import ImageCanvas
 #from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
@@ -260,7 +260,7 @@ class MappingWidget(QWidget):
                   <li> hover over group boxes to inspect settings source </li>
                   <li> adapt settings if wished </li>
                   <li> press 'Map' </li>
-                </ul>
+                </ol>
 
                 <h3>More help</h3>
                 <p>
