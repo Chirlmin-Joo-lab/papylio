@@ -74,3 +74,9 @@ def test_get_image_multiple_illuminations(file, image_configuration):
 ])
 def test_show_image(file, image_configuration, imshow_configuration):
     file.show_image(imshow_configuration=imshow_configuration, **image_configuration)
+
+def test_show_image_custom_figures_and_axes(file):
+    import matplotlib.pyplot as plt
+    figure, axes = plt.subplots(2,1)
+    image_configuration = dict(frames=slice(0,20))
+    file.show_image(axes=axes, **image_configuration)

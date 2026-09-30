@@ -352,7 +352,7 @@ class File:
 
         return image
 
-    def show_image(self, figure=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
+    def show_image(self, figure=None, axes=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
         #TODO: Finish docstring
         """
         Show a projection image of the movie.
@@ -385,7 +385,7 @@ class File:
             image_widget = ImageWidgetSingle(image)
             return
         else:
-            figure, axes = show_single_image(image[0], figure=figure, imshow_configuration=imshow_configuration)
+            figure, axes = show_single_image(image[0], figure=figure, axes=axes, imshow_configuration=imshow_configuration)
 
             if image_configuration['projection'] == 'average':
                 figure.suptitle('Average image\n' + str(self.directory / filename))
@@ -2108,11 +2108,18 @@ class File:
                         dataset_path=self.absolute_path.with_suffix('.nc'), save_path=save_path, **kwargs)
 
 #TODO: Perhaps move to Movie?
-def show_single_image(image, figure=None, imshow_configuration=None):
-    if figure is None:
-        figure = plt.figure()
+def show_single_image(image, figure=None, axes=None, imshow_configuration=None):
+
+    if axes is None:
+        if figure is None:
+            figure = plt.figure()
+    else:
+        figure = axes.flatten()[0].figure
+
+    if len(figure.axes) == 0:
+        axes = figure.subplots(1, image.shape[0], sharex=True, sharey=True, squeeze=False)
+
     figure.set_layout_engine('compressed')
-    axes = figure.subplots(1, image.shape[0], sharex=True, sharey=True, squeeze=False)
 
     if imshow_configuration is None:
         imshow_configuration = {}
@@ -2123,7 +2130,8 @@ def show_single_image(image, figure=None, imshow_configuration=None):
         axis.set_xlabel('x')# + unit_string)
         if i > 0:
             axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
-    axes[0,0].set_ylabel('y')  # ['+unit_string+']')
+        else:
+            axis.set_ylabel('y')  # ['+unit_string+']')
 
     return figure, axes
 
