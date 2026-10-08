@@ -7,14 +7,14 @@ hiddenimports = ['papylio', 'numpy', 'matplotlib', 'pathlib2', 'cv2', 'tabulate'
                   'xarray', 'netCDF4', 'h5netcdf', 'dask', 'bottleneck', 'tifffile', 'tqdm',
                   'PySide2', 'numba', 'matchpoint', 'objectlist', 'networkx']
 
-marimo_packages = set(['marimo', 'click', 'jedi', 'markdown', 'pymdown-extensions', 'tomlkit', 'pyyaml', 'uvicorn',
-                       'starlette', 'python-multipart', 'websockets', 'loro', 'typing_extensions', 'docutils',
-                       'psutil', 'itsdangerous', 'narwhals', 'packaging', 'msgspec', 'pyzmq', 'nbformat'])
+marimo_packages = set(['marimo', 'click', 'jedi', 'markdown', 'pymdownx', 'tomlkit', 'yaml', 'uvicorn',
+                       'starlette', 'multipart', 'websockets', 'loro', 'typing_extensions', 'docutils',
+                       'psutil', 'itsdangerous', 'narwhals', 'packaging', 'msgspec', 'zmq', 'nbformat'])
 
-jupyter_packages = set(['jupyterlab', 'jupyter_events', 'jupyterlab_server', 'notebook', 'jupyter_client', 'zqm',
-		                'jupyter-builder', "async_lru", "httpx", "ipykernel", "jinja2", "jupyter_core", "jupyter_server",
-                        "jupyter-lsp", "jupyterlab_server", "notebook_shim", "packaging", "tomli", "tornado", "traitlets",
-                        "typing-extensions"])
+jupyter_packages = set(['jupyterlab', 'jupyter_events', 'jupyterlab_server', 'notebook', 'jupyter_client', 'zmq',
+		                'jupyter_builder', "async_lru", "httpx", "ipykernel", "jinja2", "jupyter_core", "jupyter_server",
+                        "jupyter_lsp", "jupyterlab_server", "notebook_shim", "packaging", "tomli", "tornado", "traitlets",
+                        "typing_extensions"])
 
 papylio_packages = set(['papylio', 'pomegranate', 'dask_image', 'xarray', 'numpy', 'matplotlib'])
 
