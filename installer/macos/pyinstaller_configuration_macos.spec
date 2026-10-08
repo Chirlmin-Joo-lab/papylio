@@ -16,7 +16,7 @@ jupyter_packages = set(['jupyterlab', 'jupyter_events', 'jupyterlab_server', 'no
                         "jupyter-lsp", "jupyterlab_server", "notebook_shim", "packaging", "tomli", "tornado", "traitlets",
                         "typing-extensions"])
 
-papylio_packages = set(['papylio', 'pomegranate', 'dask_image', , 'xarray', 'numpy', 'matplotlib'])
+papylio_packages = set(['papylio', 'pomegranate', 'dask_image', 'xarray', 'numpy', 'matplotlib'])
 
 packages = papylio_packages.union(marimo_packages).union(jupyter_packages)
 
