@@ -6,10 +6,21 @@ hiddenimports = ['papylio', 'numpy', 'matplotlib', 'pathlib2', 'cv2', 'tabulate'
                   'skimage', 'skimage.transform', 'yaml', 'pandas', 'seaborn', 'nd2reader',
                   'xarray', 'netCDF4', 'h5netcdf', 'dask', 'bottleneck', 'tifffile', 'tqdm',
                   'PySide2', 'numba', 'matchpoint', 'objectlist', 'networkx']
-for pkg in ['papylio', 'pomegranate', 'dask_image', 'marimo',
-		    'starlette', 'uvicorn', 'websockets', 'click', 'jinja2', 'xarray', 'numpy', 'matplotlib',
-		    'jupyterlab', 'jupyter_events', 'jupyterlab_server', 'jupyter_server', 'notebook', 'jupyter_client',
-		    'jupyter_core', 'ipykernel', 'zqm', 'jupyter_lsp', 'notebook_shim']:
+
+marimo_packages = set(['marimo', 'click', 'jedi', 'markdown', 'pymdown-extensions', 'tomlkit', 'pyyaml', 'uvicorn',
+                       'starlette', 'python-multipart', 'websockets', 'loro', 'typing_extensions', 'docutils',
+                       'psutil', 'itsdangerous', 'narwhals', 'packaging', 'msgspec', 'pyzmq', 'nbformat'])
+
+jupyter_packages = set(['jupyterlab', 'jupyter_events', 'jupyterlab_server', 'notebook', 'jupyter_client', 'zqm',
+		                'jupyter-builder', "async_lru", "httpx", "ipykernel", "jinja2", "jupyter_core", "jupyter_server",
+                        "jupyter-lsp", "jupyterlab_server", "notebook_shim", "packaging", "tomli", "tornado", "traitlets",
+                        "typing-extensions"])
+
+papylio_packages = set(['papylio', 'pomegranate', 'dask_image', , 'xarray', 'numpy', 'matplotlib'])
+
+packages = papylio_packages.union(marimo_packages).union(jupyter_packages)
+
+for pkg in packages:
     tmp_ret = collect_all(pkg)
     datas += tmp_ret[0]
     binaries += tmp_ret[1]
