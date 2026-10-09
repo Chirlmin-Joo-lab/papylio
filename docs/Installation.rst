@@ -1,6 +1,22 @@
 Installation
 ============
 
+Standalone installation
+-----------------------
+The easiest way to install Papylio is as a standalone application.
+It provides a graphical user interface and additionally allows running custom Python code through Marimo notebooks.
+Note that only packages bundled with Papylio can be used in the notebooks.
+If you want to use additional packages, it is recommended to install Papylio through `conda or pip <Conda and pip_>`_ instead.
+
+The standalone application is available through the links below:
+
+- `Download for Windows`_
+- `Download for macOS`_
+
+All versions can be found on the `releases`_ page of the GitHub repository.
+
+.. _releases: https://github.com/Chirlmin-Joo-lab/papylio/releases
+
 Conda and pip
 -------------
 
@@ -17,7 +33,6 @@ or through using pip
    pip install papylio
 
 where it is recommended to make a separate virtual environment or conda environment for `papylio`.
-
 
 Detailed conda installation steps
 ---------------------------------

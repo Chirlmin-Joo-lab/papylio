@@ -33,6 +33,11 @@ from pathlib2 import Path
 import papylio
 release = papylio.__version__
 
+rst_epilog = f"""
+.. _Download for Windows: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/papylio-{release}.exe
+.. _Download for macOS: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/papylio-{release}.dmg
+"""
+
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be

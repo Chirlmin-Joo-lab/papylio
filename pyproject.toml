@@ -72,5 +72,4 @@ dev = ["pytest","pytest-datadir","build","twine","sphinx","sphinx-book-theme"]
 pythonpath = ["papylio"]
 testpaths = [
     "tests",
-    "integration",
 ]
