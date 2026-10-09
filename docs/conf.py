@@ -33,9 +33,11 @@ from pathlib2 import Path
 import papylio
 release = papylio.__version__
 
+release_main = release.split("+")[0]
+
 rst_epilog = f"""
-.. _Download for Windows: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/Papylio-v{release}-Windows-x64.exe
-.. _Download for macOS: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/Papylio-v{release}-macOS-intel.dmg
+.. _Download for Windows: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release_main}/Papylio-v{release_main}-Windows-x64.exe
+.. _Download for macOS: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release_main}/Papylio-v{release_main}-macOS-intel.dmg
 """
 
 # -- General configuration ---------------------------------------------------
