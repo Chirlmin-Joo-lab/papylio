@@ -88,7 +88,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload \
-            "${env:RELEASE_TAG}" \
-            "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe" \
-            --clobber
+          gh release upload "${env:RELEASE_TAG}" "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe" --clobber
