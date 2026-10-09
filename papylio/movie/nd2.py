@@ -118,7 +118,7 @@ class ND2Movie(Movie):
             # else:
             #     self.file.iter_axes = 't'
 
-            n_illumination = len(self.file.metadata["channels"])
+            n_channels = len(self.file.metadata["channels"])
             n_frames = len(x_positions)
             position_tolerance = 10  # xy tol = tolerance in um
             first_frame_of_each_fov = [0]
@@ -142,11 +142,11 @@ class ND2Movie(Movie):
             # self.number_of_fields_of_view = len(images.metadata["experiment"]["loops"])  # number of fov is now available from self.fov_info
             self.number_of_frames = len(self.file)
 
-            self.illuminations = [Illumination(name) for name in self.file.metadata["channels"]]
+            # self.illuminations = [Illumination(name) for name in self.file.metadata["channels"]]
 
             if self.fov_index is not None:
-                self.frame_offset = self.first_frame_of_each_fov[self.fov_index] * self.number_of_illuminations
-                frame_end = (self.last_frame_of_each_fov[self.fov_index]+1) * self.number_of_illuminations
+                self.frame_offset = self.first_frame_of_each_fov[self.fov_index] * n_channels
+                frame_end = (self.last_frame_of_each_fov[self.fov_index]+1) * n_channels
                 self.number_of_frames = frame_end - self.frame_offset
             else:
                 self.frame_offset = 0
@@ -156,14 +156,14 @@ class ND2Movie(Movie):
                 self.stage_coordinates_in_pixels = self.stage_coordinates / self.pixel_size
 
 
-            self.illumination_arrangement = np.arange(len(self.illuminations))
+            # self.illumination_arrangement = np.arange(len(self.illuminations))
 
             if self.fov_index is not None:
                 self.time = xr.DataArray(np.repeat(
                     self.file.timesteps[self.first_frame_of_each_fov[self.fov_index]:(self.last_frame_of_each_fov[self.fov_index]+1)],
-                    self.number_of_illuminations)/1000, dims='frame', coords={}, attrs={'units': 's'})
+                    n_channels)/1000, dims='frame', coords={}, attrs={'units': 's'})
             else:
-                self.time = xr.DataArray(np.repeat(self.file.timesteps, self.number_of_illuminations)/1000, dims='frame',
+                self.time = xr.DataArray(np.repeat(self.file.timesteps, n_channels)/1000, dims='frame',
                                          coords={}, attrs={'units': 's'})
 
             # self.exp_time = images.metadata['experiment']['loops'][0]['sampling_interval']
