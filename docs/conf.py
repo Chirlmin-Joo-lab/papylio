@@ -34,8 +34,8 @@ import papylio
 release = papylio.__version__
 
 rst_epilog = f"""
-.. _Download for Windows: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/papylio-{release}.exe
-.. _Download for macOS: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/papylio-{release}.dmg
+.. _Download for Windows: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/Papylio-v{release}-Windows-x64.exe
+.. _Download for macOS: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release}/Papylio-v{release}-macOS-intel.dmg
 """
 
 # -- General configuration ---------------------------------------------------
