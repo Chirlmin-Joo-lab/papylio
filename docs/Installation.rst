@@ -34,27 +34,6 @@ or through using pip
 
 where it is recommended to make a separate virtual environment or conda environment for `papylio`.
 
-.. ATTENTION::
-
-   Currently, installing Papylio through conda on Windows is giving a dll error when loading an Experiment.
-   For now it is recommended to either create a new environment with python and then use pip to install papylio.
-
-   .. code-block::
-
-      conda create -n papylio
-      conda install python=3.9 -c conda-forge
-      pip install papylio
-
-   Or to download the environment file in `installer/windows/environment_windows.yml` from the github repository and
-   use it to create a conda environment with all the papylio dependencies.
-   After that Papylio can be installed in the regular way using conda.
-
-   .. code-block::
-
-      conda create -n papylio -f environment_windows.yml
-      conda install papylio -c conda-forge
-
-
 Detailed conda installation steps
 ---------------------------------
 For installation with conda, it is recommended to use `miniforge`_.
