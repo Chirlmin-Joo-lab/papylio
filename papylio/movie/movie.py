@@ -265,7 +265,7 @@ class Movie:
             Formatted filename with metadata embedded
         """
 
-        image_configuration = get_default_parameters(cls.get_image) | image_configuration
+        image_configuration = get_default_parameters(cls.make_image) | image_configuration
 
         # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
         if fov_index is not None:
