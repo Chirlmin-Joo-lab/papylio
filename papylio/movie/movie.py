@@ -340,7 +340,11 @@ class Movie:
         """
         if self.__class__.unit_mapping is None:
             self.unit_mapping = mp.MatchPoint()
+
         self.filepath = Path(filepath)
+        self.directory = self.filepath.parent
+        self.name = self.filepath.name
+        
         self._with_counter = 0
         self.fov_index = None
         # self.filepaths = [Path(filepath) for filepath in filepaths] # For implementing multiple files, e.g. two channels over two files
@@ -850,7 +854,7 @@ class Movie:
         image = image.sum(axis=1, keepdims=True)
         return image
 
-    def get_image(self, frames=slice(0, 20), channel=None, illumination=None,
+    def make_image(self, frames=slice(0, 20), channel=None, illumination=None,
                   projection=None, apply_corrections=True, overlay_channels=False,# flatten_channels=False,
                   xarray=False):
         """ Construct a projection image
@@ -926,9 +930,64 @@ class Movie:
 
         return image
 
+    def get_image(self, load=True, only_save_projections=True, **image_configuration):
+        """
+        Get or generate a projection image.
+
+        Parameters:
+            load (bool, optional): Whether to try loading an existing image from disk. Default is True.
+            **kwargs: Additional configuration parameters for image projection.
+
+        Returns:
+            numpy.ndarray: The projection image.
+        """
+        # TODO: Add option to flatten channels?
+        # TODO: Check handling of frame_range = (0, None)
+        images_directory = self.directory / (self.name + '_images')
+        if not images_directory.exists():
+            images_directory.mkdir(parents=True, exist_ok=True)
+
+        if load:
+            image = self.load_image(images_directory / self.name, **image_configuration)
+        else:
+            image = None
+
+        if image is None:
+            image = self.save_image(**image_configuration, directory=images_directory,
+                                          only_save_projections=only_save_projections)
+
+        return image
+
+    @staticmethod
+    def load_image(filepath, **image_configuration):
+        image_filename = Movie.image_configuration_to_filename(filepath.name, **image_configuration)
+        image_filepath = filepath.with_name(image_filename).with_suffix('.tif')
+
+        if image_filepath.is_file():
+            with tifffile.TiffFile(image_filepath) as tif:
+                image = tif.asarray()
+                metadata = tif.imagej_metadata
+            channels = np.array(metadata['Labels'])
+            channel_arrangement = np.array(json.loads(metadata['channel_arrangement']))
+            image = Movie.separate_channels(image, channel_arrangement)
+            if image.ndim == 3:
+                image = image[None, ...]
+            image_configuration_metadata = metadata['image_configuration']
+            from papylio.log_functions import function_arguments_json
+            image_configuration_json = function_arguments_json(Movie.get_image, image_configuration)
+            if image_configuration_metadata != image_configuration_json:
+                warnings.warn(f'Image configuration in metadata does not match requested configuration. '
+                              f'Metadata: {image_configuration_metadata}, Requested: {image_configuration_json}')
+                return None
+            image = xr.DataArray(image, dims=('frame', 'channel', 'y', 'x'), coords={'channel': channels})
+            return image
+        else:
+            return None
+            # raise FileNotFoundError(f'Projection image not found at {image_filepath}')
+
     def save_image(self, intensity_range=None, color_map='gray', directory=None, filename=None, filetype='tif',
                    only_save_projections=False, **image_configuration):
-        image = self.get_image(**image_configuration)
+        image = self.make_image(**image_configuration)
 
         if directory is None:
             directory = self.writepath
@@ -977,32 +1036,47 @@ class Movie:
 
         return image
 
-    @staticmethod
-    def load_image(filepath, **image_configuration):
-        image_filename = Movie.image_configuration_to_filename(filepath.name, **image_configuration)
-        image_filepath = filepath.with_name(image_filename).with_suffix('.tif')
+    def show_image(self, figure=None, axes=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
+        #TODO: Finish docstring
+        """
+        Show a projection image of the movie.
 
-        if image_filepath.is_file():
-            with tifffile.TiffFile(image_filepath) as tif:
-                image = tif.asarray()
-                metadata = tif.imagej_metadata
-            channels = np.array(metadata['Labels'])
-            channel_arrangement = np.array(json.loads(metadata['channel_arrangement']))
-            image = Movie.separate_channels(image, channel_arrangement)
-            if image.ndim == 3:
-                image = image[None, ...]
-            image_configuration_metadata = metadata['image_configuration']
-            from papylio.log_functions import function_arguments_json
-            image_configuration_json = function_arguments_json(Movie.get_image, image_configuration)
-            if image_configuration_metadata != image_configuration_json:
-                warnings.warn(f'Image configuration in metadata does not match requested configuration. '
-                              f'Metadata: {image_configuration_metadata}, Requested: {image_configuration_json}')
-                return None
-            image = xr.DataArray(image, dims=('frame', 'channel', 'y', 'x'), coords={'channel': channels})
-            return image
+        Returns:
+            tuple: (figure, axes)
+        """
+        # TODO: Show two channels separately and connect axes
+        # Split configuration based on inspect??
+
+        # if image_configuration is None:
+        #     image_configuration = {}
+
+        image = self.get_image(**image_configuration)
+
+        image_configuration_defaults = get_default_parameters(Movie.get_image)
+        image_configuration = (image_configuration_defaults | image_configuration)
+        filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
+
+        if unit == 'pixel':
+            unit_string = ' (pixels)'
+        elif unit == 'metric':
+            imshow_configuration['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
+            unit_string = f' ({self.movie.pixel_size_unit})'
         else:
-            return None
-            # raise FileNotFoundError(f'Projection image not found at {image_filepath}')
+            raise ValueError('Wrong unit value')
+
+        if interactive:
+            from papylio.gui.image_widget import ImageWidgetSingle
+            image_widget = ImageWidgetSingle(image)
+            return
+        else:
+            figure, axes = show_single_image(image[0], figure=figure, axes=axes, imshow_configuration=imshow_configuration)
+
+            if image_configuration.get('projection', None) == 'average':
+                figure.suptitle('Average image\n' + str(self.directory / filename))
+            elif image_configuration.get('projection', None) == 'maximum':
+                figure.suptitle('Maximum projection\n' + str(self.directory / filename))
+
+            return figure, axes
 
     # def make_projection_images(self, projection='average', frame_range=(0, 20)):
     #     # Perhaps put this in make_projection_image as a special type of cmap
@@ -1407,6 +1481,33 @@ def expand_axes(frames, expand_into, from_axes=-1, to_axes=None, new_axes_positi
     # print(time.time() - start)
 
     return frames
+
+def show_single_image(image, figure=None, axes=None, imshow_configuration=None):
+
+    if axes is None:
+        if figure is None:
+            figure = plt.figure()
+    else:
+        figure = axes.flatten()[0].figure
+
+    if len(figure.axes) == 0:
+        axes = figure.subplots(1, image.shape[0], sharex=True, sharey=True, squeeze=False)
+
+    figure.set_layout_engine('compressed')
+
+    if imshow_configuration is None:
+        imshow_configuration = {}
+
+    for i, (im, axis) in enumerate(zip(image, axes.flatten())):
+        axis.imshow(im, **imshow_configuration)
+        axis.set_title(image.channel[i].item().capitalize())
+        axis.set_xlabel('x')# + unit_string)
+        if i > 0:
+            axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
+        else:
+            axis.set_ylabel('y')  # ['+unit_string+']')
+
+    return figure, axes
 
 # from collections.abc import Mapping
 #

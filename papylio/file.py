@@ -164,6 +164,8 @@ class File:
                     # It is desirable to raise an AttributeError instead of a KeyError,
                     # as this is used by hasattr for example. Hence the try except.
                     pass
+        elif hasattr(self.movie, item):
+            return getattr(self.movie, item)
         else:
             return super().__getattribute__(item)
 
@@ -324,75 +326,7 @@ class File:
     def illumination_arrangement(self, value):
         self.movie.illumination_arrangement = value
 
-    def get_image(self, load=True, only_save_projections=True, **image_configuration):
-        """
-        Get or generate a projection image.
 
-        Parameters:
-            load (bool, optional): Whether to try loading an existing image from disk. Default is True.
-            **kwargs: Additional configuration parameters for image projection.
-
-        Returns:
-            numpy.ndarray: The projection image.
-        """
-        # TODO: Add option to flatten channels?
-        # TODO: Check handling of frame_range = (0, None)
-        images_directory = self.directory / (self.name + '_images')
-        if not images_directory.exists():
-            images_directory.mkdir(parents=True, exist_ok=True)
-
-        if load:
-            image = Movie.load_image(images_directory / self.name, **image_configuration)
-        else:
-            image = None
-
-        if image is None:
-            image = self.movie.save_image(**image_configuration, directory=images_directory,
-                                          only_save_projections=only_save_projections)
-
-        return image
-
-    def show_image(self, figure=None, axes=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
-        #TODO: Finish docstring
-        """
-        Show a projection image of the movie.
-
-        Returns:
-            tuple: (figure, axes)
-        """
-        # TODO: Show two channels separately and connect axes
-        # Split configuration based on inspect??
-
-        # if image_configuration is None:
-        #     image_configuration = {}
-
-        image = self.get_image(**image_configuration)
-
-        image_configuration_defaults = get_default_parameters(Movie.get_image)
-        image_configuration = (image_configuration_defaults | image_configuration)
-        filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
-
-        if unit == 'pixel':
-            unit_string = ' (pixels)'
-        elif unit == 'metric':
-            imshow_configuration['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
-            unit_string = f' ({self.movie.pixel_size_unit})'
-        else:
-            raise ValueError('Wrong unit value')
-
-        if interactive:
-            from papylio.gui.image_widget import ImageWidgetSingle
-            image_widget = ImageWidgetSingle(image)
-            return
-        else:
-            figure, axes = show_single_image(image[0], figure=figure, axes=axes, imshow_configuration=imshow_configuration)
-
-            if image_configuration['projection'] == 'average':
-                figure.suptitle('Average image\n' + str(self.directory / filename))
-            elif image_configuration['projection'] == 'maximum':
-                figure.suptitle('Maximum projection\n' + str(self.directory / filename))
-
-            return figure, axes
 
     @property
     @return_none_when_executed_by_pycharm
@@ -2106,34 +2040,6 @@ class File:
         from papylio.trace_plot import TracePlotWindow
         TracePlotWindow(dataset=dataset, split_illuminations=split_illuminations,
                         dataset_path=self.absolute_path.with_suffix('.nc'), save_path=save_path, **kwargs)
-
-#TODO: Perhaps move to Movie?
-def show_single_image(image, figure=None, axes=None, imshow_configuration=None):
-
-    if axes is None:
-        if figure is None:
-            figure = plt.figure()
-    else:
-        figure = axes.flatten()[0].figure
-
-    if len(figure.axes) == 0:
-        axes = figure.subplots(1, image.shape[0], sharex=True, sharey=True, squeeze=False)
-
-    figure.set_layout_engine('compressed')
-
-    if imshow_configuration is None:
-        imshow_configuration = {}
-
-    for i, (im, axis) in enumerate(zip(image, axes.flatten())):
-        axis.imshow(im, **imshow_configuration)
-        axis.set_title(image.channel[i].item().capitalize())
-        axis.set_xlabel('x')# + unit_string)
-        if i > 0:
-            axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
-        else:
-            axis.set_ylabel('y')  # ['+unit_string+']')
-
-    return figure, axes
 
 
 def calculate_intensity_total(intensity):
