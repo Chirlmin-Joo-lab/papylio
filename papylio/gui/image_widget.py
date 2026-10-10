@@ -46,7 +46,7 @@ from matplotlib.figure import Figure
 #         else:
 #             self.setDisabled(False)
 
-from papylio.file import show_single_image
+from papylio.movie.movie import show_single_image
 
 class ImageWidgetSingle(QWidget):
     """A QSlider that controls a line plot embedded in a matplotlib canvas."""
