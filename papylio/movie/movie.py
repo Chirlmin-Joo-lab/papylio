@@ -264,8 +264,17 @@ class Movie:
         str
             Formatted filename with metadata embedded
         """
+        image_configuration_default = get_default_parameters(cls.make_image)
 
-        image_configuration = get_default_parameters(cls.make_image) | image_configuration
+        unknown = image_configuration.keys() - image_configuration_default.keys()
+        if unknown:
+            raise TypeError(
+                f"{cls.make_image.__qualname__}() got unexpected image configuration "
+                f"argument(s): {', '.join(sorted(map(repr, unknown)))}. "
+                f"Valid arguments are: {', '.join(sorted(image_configuration_default))}."
+            )
+
+        image_configuration = image_configuration_default | image_configuration
 
         # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
         if fov_index is not None:

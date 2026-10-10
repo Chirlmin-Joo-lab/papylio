@@ -70,9 +70,9 @@ def test_get_image_multiple_illuminations(file, image_configuration):
     assert image.shape == (10, 2, 512, 256)
 
 def test_get_image_any_kwarg(file):
-    file.get_image()
+    file.get_image(frames=range(0,20), projection='average')
     with pytest.raises(TypeError):
-        file.get_image(test=True)
+        file.get_image(frames=range(0,20), projection='average', test=True)
 
 @pytest.mark.parametrize(
     "image_configuration, imshow_configuration", [
