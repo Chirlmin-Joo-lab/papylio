@@ -49,9 +49,14 @@ def test_get_image(file, image_configuration, result):
     image = file.get_image(**image_configuration)
     assert image.shape == result
 
-def test_get_image_save_and_load(file):
-    image_saved = file.get_image(frames=slice(0,20), projection='average')
-    image_loaded = file.get_image(frames=slice(0, 20), projection='average')
+@pytest.mark.parametrize(
+    "image_configuration", [
+        dict(frames=slice(0,20), projection='average'),
+        dict(frames=slice(0,20), projection='average', overlay_channels=True),
+])
+def test_get_image_save_and_load(file, image_configuration):
+    image_saved = file.get_image(**image_configuration)
+    image_loaded = file.get_image(**image_configuration)
     assert (image_saved == image_loaded).all().item()
 
 @pytest.mark.parametrize(

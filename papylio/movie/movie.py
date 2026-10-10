@@ -344,7 +344,7 @@ class Movie:
         self.filepath = Path(filepath)
         self.directory = self.filepath.parent
         self.name = self.filepath.name
-        
+
         self._with_counter = 0
         self.fov_index = None
         # self.filepaths = [Path(filepath) for filepath in filepaths] # For implementing multiple files, e.g. two channels over two files
@@ -967,7 +967,7 @@ class Movie:
             with tifffile.TiffFile(image_filepath) as tif:
                 image = tif.asarray()
                 metadata = tif.imagej_metadata
-            channels = np.array(metadata['Labels'])
+            channels = np.atleast_1d(metadata['Labels'])
             channel_arrangement = np.array(json.loads(metadata['channel_arrangement']))
             image = Movie.separate_channels(image, channel_arrangement)
             if image.ndim == 3:
@@ -979,7 +979,7 @@ class Movie:
                 warnings.warn(f'Image configuration in metadata does not match requested configuration. '
                               f'Metadata: {image_configuration_metadata}, Requested: {image_configuration_json}')
                 return None
-            image = xr.DataArray(image, dims=('frame', 'channel', 'y', 'x'), coords={'channel': channels})
+            image = xr.DataArray(image, dims=('frame', 'channel', 'y', 'x'), coords={'channel': ('channel', channels)})
             return image
         else:
             return None
