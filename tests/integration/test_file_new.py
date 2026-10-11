@@ -36,8 +36,8 @@ def file():
     (dict(frames=range(10,30,2)),(10, 2, 512, 256)),
     (dict(frames=[10, 20, 30]),(3, 2, 512, 256)),
     (dict(frames=np.array([10, 20, 30])),(3, 2, 512, 256)),
-    (dict(frames=slice(0,20), channel='green'),(20, 1, 512, 256)),
-    (dict(frames=slice(0,20), channel='red'),(20, 1, 512, 256)),
+    (dict(frames=slice(0,20), channels='green'),(20, 1, 512, 256)),
+    (dict(frames=slice(0,20), channels='red'),(20, 1, 512, 256)),
     (dict(frames=slice(0,20), projection='average'),(1, 2, 512, 256)),
     (dict(frames=slice(0,20), projection='maximum'),(1, 2, 512, 256)),
     (dict(frames=slice(0,20), overlay_channels=True),(20, 1, 512, 256)),
@@ -52,6 +52,7 @@ def test_get_image(file, image_configuration, result):
 @pytest.mark.parametrize(
     "image_configuration", [
         dict(frames=slice(0,20), projection='average'),
+        dict(frames=slice(0,20), projection='average', load=True),
         dict(frames=slice(0,20), projection='average', overlay_channels=True),
 ])
 def test_get_image_save_and_load(file, image_configuration):
@@ -61,12 +62,14 @@ def test_get_image_save_and_load(file, image_configuration):
 
 @pytest.mark.parametrize(
     "image_configuration", [
-        dict(frames=slice(0,20), illumination=0),
-        dict(frames=slice(0,20), illumination=1)
+        dict(frames=slice(0,20), illuminations=0),
+        dict(frames=slice(0,20), illuminations=1),
+        dict(frames=slice(0,20), illuminations='green'),
+        dict(frames=slice(0,20), illuminations='red'),
 ])
 def test_get_image_multiple_illuminations(file, image_configuration):
     file.illumination_arrangement = [0] * 10 + [1] * 390
-    image = file.get_image(**image_configuration)
+    image = file.get_image(only_save_projections=False, **image_configuration)
     assert image.shape == (10, 2, 512, 256)
 
 def test_get_image_any_kwarg(file):
@@ -77,7 +80,7 @@ def test_get_image_any_kwarg(file):
 @pytest.mark.parametrize(
     "image_configuration, imshow_configuration", [
     (dict(frames=slice(0,20)), None),
-    (dict(frames=slice(0,20), channel='red'),None),
+    (dict(frames=slice(0,20), channels='red'),None),
     (dict(frames=slice(0,20), projection='average'), None),
     (dict(frames=slice(0,20), projection='average', overlay_channels=True), None),
     (dict(frames=slice(0,20), projection='average', overlay_channels=True), dict(vmin=0, vmax=100)),
@@ -90,3 +93,11 @@ def test_show_image_custom_figures_and_axes(file):
     figure, axes = plt.subplots(2,1)
     image_configuration = dict(frames=slice(0,20))
     file.show_image(axes=axes, **image_configuration)
+
+def test_clear_images(file):
+    file.get_image(frames=slice(0,20), projection='average')
+    assert file.images_directory.exists()
+    assert len(list(file.images_directory.iterdir())) == 1
+
+    file.clear_images()
+    assert not file.images_directory.exists()

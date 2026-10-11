@@ -20,6 +20,7 @@ import xarray as xr
 from skimage.transform import AffineTransform
 
 import matchpoint as mp
+from toolz import isiterable
 
 from papylio.helper_functions import get_default_parameters
 # from papylio.movie.background_correction import rollingball
@@ -247,8 +248,7 @@ class Movie:
 
         return image_info
 
-    @classmethod
-    def image_configuration_to_filename(cls, filename, fov_index=None, **image_configuration):
+    def image_configuration_to_filename(self, filename, fov_index=None, **image_configuration):
         """Construct standardized filename from base name and image metadata.
 
         Parameters
@@ -264,12 +264,12 @@ class Movie:
         str
             Formatted filename with metadata embedded
         """
-        image_configuration_default = get_default_parameters(cls.make_image)
+        image_configuration_default = get_default_parameters(self.make_image)
 
         unknown = image_configuration.keys() - image_configuration_default.keys()
         if unknown:
             raise TypeError(
-                f"{cls.make_image.__qualname__}() got unexpected image configuration "
+                f"{self.make_image.__qualname__}() got unexpected image configuration "
                 f"argument(s): {', '.join(sorted(map(repr, unknown)))}. "
                 f"Valid arguments are: {', '.join(sorted(image_configuration_default))}."
             )
@@ -296,13 +296,15 @@ class Movie:
 
         channels = image_configuration.get('channels', None)
         if channels is not None:  # and self.number_of_illuminations_in_movie > 1:
-            # channels = cls.get_channel_indices_from_names(channels)
-            filename += f'_c-{''.join(channel + '+' for channel in channels)}'[:-1]
+            channel_indices = self.get_channel_indices_from_names(channels)
+            channels = [self.channels[i] for i in channel_indices]
+            filename += f'_c-{''.join(str(channel) + '+' for channel in channels)}'[:-1]
 
         illuminations = image_configuration.get('illuminations', None)
         if illuminations is not None:  # and self.number_of_illuminations_in_movie > 1:
-            # illuminations = cls.get_illuminations_indices_from_names(illuminations)
-            filename += f'_i-{''.join(illumination + '+' for illumination in illuminations)}'[:-1]
+            illumination_indices = self.get_illumination_indices_from_names(illuminations)
+            illuminations = [self.illuminations[i] for i in illumination_indices]
+            filename += f'_i-{''.join(str(illumination) + '+' for illumination in illuminations)}'[:-1]
 
         apply_corrections = image_configuration.get('apply_corrections', True)
         if not apply_corrections:
@@ -832,6 +834,19 @@ class Movie:
             frame = self.read_frames([i], apply_corrections=False, xarray=False)
             tifffile.imwrite(tif_filepath, frame, append=True)
 
+    ### IMAGES ###
+
+    @property
+    def images_directory(self):
+        return self.directory / (self.name + '_images')
+
+    def clear_images(self):
+        """Clear all saved projection images for this movie."""
+        for file in self.images_directory.glob(f'{self.name}_*.tif'):
+            file.unlink()
+        if self.images_directory.exists() and not any(self.images_directory.iterdir()):
+            self.images_directory.rmdir()
+
     def project_frames(self, frame_indices, projection='average', **read_frames_kwargs):
         image = self.separate_channels(np.zeros((self.height, self.width)).astype('float64'), self.channel_arrangement)
         frame_indices_subsets = np.array_split(frame_indices, len(frame_indices) // self.chunk_size + 1)
@@ -863,7 +878,7 @@ class Movie:
         image = image.sum(axis=1, keepdims=True)
         return image
 
-    def make_image(self, frames=slice(0, 20), channel=None, illumination=None,
+    def make_image(self, frames=slice(0, 20), channels=None, illuminations=None,
                   projection=None, apply_corrections=True, overlay_channels=False,# flatten_channels=False,
                   xarray=False):
         """ Construct a projection image
@@ -903,8 +918,9 @@ class Movie:
         if np.max(frame_indices) > self.number_of_frames-1:
             raise ValueError(f'Incorrect frame indices, choose frames between 0 and {self.number_of_frames - 1}')
 
-        illumination_indices = self.get_illumination_indices_from_names(illumination)
+        illumination_indices = self.get_illumination_indices_from_names(illuminations)
         illumination_index = np.intersect1d(illumination_indices, self.illumination_indices_in_movie)[0]
+        illuminations = [self.illuminations[i] for i in illumination_indices]
 
         # Select frame_indices with illumination
         frame_indices = frame_indices[self.illumination_index_per_frame.values[frame_indices] == illumination_index]
@@ -920,10 +936,11 @@ class Movie:
             image = image.drop_vars(['frame', 'illumination', 'time'])
         image.attrs['channel_arrangement'] = self.channel_arrangement
 
-        if channel is not None:
-            channel_indices = self.get_channel_indices_from_names(channel)
+        if channels is not None:
+            channel_indices = self.get_channel_indices_from_names(channels)
             image = image[...,channel_indices,:,:]
             image.attrs['channel_arrangement'] = [[list(range(len(channel_indices)))]]
+            channels = [self.channels[i] for i in channel_indices]
 
         if overlay_channels:
             image = self.overlay_channels(image)
@@ -952,24 +969,23 @@ class Movie:
         """
         # TODO: Add option to flatten channels?
         # TODO: Check handling of frame_range = (0, None)
-        images_directory = self.directory / (self.name + '_images')
-        if not images_directory.exists():
-            images_directory.mkdir(parents=True, exist_ok=True)
+
+        if not self.images_directory.exists():
+            self.images_directory.mkdir(exist_ok=True)
 
         if load:
-            image = self.load_image(images_directory / self.name, **image_configuration)
+            image = self.load_image(self.images_directory / self.name, **image_configuration)
         else:
             image = None
 
         if image is None:
-            image = self.save_image(**image_configuration, directory=images_directory,
+            image = self.save_image(**image_configuration, directory=self.images_directory,
                                           only_save_projections=only_save_projections)
 
         return image
 
-    @staticmethod
-    def load_image(filepath, **image_configuration):
-        image_filename = Movie.image_configuration_to_filename(filepath.name, **image_configuration)
+    def load_image(self, filepath, **image_configuration):
+        image_filename = self.image_configuration_to_filename(filepath.name, **image_configuration)
         image_filepath = filepath.with_name(image_filename).with_suffix('.tif')
 
         if image_filepath.is_file():
@@ -983,7 +999,7 @@ class Movie:
                 image = image[None, ...]
             image_configuration_metadata = metadata['image_configuration']
             from papylio.log_functions import function_arguments_json
-            image_configuration_json = function_arguments_json(Movie.get_image, image_configuration)
+            image_configuration_json = function_arguments_json(Movie.make_image, image_configuration)
             if image_configuration_metadata != image_configuration_json:
                 warnings.warn(f'Image configuration in metadata does not match requested configuration. '
                               f'Metadata: {image_configuration_metadata}, Requested: {image_configuration_json}')
@@ -1002,7 +1018,7 @@ class Movie:
             directory = self.writepath
 
         if filename is None:
-            filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
+            filename = self.image_configuration_to_filename(self.name, **image_configuration)
 
         filepath = directory / filename
 
@@ -1044,6 +1060,8 @@ class Movie:
                        cmap=color_map)
 
         return image
+
+    ## Image visualization
 
     def show_image(self, figure=None, axes=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
         #TODO: Finish docstring
@@ -1140,6 +1158,8 @@ class Movie:
     def show(self):
         from papylio.gui.image_widget import ImageWidgetSingle
         ImageWidgetSingle(image=self)
+
+    ### BACKGROUND CORRECTION ###
 
     # Do we really need this?
     def determine_general_background_correction(self, method='median', frame_range=(0, 20), use_existing=False):
@@ -1566,7 +1586,7 @@ def show_single_image(image, figure=None, axes=None, imshow_configuration=None):
 #             Formatted filename with metadata embedded
 #         """
 #
-#         # image_configuration = get_default_parameters(Movie.get_image) | self
+#         # image_configuration = get_default_parameters(Movie.make_image) | self
 #
 #         # # if 'fov_info' in self.__dict__.keys() and self.fov_info: # Or hasattr(self, 'fov_info')
 #         # if fov_index is not None:
