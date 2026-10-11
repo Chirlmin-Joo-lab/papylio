@@ -934,7 +934,7 @@ class Movie:
         #     image = self.flatten_channels(image, self.channel_arrangement)
 
         image.attrs['movie_configuration'] = json.dumps(self.configuration)
-        image = add_configuration_to_dataarray(image, Movie.get_image, locals(), units='a.u.')
+        image = add_configuration_to_dataarray(image, Movie.make_image, locals(), units='a.u.')
         image.attrs["image_configuration"] = image.attrs.pop("configuration")
 
         return image
@@ -1053,23 +1053,15 @@ class Movie:
         Returns:
             tuple: (figure, axes)
         """
-        # TODO: Show two channels separately and connect axes
         # Split configuration based on inspect??
 
-        # if image_configuration is None:
-        #     image_configuration = {}
-
         image = self.get_image(**image_configuration)
-
-        image_configuration_defaults = get_default_parameters(Movie.get_image)
-        image_configuration = (image_configuration_defaults | image_configuration)
-        filename = Movie.image_configuration_to_filename(self.name, **image_configuration)
 
         if unit == 'pixel':
             unit_string = ' (pixels)'
         elif unit == 'metric':
-            imshow_configuration['extent'] = self.movie.boundaries_metric.T.flatten()[[0,1,3,2]]
-            unit_string = f' ({self.movie.pixel_size_unit})'
+            imshow_configuration['extent'] = self.boundaries_metric.T.flatten()[[0,1,3,2]]
+            unit_string = f' ({self.pixel_size_unit})'
         else:
             raise ValueError('Wrong unit value')
 
@@ -1079,12 +1071,8 @@ class Movie:
             return
         else:
             figure, axes = show_single_image(image[0], figure=figure, axes=axes, imshow_configuration=imshow_configuration)
-
-            if image_configuration.get('projection', None) == 'average':
-                figure.suptitle('Average image\n' + str(self.directory / filename))
-            elif image_configuration.get('projection', None) == 'maximum':
-                figure.suptitle('Maximum projection\n' + str(self.directory / filename))
-
+            title = self.image_configuration_to_filename(self.name, **image_configuration)
+            figure.suptitle(title)
             return figure, axes
 
     # def make_projection_images(self, projection='average', frame_range=(0, 20)):
