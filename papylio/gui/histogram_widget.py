@@ -126,7 +126,8 @@ class HistogramCanvas_1D(FigureCanvas):
         self.file.show_histogram(
             variable=self.variable,
             axis=axis,
-            bins=self.bins
+            bins=self.bins,
+            selected=True
         )
         self.draw()
 

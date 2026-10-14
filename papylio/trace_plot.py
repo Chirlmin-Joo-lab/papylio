@@ -1248,7 +1248,7 @@ if __name__ == "__main__":
 
 
     import papylio as pp
-    exp = pp.Experiment(r'C:\Users\ivoseverins\surfdrive\Promotie\Code\Python\traceAnalysis\twoColourExampleData\20141017 - Holliday junction - Copy')
+    exp = pp.Experiment(r'C:\Users\jkerssemakers\OneDrive - Delft University of Technology\Documents\GitHub\Papylio example dataset_flat')
     ds = exp.files[0].dataset
 
     from PySide2.QtWidgets import QApplication
