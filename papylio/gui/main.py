@@ -21,6 +21,7 @@ import numpy as np
 import papylio as pp
 from papylio import Experiment, File
 from papylio.trace_plot import TracePlotWindow
+from papylio.hist_plot import HistogramPlotWindow
 from papylio.gui.setup_widget import SetUpWidget
 from papylio.gui.selection_widget import SelectionWidget
 from papylio.gui.classification_widget import ClassificationWidget
@@ -100,12 +101,11 @@ class MainWindow(QMainWindow):
 
         self.image = ImageWidget(parent=self)
         self.traces.set_highlighted_molecule.connect(self.image.image_canvas.set_highlighted_molecule)
-        self.histograms=HistogramWidget(parent=self)
+        self.histograms=HistogramPlotWindow()
         self.kinetics_results = QWidget()
         self.top_tabs.addTab(self.image, 'Image')
         self.top_tabs.addTab(self.traces, 'Traces')
         self.top_tabs.addTab(self.histograms, 'Histograms')
-
 
 
         tabs = QTabWidget()
@@ -179,13 +179,10 @@ class MainWindow(QMainWindow):
 
         central_widget = QWidget()
         central_widget.setLayout(super_layout)
-
         self.setCentralWidget(central_widget)
         self.show()
         self.showMaximized()
-
         self._create_menu_bar()
-
         #self.top_tabs.tabBar().currentChanged.connect(self.update_plots)
 
     def _create_menu_bar(self):
@@ -342,6 +339,8 @@ class MainWindow(QMainWindow):
         selected_files = self.experiment.selectedFiles + [None]
         for widget in self.tab_widgets:
             widget.file = selected_files[0]
+            # if hasattr(widget, "set_file"):
+            #      widget.set_file(selected_files[0])
             if hasattr(widget, "image_canvas"):
                 widget.image_canvas.refresh()
 

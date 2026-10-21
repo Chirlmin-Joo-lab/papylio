@@ -88,7 +88,7 @@ class File:
         """
         self.perform_logging = False # It is set to False temporarily until the end of __init__.
 
-        self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
+        self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'intensity_total', 'FRET', 'selected', 'filtered',
                                   'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
 
         relativeFilePath = Path(relativeFilePath)
