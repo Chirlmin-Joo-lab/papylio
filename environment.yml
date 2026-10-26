@@ -18,7 +18,7 @@ dependencies:
 - openpyxl
 - sphinx=5
 - sphinx-book-theme
-- nd2reader
+- nd2
 - shapely
 - xarray
 - netcdf4
@@ -42,6 +42,7 @@ dependencies:
 - perl
 - setuptools >=61.0.0
 - ipympl
+- marimo
 #- bioconda::logomaker=0.8
 # Logomaker has a matplotlib dependency, which installs PyQt
 # So please install manually if needed using

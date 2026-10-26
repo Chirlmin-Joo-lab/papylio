@@ -37,7 +37,7 @@ dependencies = [
 	"pandas >= 1.4",
 	"seaborn >= 0.11",
 	"openpyxl >= 3.0",
-	"nd2reader >= 3.3",
+	"nd2",
 	"xarray >= 2024.07",
 	"netcdf4 >= 1.6",
 	"h5netcdf >= 1.0",
