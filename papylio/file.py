@@ -640,7 +640,7 @@ class File:
         self.experiment.load_darkfield_correction()
 
     def find_coordinates(self, channels=(0, 1),
-                         projection_image_configuration=None, sliding_window=None,
+                         image_configuration=None, sliding_window=None,
                          peak_finding_configuration=None, margin=10, fit_peaks=True, remove_peaks_with_close_neighbors=None):
         """
         Find and set the locations of all molecules within the movie's images.
@@ -648,23 +648,23 @@ class File:
         This function performs peak finding on projection images, handles multiple channels,
         and manages coordinate sets across different frames if sliding windows are used.
 
+
         For configuration options see the "find_coordinates" section in the default configuration file.
         """
 
-        if projection_image_configuration is None:
-            projection_image_configuration = dict()
+        if image_configuration is None:
+            image_configuration = dict()
 
         if peak_finding_configuration is None:
             peak_finding_configuration = dict()
 
         if len(channels) > 1:
-            projection_image_configuration['overlay_channels'] = True
+            image_configuration['overlay_channels'] = True
 
         # TODO: copy relevant info from movie into dataset
         self.movie.read_metadata()
 
-        # TODO: Perhaps it is best to always return an image with a channel dimension (when overlay_channels this can be one)
-        image = self.get_image(**projection_image_configuration)
+        image = self.get_image(**image_configuration)
         channel_index = self.movie.get_channel_indices_from_names(channels)[0]
         # if channel_index is None:
         #     raise ValueError('Unknown channel')

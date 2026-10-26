@@ -54,12 +54,18 @@ def function_arguments_json(function, function_locals):
         JSON-serialized function arguments
     """
     arguments = function_arguments(function, function_locals)
+    arguments = prepare_function_arguments_for_json(arguments)
+    return json.dumps(arguments)
+
+def prepare_function_arguments_for_json(arguments):
     for keyword, argument in arguments.items():
         if isinstance(arguments[keyword], (slice, range)):
             arguments[keyword] = str(argument)
         elif isinstance(arguments[keyword], np.ndarray):
             arguments[keyword] = arguments[keyword].tolist()
-    return json.dumps(arguments)
+        elif isinstance(arguments[keyword], dict):
+            arguments[keyword] = prepare_function_arguments_for_json(arguments[keyword])
+    return arguments
 
 def get_current_datetime():
     """Get current date and time as formatted string.
