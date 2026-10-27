@@ -804,7 +804,7 @@ class File:
         """
         # Reset current .nc file
         self._init_dataset(len(coordinates.molecule))
-        coordinates.drop('file', errors='ignore').to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
+        coordinates.drop_vars('file', errors='ignore').to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     def extract_traces(self, mask_size, neighbourhood_size=11, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
