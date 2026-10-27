@@ -115,9 +115,14 @@ def extract_traces(movie, coordinates, mask_size, neighbourhood_size=11):
         # background_correction[:] = weighed_background(background_per_frame, twoD_gaussians).transpose((1,2,0))
 
         if all_frames_in_memory:
-            frames = movie.read_frames(xarray=False, flatten_channels=True)#.astype('uint16')
+            frames = movie.read_frames(xarray=False, flatten_channels=False)#.astype('uint16')
 
-        oneD_indices = (roi_indices.sel(dimension='y')*movie.width+roi_indices.sel(dimension='x')).stack(peak=('molecule','channel')).stack(i=('y','x'))
+        oneD_indices = roi_indices[:]
+        oneD_indices = (oneD_indices.sel(dimension='y') * movie.channel_width + oneD_indices.sel(dimension='x'))
+        for channel_index in range(1, movie.number_of_channels):
+            oneD_indices.loc[:, channel_index, ...] += movie.channel_width * movie.channel_height * channel_index
+        oneD_indices = oneD_indices.stack(peak=('molecule','channel')).stack(i=('y', 'x'))
+
         for frame_index in tqdm(range(movie.number_of_frames), desc=movie.name, leave=True):  # self.number_of_frames also works for pm, len(self.movie_file_object.filelist) not
             # print(frame_number)
             # if frame_number % 13 == 0:
@@ -128,7 +133,7 @@ def extract_traces(movie, coordinates, mask_size, neighbourhood_size=11):
                 image = frames[frame_index]
             else:
                 image = movie.read_frame(frame_index, xarray=False, flatten_channels=True)#.astype('uint16')
-            frame = xr.DataArray(image, dims=('y','x'))
+            frame = xr.DataArray(image, dims=('channel','y','x')) #TODO: Perhaps put this in read_frame (or make this faster in read_frame)
 
             # TODO: Proper background subtraction
 
