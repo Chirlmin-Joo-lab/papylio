@@ -232,7 +232,6 @@ class ExtractionWidget(QWidget):
             find_coordinates_config=self.pass_buttons_to_config_for_find_coordinates()
             find_coordinates_config['peak_finding'] = spot_detection_kwargs
             config_find_coordinates = {**find_coordinates_config}
-            selected_files.movie.determine_spatial_background_correction(use_existing=True)
             selected_files.find_coordinates(**config_find_coordinates)
             self.parent.image.image_canvas.refresh()
             self.parent.update_plots()
