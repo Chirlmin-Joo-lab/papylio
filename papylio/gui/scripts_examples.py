@@ -94,8 +94,43 @@ fig.show()
     """,
 }
 
+example_scripts_filter_traces= {
+"median_FRET": """
+#Build a variable that comprises of a median-filtered FRET
+fret=file.get_variable("FRET")
+fret_median5 = fret.rolling(frame=5, center=True, min_periods=1).median()
+file.set_variable(fret_median5, name='filtered')
+    """,
+
+"any processing": """
+#[for testing purposes]
+#Build -or overwrite- a buffer variable 'filtered' ,
+#using any variable and operator. Example:
+var=file.get_variable("intensity_total")
+processed_ave10 = var.rolling(frame=10, center=True, min_periods=1).mean()
+file.set_variable(processed_ave10, name='filtered_intensity_total_ave10')
+    """,
+
+"erase filtered_*": """
+#clean out any numeric variable from the stored data
+
+#single:
+dataset = file.dataset.drop_vars(["any_variable"])
+#template:
+dataset = file.dataset.drop_vars([name for name in file.dataset.data_vars.keys() if name.startswith('filtered_')])
+dataset.to_netcdf(file.absoluteFilePath.with_suffix('.nc'), engine='netcdf4', mode='w')
+
+#notes 
+#1: Use with care: this wil permanently delete the data from the .nc file.
+#2: in the Plot Configuration Panel, this cleared variable will only be gone on next run
+    """,
+
+
+}
+
 example_scripts = {
     "Show": example_scripts_show,
     "Select": example_scripts_select,
+    "Filter": example_scripts_filter_traces,
     "Analyze": example_scripts_analyze,
 }

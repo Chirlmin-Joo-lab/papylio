@@ -283,7 +283,7 @@ class ScriptBox(QWidget):
         <p>
         <ul>
           <li>Hover over the buttons to see their functions </li>
-          <li>Choose Theme and Example and Load to load example scripts </li>
+          <li>Choose Theme and Example and Load to load pre-set example scripts </li>
           <li>Before running, edit at wish </li>
         </p>
 
@@ -296,12 +296,21 @@ class ScriptBox(QWidget):
         figure.show()
         </pre>
         
+        <h3>Special pre_sets</h3>
+        <p>
+        <ul>
+          <li> Theme 'pre-process' writes any processing to a variable 'processed', 
+          to be used for quick checking within the histogram panel </li>
+          <li>Choose Theme and Example and Load to load pre-set example scripts </li>
+          <li>Before running, edit at wish </li>
+        </p>
+        
 
         <h3>Note</h3>
         <p>
          The user is assumed to have a proper insight in use of Papylio scripts.
          Custom code may overwrite earlier GUI pipeline results.
-         It may lead to mismatches and or errors in the stored data.
+         It may lead to mismatches and/or errors in the stored data or in GUI use
          
         </p>
         
