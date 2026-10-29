@@ -1,31 +1,19 @@
-import os
 import pytest
 import numpy as np
-import shutil, tempfile
 from pathlib import Path
-
-# def create_full_experiment(src: Path, files) -> Path:
-#     shutil.copytree(src, dst, dirs_exist_ok=True)
+from tests.integration.temporary_data import temporary_data
 
 @pytest.fixture
 def file():
-    filepath = Path(r'ssHJ1/ssHJ1_1.tif')
-    source = Path(__file__).parent / 'data' / 'Example dataset' / filepath
+    relative_path = Path(r'Example dataset/ssHJ1/ssHJ1_1.tif')
 
-    with tempfile.TemporaryDirectory(prefix='papylio_test_') as temporary_directory:
-        destination = Path(temporary_directory) / filepath.name
-        print(temporary_directory)
-        shutil.copy(source, destination)
-
+    with temporary_data(relative_path) as path:
         from papylio import Experiment
-        exp = Experiment(destination.parent)
+        exp = Experiment(path.parent)
         file = exp.files[0]
         file.illumination_arrangement = [0]
 
-        try:
-            yield file
-        finally:
-            os.chdir('..') # To remove the temporary directory, we need to change the working directory away from it.
+        yield file
 
 @pytest.mark.parametrize(
     "image_configuration, result", [
@@ -101,3 +89,15 @@ def test_clear_images(file):
 
     file.clear_images()
     assert not file.images_directory.exists()
+
+def test_background_correction(file):
+    file.determine_spatial_background_correction()
+    file.show_correction('spatial_background_correction')
+
+def test_find_coordinates(file):
+    file.find_coordinates(image_configuration=dict(frames=slice(0,20), projection='average'))
+    assert len(file.coordinates) > 0
+
+def test_extract_traces(file):
+    file.find_coordinates(image_configuration=dict(frames=slice(0,20), projection='average'))
+    file.extract_traces(1)
