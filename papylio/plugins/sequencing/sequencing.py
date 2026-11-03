@@ -418,8 +418,6 @@ class File:
         self._sequencing_match = None
         # self.sequencing_match_old = None
 
-        self.dataset_variables += ['sequence', 'sequence_coordinates', 'sequence_quality', 'sequence_tile', 'sequence_variable']
-
         # if self.experiment.import_all is True:
         #     self.findAndAddExtensions()
 

@@ -30,6 +30,7 @@ import papylio
 
 import matchpoint as mp
 from papylio.movie.movie import Movie
+from papylio.dataset import SingleMoleculeDataset
 from papylio.plotting import histogram, wysiwyg_export
 from papylio.peak_finding import find_peaks
 from papylio.coordinate_optimization import  coordinates_within_margin, \
@@ -50,12 +51,23 @@ from papylio.analysis.classification_simple import classify_threshold
 from papylio.analysis.hidden_markov_modelling import classify_hmm
 
 
+import inspect
+
+_MISSING = object()
+
+def hasattr_static(obj, name):
+    """Check whether `name` exists on obj without triggering __getattr__ or property getters."""
+    return inspect.getattr_static(obj, name, _MISSING) is not _MISSING
+
 @plugins
 class File:
     """
     A class representing all the data related to a single-molecule data file, handling movie imports,
     coordinate finding, trace extraction, and analysis.
     """
+
+    _targets = ('movie', 'dataset')   # lookup order
+
 
     unit_mapping = mp.MatchPoint()
 
@@ -72,10 +84,6 @@ class File:
         """
         self.perform_logging = False # It is set to False temporarily until the end of __init__.
 
-        self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
-                                  'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
-
-
         self.experiment = experiment
 
         path = Path(path)
@@ -83,43 +91,19 @@ class File:
         self.name = path.name
         self.extensions = set()
 
-        # self.exposure_time = None  # Found from log file or should be inputted
-
-        self.number_of_frames = None
+        self.dataset = SingleMoleculeDataset(path.with_suffix('.nc'))
 
         self.is_selected = False
         # self.is_mapping_file = False
 
-        self._movie = None
         self.microscope = microscope
         # self.mapping = None
-
-        # self._rotation = 0
 
         self._mappings = None
         # self.mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
 
-        # I think it will be easier if we have import functions for specific data instead of specific files.
-        # For example. the sifx, pma and tif files can better be handled in the Movie class. Here we then just have a method import_movie.
-        # [IS 10-08-2020]
-        # TODO: Make an import_movie method and move the specific file type handling to the movie class (probably this should also include the log file)
-        # TODO: Make an import_mapping method and move the specific mapping type handling (.map, .coeff) to the mapping class.
 
-        self.importFunctions = {'.sifx': self.import_movie,
-                                '.pma': self.import_movie,
-                                '.nd2': self.import_movie,
-                                '.tif': self.import_movie,
-                                '.tiff': self.import_movie,
-                                '.TIF': self.import_movie,
-                                '.TIFF': self.import_movie,
-                                '.bin': self.import_movie,
-                                # '.coeff': self.import_coeff_file,
-                                # '.map': self.import_map_file,
-                                # '.mapping': self.import_mapping_file,
-                                '.pks': self.import_pks_file,
-                                '.traces': self.import_traces_file,
-                                '.nc': self.none_function
-                                }
+        # TODO: Make an import_mapping method and move the specific mapping type handling (.map, .coeff) to the mapping class.
 
         if extensions is None:
             extensions = self.find_extensions()
@@ -141,7 +125,7 @@ class File:
         """Set the object's state during unpickling."""
         self.__dict__.update(dict)
 
-    def __getattr__(self, item):
+    def __getattr__(self, name):
         """
         Dynamically retrieve attributes, specifically looking into the netCDF dataset.
 
@@ -154,20 +138,18 @@ class File:
         Raises:
             AttributeError: If the attribute is not found.
         """
-        if item == 'dataset_variables':
-            return
-        if item in self.dataset_variables or item.startswith('selection') or item.startswith('classification') or item.startswith('intensity'):
-            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
-                try:
-                    return dataset[item].load()
-                except KeyError:
-                    # It is desirable to raise an AttributeError instead of a KeyError,
-                    # as this is used by hasattr for example. Hence the try except.
-                    pass
-        elif hasattr(self.movie, item):
-            return getattr(self.movie, item)
+        if name.startswith('_') or name in self._targets:
+            raise AttributeError(name)
+        for target in self._targets:
+            try:
+                return getattr(getattr(self, target), name)
+            except AttributeError:
+                continue
         else:
-            return super().__getattribute__(item)
+            raise AttributeError(
+                f"{type(self).__name__!r} object has no attribute {name!r}",
+                name=name, obj=self,
+            )
 
     def __setattr__(self, name, value):
         """
@@ -177,7 +159,17 @@ class File:
             name (str): The name of the attribute.
             value: The value to set.
         """
-        super().__setattr__(name, value)
+        # super().__setattr__(name, value)
+        #
+        if name.startswith('_') or name in self._targets or hasattr_static(self, name):
+            object.__setattr__(self, name, value)
+            return
+        for target in self._targets:
+            if hasattr(self, target) and hasattr_static(getattr(self, target), name):
+                setattr(getattr(self, target), name, value)  # runs the owner's property setter
+                return
+        object.__setattr__(self, name, value)
+
         # # Skip logger itself
         # if name != "_logger" and self.perform_logging:
         #     # Check if the assignment comes from outside this instance
@@ -193,6 +185,12 @@ class File:
             # if not isinstance(caller, File):
             if caller is not self:
                 self._log('info', f"Set attribute {name} = {value!r}")
+
+    def __dir__(self):
+        names = set(super().__dir__())
+        for target in self._targets:
+            names |= set(dir(getattr(self, target)))
+        return sorted(names)
 
     ## Paths, directories ###
 
@@ -257,23 +255,6 @@ class File:
 
             handler.close()
             self._logger.removeHandler(handler)
-
-    @property
-    def has_movie(self):
-        return self._movie is not None
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def movie(self):
-        # TODO: Perhaps upon first getting the movie, in case a dataset exists,
-        #       then the movie should be updated with the dataset information (e.g. rotation, channel arrangement, etc.)
-        if not self.has_movie:
-            raise RuntimeError('No movie found')
-        return self._movie
-
-    @movie.setter
-    def movie(self, value):
-        self._movie = value
 
     @property
     @return_none_when_executed_by_pycharm
@@ -401,15 +382,15 @@ class File:
         with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
             return dataset[key].load()
 
-    @property
-    @return_none_when_executed_by_pycharm
-    def dataset(self):
-        """Return the full xarray dataset for this file."""
-        if self.absolute_path.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
-                return dataset.load()
-        else:
-            return None
+    # @property
+    # @return_none_when_executed_by_pycharm
+    # def dataset(self):
+    #     """Return the full xarray dataset for this file."""
+    #     if self.absolute_path.with_suffix('.nc').exists():
+    #         with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
+    #             return dataset.load()
+    #     else:
+    #         return None
 
     @property
     @return_none_when_executed_by_pycharm
@@ -501,8 +482,10 @@ class File:
         if isinstance(extensions, str):
             extensions = [extensions]
         for extension in set(extensions)-self.extensions:
-            if load:
-                self.importFunctions.get(extension, self.none_function)(extension)
+            # if load:
+            #     self.importFunctions.get(extension, self.none_function)(extension)
+            if extension in Movie.supported_extensions():
+                self.import_movie(extension)
             self.extensions.add(extension) # Maybe not necessary?
 
     def none_function(self, *args, **kwargs):
@@ -527,11 +510,7 @@ class File:
         else:
             filepath = self.absolute_path.with_suffix(extension)
 
-        self.movie = Movie(filepath, microscope=self.microscope)
-        if 'channel_arrangement' in self.dataset_attributes.keys():
-            channel_arrangement_text_string=self.dataset_attributes['channel_arrangement']
-            self.movie.channel_arrangement = ast.literal_eval(channel_arrangement_text_string)
-        # self.number_of_frames = self.movie.number_of_frames
+        self.movie = Movie(filepath, microscope=self.microscope, dataset=self.dataset)
 
     def import_coeff_file(self, extension):
         """
@@ -1102,7 +1081,7 @@ class File:
     @property
     def mappings(self):
         if self._mappings is None:
-            self.mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
+            self._mappings = [self.unit_mapping, ] * (self.number_of_channels - 1)
         return self._mappings
 
     @mappings.setter
