@@ -17,7 +17,6 @@ import xarray as xr
 
 from papylio.movie.movie import Movie
 
-
 class ND2Movie(Movie):
     """Movie class for reading Nikon ND2 image files.
 
@@ -108,17 +107,18 @@ class ND2Movie(Movie):
         data, pixel calibration, and stage coordinates from ND2 metadata.
         Automatically detects multiple fields of view based on stage position changes.
         """
+        metadata = {}
+
         with self:
-            self.width = self.file.sizes['X']
-            self.height = self.file.sizes['Y']
-            self.number_of_frames = self.file.sizes['T']
-            self.pixel_size = self.file.voxel_size()[0:2]
+            self.movie_size = (self.file.sizes['X'], self.file.sizes['Y'])
+            self.number_of_frames = number_of_frames = self.file.sizes['T']
+            self.pixel_size = self.file.voxel_size()[0:2] # in um
 
-            time_ms =  np.full(self.number_of_frames, np.nan)
+            time_ms =  np.full(number_of_frames, np.nan)
 
-            stage_coordinates_per_frame = np.full((self.number_of_frames, 2), np.nan)
+            stage_coordinates_per_frame = np.full((number_of_frames, 2), np.nan)
 
-            for i in range(self.number_of_frames):
+            for i in range(number_of_frames):
                 frame_metadata = self.file.frame_metadata(i)
                 time_ms[i] = frame_metadata.channels[0].time.relativeTimeMs
                 stage_coordinates_per_frame[i] = frame_metadata.channels[0].position.stagePositionUm[0:2]
@@ -130,15 +130,22 @@ class ND2Movie(Movie):
             self.number_of_fov = len(self.stage_coordinates)
 
             if self.fov_index is not None:
-                self.fov_frames = np.where(fov_per_frame == self.fov_index)[0]
-                self.number_of_frames = len(self.fov_frames)
+                fov_frames = np.where(fov_per_frame == self.fov_index)[0]
+                self.number_of_frames = len(fov_frames)
             else:
-                self.fov_frames = np.where(fov_per_frame == 0)[0]
+                fov_frames = np.where(fov_per_frame == 0)[0]
 
-            self.time = xr.DataArray(time_ms[self.fov_frames]/1000, dims='frame', coords={}, attrs={'units': 's'})
+            self.time = xr.DataArray(time_ms[fov_frames]/1000, dims='frame', coords={}, attrs={'units': 's'})
 
-            self.stage_coordinates_in_pixels = self.stage_coordinates / self.pixel_size
+    @property
+    def number_of_fov(self):
+        """Return the number of fields of view (FOVs) in the ND2 file."""
+        return self.dataset.number_of_fov
 
+    @number_of_fov.setter
+    def number_of_fov(self, value):
+        """Set the number of fields of view (FOVs) in the ND2 file."""
+        self.dataset.set_attribute(number_of_fov=value)
 
     def _read_frame(self, frame_number):
         """Read a single frame from the ND2 file.

@@ -22,6 +22,7 @@ from skimage.transform import AffineTransform
 import matchpoint as mp
 from toolz import isiterable
 
+from papylio.dataset import SingleMoleculeDataset
 from papylio.helper_functions import get_default_parameters
 # from papylio.movie.background_correction import rollingball
 from papylio.timer import Timer
@@ -34,15 +35,8 @@ class Movie:
     image data from various microscopy file formats.
     """
 
-    unit_mapping = None #mp.MatchPoint() # Is set first time in Movie init.
+    unit_mapping = None #mp.MatchPoint() # None Is set first time in Movie init.
     default_microscope = None
-
-    _rotation = None
-    _channels = None
-    _channel_arrangement = None
-
-    _illumination_arrangement = None  # [self.default_illumination]  # First level: frames, second level: illumination
-    _illumination_index_per_frame = None
 
     @classmethod
     def type_dict(cls):
@@ -62,6 +56,14 @@ class Movie:
         # from papylio.movie.nsk import NskMovie
         # from papylio.movie.binary import BinaryMovie
         return {extension: subclass for subclass in cls.__subclasses__() for extension in subclass.extensions}
+
+    @classmethod
+    def supported_extensions(cls):
+        extensions = set()
+        for cls in Movie.default_movie_classes() + Movie.custom_movie_classes():
+            for extension in cls.extensions:
+                extensions.add(extension)
+        return extensions
 
     @classmethod
     def default_movie_classes(cls, extension=None):
@@ -116,7 +118,7 @@ class Movie:
             return custom_movie_classes[0]
         else:
             if cls.default_microscope is None:
-                custom_movie_classes = [custom_movie_class for custom_movie_class in custom_movie_classes if getattr(custom_movie_class(filepath), 'correct_microscope', lambda: False)()]
+                custom_movie_classes = [custom_movie_class for custom_movie_class in custom_movie_classes]# if getattr(custom_movie_class(filepath), 'correct_microscope', lambda: False)()]
                 number_of_correct_microscopes = len(custom_movie_classes)
                 if number_of_correct_microscopes == 1:
                     custom_movie_class = custom_movie_classes[0]
@@ -136,6 +138,420 @@ class Movie:
 
     # illuminations = ['green', 'red']
     # default_illumination = 0
+
+    # @property
+    # def njit(self):
+    #     from numba import njit
+    #     return njit
+
+    def __new__(cls, filepath, microscope=None, dataset=None):
+        if cls is Movie:
+            subclass = cls.get_subclass(filepath, microscope)
+            return object.__new__(subclass)
+        else:
+            return object.__new__(cls)
+
+    def __getnewargs__(self):
+        return (self.filepath, self.rotation)
+
+    def __getstate__(self):
+        d = self.__dict__.copy()
+        d.pop('file', None)
+        return d
+
+    def __setstate__(self, dict):
+        self.__dict__.update(dict)
+
+    def __init__(self, filepath, microscope=None, dataset=None):  # , **kwargs):
+        """Initialize Movie object.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to the movie file
+        rotation : int, optional
+            Number of 90-degree rotations to apply to images (default: 0)
+        """
+        # if self.__class__.unit_mapping is None:
+        #     self.unit_mapping = mp.MatchPoint()
+
+        self.filepath = Path(filepath)
+        self.directory = self.filepath.parent
+        self.name = self.filepath.name
+
+        if dataset is None:
+            dataset = SingleMoleculeDataset(filepath.with_suffix('.nc'))
+        self.dataset = dataset
+
+        self._with_counter = 0
+        self.fov_index = None
+        # self.filepaths = [Path(filepath) for filepath in filepaths] # For implementing multiple files, e.g. two channels over two files
+        self.is_mapping_movie = False
+
+        # self.correct_images = False
+
+        self.chunk_size = 100
+        self.use_dask = False
+
+        if not self.filepath.suffix == '.sifx':
+            self.writepath = self.filepath.parent
+            self.name = self.filepath.with_suffix('').name
+
+        self._common_corrections = xr.Dataset()
+        self._channel_mapping = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        for base in cls.__mro__[1:]:
+            for name, attr in vars(base).items():
+                if isinstance(attr, property) and name in cls.__dict__:
+                    raw_value = cls.__dict__[name]
+                    if not isinstance(raw_value, property):
+                        delattr(cls, name)
+                        attr.fset(cls, raw_value)
+
+    def __enter__(self):
+        """Context manager entry point. Opens file for reading."""
+        if self._with_counter == 0:
+            self.open()
+        self._with_counter += 1
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit point. Closes file when exiting context."""
+        self._with_counter -= 1
+        if self._with_counter == 0:
+            self.close()
+
+    def __repr__(self):
+        """Return string representation of Movie object."""
+        return (f'{self.__class__.__name__}({str(self.filepath)})')
+
+    def __getattr__(self, name):
+        if not self.dataset.exists or not 'contains_metadata' in self.dataset.attributes:
+            self.read_metadata()
+
+        try:
+            return getattr(self.dataset, name)
+        except AttributeError:
+            raise AttributeError(
+                f"{type(self).__name__!r} object has no attribute {name!r}",
+                name=name, obj=self,
+            )
+
+    ### GENERAL ###
+
+    @property
+    def configuration(self):
+        configuration = {name: getattr(self, name) for name in ['rotation', 'channels', 'channel_arrangement', 'illuminations', 'illumination_arrangement']}
+        for name, correction in self.corrections.data_vars.items():
+            if 'configuration' in correction.attrs:
+                configuration[name] = correction.attrs['configuration']
+            else:
+                configuration[name] = None
+        return configuration
+
+    ### METADATA ###
+
+    def read_metadata(self):
+        """Read and parse file header.
+
+        Calls the subclass-specific _read_metadata() method.
+        """
+        with self:
+            self._read_metadata()
+            self.dataset.set_attribute(contains_metadata=1)
+
+    ### PIXELS ###
+
+    @property
+    def pixel_size(self):
+        return self.dataset.pixel_size
+
+    @pixel_size.setter
+    def pixel_size(self, value):
+        self.dataset.set_attribute(pixel_size=value)
+
+    @property
+    def data_type(self):
+        return np.dtype(self.dataset.datatype)
+
+    @data_type.setter
+    def data_type(self, value):
+        self.dataset.set_attribute(data_type=str(value))
+        self.intensity_range = (np.iinfo(value).min, np.iinfo(value).max) #TODO: Check whether this is used
+
+    @property
+    def bitdepth(self):
+        """int : Bit depth of the image data (e.g., 8, 16, 32)"""
+        return self.data_type.itemsize * 8  # 8 bits in a byte
+
+    ### MOVIE PROPERTIES ###
+
+    @property
+    def rotation(self):
+        if self._rotation is None:
+            raise RuntimeError("rotation not set")
+        return self._rotation
+
+    @rotation.setter
+    def rotation(self, value):
+        self._rotation = value
+
+    @property
+    def movie_size(self):
+        return self.dataset.movie_size
+
+    @movie_size.setter
+    def movie_size(self, value):
+        self.dataset.set_attribute(movie_size=value)
+
+    @property
+    def width(self):
+        if self.rotation % 2 == 0:
+            return self.movie_size[0]
+        else:
+            return self.movie_size[1]
+
+    @property
+    def height(self):
+        if self.rotation % 2 == 0:
+            return self.movie_size[1]
+        else:
+            return self.movie_size[0]
+
+    @property
+    def width_metric(self):
+        return self.width * self.pixel_size[0]
+
+    @property
+    def height_metric(self):
+        return self.height * self.pixel_size[1]
+
+    @property
+    def boundaries(self):
+        horizontal_boundaries = np.array([0, self.width])
+        vertical_boundaries = np.array([0, self.height])
+        return np.vstack([horizontal_boundaries, vertical_boundaries]).T
+
+    @property
+    def boundaries_metric(self):
+        # Formatted as two coordinates, with the lowest and highest x and y values respectively
+        horizontal_boundaries = np.array([0, self.width_metric])
+        vertical_boundaries = np.array([0, self.height_metric])
+        return np.vstack([horizontal_boundaries, vertical_boundaries]).T
+
+    @property
+    def pixels_per_frame(self):
+        """int : Total number of pixels in one frame (width × height)"""
+        return self.width * self.height
+
+    @property
+    def bytes_per_frame(self):
+        """int : Number of bytes per frame"""
+        return self.data_type.itemsize * self.pixels_per_frame
+
+    @property
+    def stage_coordinates(self):
+        return self.dataset.stage_coordinates
+
+    @stage_coordinates.setter
+    def stage_coordinates(self, value):
+        self.dataset.set_attribute(stage_coordinates=value)
+
+    @property
+    def pixel_to_stage_coordinates_transformation(self):
+        #TODO: Check whether the flipping implementation is correct for different microscopes, i.e. whether the stage coordinates are flipped with respect to the pixel coordinates and whether this is correctly implemented by flipping the stage coordinates in the translation part of the transformation.
+        pixels_to_um = AffineTransform(scale=self.pixel_size)
+        pixels_um_to_stage_coordinates_um = AffineTransform(translation=np.flip(self.stage_coordinates))
+        pixels_to_stage_coordinates_um = pixels_to_um + pixels_um_to_stage_coordinates_um
+        return pixels_to_stage_coordinates_um
+
+    @property
+    def boundaries_stage(self):
+        return self.pixel_to_stage_coordinates_transformation(self.channels[0].boundaries)
+
+    ### FRAMES & TIME ###
+
+    @property
+    def number_of_frames(self):
+        # TODO: Check whether this is useful or whether it can be derived from the frame dimension in the dataset.
+        return self.dataset.number_of_frames
+
+    @number_of_frames.setter
+    def number_of_frames(self, value):
+        self.dataset.set_attribute(number_of_frames=value)
+
+    @property
+    def frame_indices(self):
+        if 'frame' not in self.dataset:
+            frame_indices = xr.DataArray(np.arange(self.number_of_frames), dims='frame')
+            self.dataset.set_coordinate(frame=frame_indices)
+        return self.dataset.frame.values
+
+    @property
+    def time(self):
+        """xr.DataArray : Time coordinate for each frame"""
+        return self.dataset.time
+
+    @time.setter
+    def time(self, value):
+        """Set time coordinate for frames."""
+        self.dataset.set_coordinate(time=value)
+
+    ### CHANNELS ###
+
+    @property
+    def channels(self):
+        if 'channel' not in self.dataset:
+            raise RuntimeError("channels not set")
+        return self.dataset.channel.values.tolist()
+
+    @channels.setter
+    def channels(self, value):
+        if 'channel' in self.dataset and len(value) != len(self.dataset.channel):
+            raise ValueError("Number of channels must match existing channels")
+        self.dataset.set_coordinate(channel=value)
+
+    @property
+    def channel_arrangement(self):
+        if 'channel_arrangement' not in self.dataset:
+            raise RuntimeError("channel_arrangement not set")
+        return self.dataset.channel_arrangement.tolist()
+
+    @channel_arrangement.setter
+    def channel_arrangement(self, value):
+        # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
+        self.dataset.set_attribute(channel_arrangement=value)
+
+    @property
+    def channel_indices(self):
+        return xr.DataArray(np.array(self.channel_arrangement).flatten(), dims='channel')
+
+    @property
+    def channel_rows(self):
+        """int : Number of channel rows in channel arrangement"""
+        return len(self.channel_arrangement[0])
+
+    @property
+    def channel_columns(self):
+        """int : Number of channel columns in channel arrangement"""
+        return len(self.channel_arrangement[0][0])
+
+    @property
+    def number_of_channels(self):
+        """ int : number of channels in the movie
+
+        Setting the number of channels will divide the image horizontally in equally spaced channels.
+        """
+        return len(self.channels)
+
+    @property
+    def number_of_channels_per_frame(self):
+        return np.product(self.channel_arrangement.shape[1:])
+
+    @property
+    def channel_width(self):
+        """int : Width of this channel in pixels (read-only)"""
+        return self.width // len(self.channel_arrangement[0][0])
+
+    @property
+    def channel_height(self):
+        """int : Height of this channel in pixels (read-only)"""
+        return self.height // len(self.channel_arrangement[0])
+
+    def get_channel_indices_from_names(self, channel_names):
+        if channel_names in [None, 'all']:
+            channel_indices = np.arange(len(self.channels))
+            return channel_indices
+
+        if not (isinstance(channel_names, list) or isinstance(channel_names, tuple)):
+            channel_names = [channel_names]
+        channel_indices = []
+        for channel_name in channel_names:
+            if isinstance(channel_name, int):
+                if channel_name < 0 or channel_name >= len(self.channels):
+                    raise ValueError(f'Channel index "{channel_name}" out of range')
+                channel_index = channel_name
+            else:
+                if channel_name not in self.channels:
+                    raise ValueError(f'Unknown channel name "{channel_name}"')
+                channel_index = self.channels.index(channel_name)
+            channel_indices.append(channel_index)
+        return channel_indices
+
+    ## Mapping ##
+
+    @property
+    def channel_mapping(self):
+        if self._channel_mapping is None:
+            if self.unit_mapping is None:
+                self.unit_mapping = mp.MatchPoint()
+            self._channel_mapping = [self.unit_mapping, ] * (self.number_of_channels - 1)
+        return self._channel_mapping
+
+    @channel_mapping.setter
+    def channel_mapping(self, value):
+        self._channel_mapping = value
+
+    ### ILLUMINATIONS ###
+
+    @property
+    def illuminations(self):
+        if 'illuminations' not in self.dataset:
+            raise RuntimeError("illuminations not set")
+        return self.dataset.illuminations
+
+    @illuminations.setter
+    def illuminations(self, value):
+        self.dataset.set_attribute(illuminations=value)
+
+    @property
+    def illumination_arrangement(self):
+        if 'illumination_arrangement' not in self.dataset:
+            raise RuntimeError("illumination_arrangement not set")
+        return self.dataset.illumination_arrangement
+
+    @illumination_arrangement.setter
+    def illumination_arrangement(self, value):
+        self.dataset.set_attribute(illumination_arrangement=value)
+
+    @property
+    def illumination_indices(self):
+        return xr.DataArray(list(range(len(self.illuminations))), dims='illumination')
+
+    @property
+    def number_of_illuminations(self):
+        """int : Number of illumination channels in the movie"""
+        return len(self.illuminations)
+
+    @property
+    def number_of_illuminations_in_movie(self):
+        """ int : number of channels in the movie
+
+        Setting the number of channels will divide the image horizontally in equally spaced channels.
+        """
+        return len(self.illumination_indices_in_movie)
+
+    @property
+    def illumination_index_per_frame(self):
+        if 'illumination_index_per_frame' not in self.dataset:
+            if 'illumination_arrangement' in self.dataset:
+                illumination_index_per_frame = xr.DataArray(
+                    np.resize(self.illumination_arrangement, self.number_of_frames),
+                    dims='frame', coords={'frame': self.frame_indices})
+                self.dataset.set_coordinate(illumination_index_per_frame=illumination_index_per_frame)
+            else:
+                raise RuntimeError("illumination_arrangement or illumination_index_per_frame not set")
+        return self.dataset.illumination_index_per_frame
+
+    @illumination_index_per_frame.setter
+    def illumination_index_per_frame(self, value):
+        self.dataset.set_coordinate(illumination_index_per_frame=value)
+        self.illumination_arrangement = value
+
+    @property
+    def illumination_indices_in_movie(self):
+        return np.unique(self.illumination_index_per_frame)
 
     def get_illumination_indices_from_names(self, illuminations):
         """Get list of illumination indices by illumination names.
@@ -167,6 +583,176 @@ class Movie:
                 None
 
         return illumination_indices
+
+    ### FRAME PROCESSING ###
+
+    def read_frame(self, frame_index, **kwargs):
+        """Read a single frame from the movie.
+
+        Parameters
+        ----------
+        frame_index : int
+            Index of frame to read
+        **kwargs
+            Additional keyword arguments passed to read_frames()
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Single frame image data
+        """
+        return self.read_frames([frame_index], **kwargs).squeeze(axis=0)
+
+    def read_frames(self, frame_indices=None, apply_corrections=True, xarray=True, flatten_channels=False):
+        """Read multiple frames from the movie.
+
+        Parameters
+        ----------
+        frame_indices : list or np.ndarray, optional
+            Indices of frames to read. If None, reads all frames (default: None)
+        apply_corrections : bool, optional
+            If True, apply flatfield/darkfield corrections (default: True)
+        xarray : bool, optional
+            If True, return xarray DataArray; else return numpy array (default: True)
+        flatten_channels : bool, optional
+            If True, combine channels back into spatial dimensions (default: False)
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Array of image frames with shape (frame, channel, y, x)
+        """
+        if frame_indices is None:
+            frame_indices = self.frame_indices
+
+        frames = self._read_frames(frame_indices)
+        frames = np.rot90(frames, self.rotation, axes=(1, 2))
+
+        if len(self.channel_arrangement) > 1:
+            raise NotImplementedError('Channel arrangement where frames indicated different channels not implemented')
+            # Perhaps remove the outermost layer from channel_configuration
+            # Or add this to separate and flatten channels
+
+        frames = self.separate_channels(frames, self.channel_arrangement)
+
+        if apply_corrections:  # and self.correct_images
+            frames = self.apply_corrections(frames, frame_indices)
+
+        if xarray:
+            frames = self.frames_to_xarray_dataarray(frames, frame_indices)
+
+        if flatten_channels:
+            frames = self.flatten_channels(frames, self.channel_arrangement)
+
+        return frames
+
+    @staticmethod
+    def separate_channels(frames, channel_arrangement):
+        """Separate channels from spatial dimensions.
+
+        Splits frames from single image dimension into separate channel dimension
+        based on channel_arrangement pattern.
+
+        Parameters
+        ----------
+        frames : np.ndarray or xr.DataArray
+            Input frames with channels arranged spatially
+        channel_rows : int
+            Number of channel rows in channel arrangement
+        channel_columns : int
+            Number of channel columns in channel arrangement
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Frames with channel as separate dimension
+        """
+
+        channel_arrangement = np.array(channel_arrangement)
+        channel_frames, channel_rows, channel_columns = channel_arrangement.shape
+
+        frames = xr.apply_ufunc(
+            expand_axes, frames, input_core_dims=[['y', 'x']], output_core_dims=[['channel', 'y', 'x']],
+            exclude_dims=set(['y', 'x']),
+            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
+                    "to_axes": (frames.ndim,) * 2, "new_axes_positions": [-3]}
+        )
+
+        order = channel_arrangement.flatten()
+        inverse_order = np.argsort(order)
+        frames = frames[..., inverse_order, :, :]
+
+        return frames
+
+    @staticmethod
+    def flatten_channels(frames, channel_arrangement):
+        """Combine channel dimension back into spatial dimensions.
+
+        Parameters
+        ----------
+        frames : np.ndarray or xr.DataArray
+            Frames with channel as separate dimension
+        channel_rows : int
+            Number of channel rows in channel arrangement
+        channel_columns : int
+            Number of channel columns in channel arrangement
+
+        Returns
+        -------
+        np.ndarray or xr.DataArray
+            Frames with channels arranged spatially
+        """
+        channel_arrangement = np.array(channel_arrangement)
+        channel_frames, channel_rows, channel_columns = channel_arrangement.shape
+
+        order = channel_arrangement.flatten()
+        frames = frames[..., order, :, :]
+
+        return xr.apply_ufunc(
+            expand_axes, frames, input_core_dims=[['channel', 'y', 'x']], output_core_dims=[['y', 'x']],
+            exclude_dims=set(['x', 'y']),
+            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
+                    "to_axes": (-3, -3),
+                    "inverse": True, "squeeze": True}
+        )
+
+    def frames_to_xarray_dataarray(self, frames, frame_indices):
+        """Convert frame array to xarray DataArray with coordinates.
+
+        Parameters
+        ----------
+        frames : np.ndarray
+            Frame array to convert
+        frame_indices : array-like
+            Frame indices for coordinates
+
+        Returns
+        -------
+        xr.DataArray
+            DataArray with frame, channel, y, x dimensions and coordinates
+        """
+        frames = xr.DataArray(frames,
+                              dims=('frame', 'channel', 'y', 'x'),
+                              coords={'frame': frame_indices,
+                                      'illumination': self.illumination_index_per_frame[frame_indices],
+                                      'channel': self.channels})
+
+        if self.time is not None:
+            frames = frames.assign_coords(time=self.time[frames.frame])
+
+        return frames
+
+    def show(self):
+        from papylio.gui.image_widget import ImageWidgetSingle
+        ImageWidgetSingle(image=self)
+
+    ### IMAGES ###
+
+    ## Configuration ##
+
+    @property
+    def images_directory(self):
+        return self.directory / (self.name + '_images')
 
     @classmethod
     def image_configuration_from_filename(cls, filename):
@@ -316,516 +902,6 @@ class Movie:
 
         return filename
 
-    # @property
-    # def njit(self):
-    #     from numba import njit
-    #     return njit
-
-    def __new__(cls, filepath, rotation=0, microscope=None):
-        if cls is Movie:
-            subclass = cls.get_subclass(filepath, microscope)
-            return object.__new__(subclass)
-        else:
-            return object.__new__(cls)
-
-    def __getnewargs__(self):
-        return (self.filepath, self.rotation)
-
-    def __getstate__(self):
-        d = self.__dict__.copy()
-        d.pop('file', None)
-        return d
-
-    def __setstate__(self, dict):
-        self.__dict__.update(dict)
-
-    def __init__(self, filepath, microscope=None):  # , **kwargs):
-        """Initialize Movie object.
-
-        Parameters
-        ----------
-        filepath : str or Path
-            Path to the movie file
-        rotation : int, optional
-            Number of 90-degree rotations to apply to images (default: 0)
-        """
-        if self.__class__.unit_mapping is None:
-            self.unit_mapping = mp.MatchPoint()
-
-        self.filepath = Path(filepath)
-        self.directory = self.filepath.parent
-        self.name = self.filepath.name
-
-        self._with_counter = 0
-        self.fov_index = None
-        # self.filepaths = [Path(filepath) for filepath in filepaths] # For implementing multiple files, e.g. two channels over two files
-        self.is_mapping_movie = False
-
-        # self.correct_images = False
-
-        self.chunk_size = 100
-        self.use_dask = False
-
-        self._data_type = np.dtype(np.uint16)
-        self.intensity_range = (np.iinfo(self.data_type).min, np.iinfo(self.data_type).max)
-
-        if not self.filepath.suffix == '.sifx':
-            self.writepath = self.filepath.parent
-            self.name = self.filepath.with_suffix('').name
-
-        self._time = None
-
-        self._common_corrections = xr.Dataset()
-        self._channel_mapping = None
-
-        self.metadata_is_read = False
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        for base in cls.__mro__[1:]:
-            for name, attr in vars(base).items():
-                if isinstance(attr, property) and name in cls.__dict__:
-                    raw_value = cls.__dict__[name]
-                    if not isinstance(raw_value, property):
-                        delattr(cls, name)
-                        attr.fset(cls, raw_value)
-
-    def __enter__(self):
-        """Context manager entry point. Opens file for reading."""
-        if self._with_counter == 0:
-            self.open()
-        self._with_counter += 1
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit point. Closes file when exiting context."""
-        self._with_counter -= 1
-        if self._with_counter == 0:
-            self.close()
-
-    def __repr__(self):
-        """Return string representation of Movie object."""
-        return (f'{self.__class__.__name__}({str(self.filepath)})')
-
-    def __getattr__(self, item):
-        """Lazy-load header when accessing attributes before header is read."""
-
-        # if 'metadata_is_read' in self.__dict__.keys() and not self.metadata_is_read:
-        if not self.__dict__.get('metadata_is_read', True):
-            # print(item+'2')
-            self.read_metadata()
-            return getattr(self, item)
-        else:
-            raise AttributeError(f'Attribute {item} not found')
-        # return super().__getattribute__(item)
-
-    @property
-    def pixels_per_frame(self):
-        """int : Total number of pixels in one frame (width × height)"""
-        return self.width * self.height
-
-    @property
-    def bitdepth(self):
-        """int : Bit depth of the image data (e.g., 8, 16, 32)"""
-        return self.data_type.itemsize * 8  # 8 bits in a byte
-
-    @property
-    def bytes_per_frame(self):
-        """int : Number of bytes per frame"""
-        return self.data_type.itemsize * self.pixels_per_frame
-
-    @property
-    def time(self):
-        """xr.DataArray : Time coordinate for each frame"""
-        return self._time
-
-    @time.setter
-    def time(self, value):
-        """Set time coordinate for frames."""
-        self._time = value
-
-    @property
-    def number_of_illuminations(self):
-        """int : Number of illumination channels in the movie"""
-        return len(self.illuminations)
-
-    @property
-    def number_of_illuminations_in_movie(self):
-        """ int : number of channels in the movie
-
-        Setting the number of channels will divide the image horizontally in equally spaced channels.
-        """
-        return len(self.illumination_indices_in_movie)
-
-    @property
-    def number_of_channels(self):
-        """ int : number of channels in the movie
-
-        Setting the number of channels will divide the image horizontally in equally spaced channels.
-        """
-        return len(self.channels)
-
-    @property
-    def data_type(self):
-        return self._data_type
-
-    @data_type.setter
-    def data_type(self, data_type):
-        self._data_type = data_type
-        self.intensity_range = (np.iinfo(self.data_type).min, np.iinfo(self.data_type).max)
-
-    @property
-    def frame_indices(self):
-        return np.arange(self.number_of_frames)
-
-    @property
-    def rotation(self):
-        if self._rotation is None:
-            raise RuntimeError("rotation not set")
-        return self._rotation
-
-    @rotation.setter
-    def rotation(self, value):
-        self._rotation = value
-
-    @property
-    def width(self):
-        if self.rotation % 2 == 0:
-            return self._width
-        else:
-            return self._height
-
-    @width.setter
-    def width(self, value):
-        self._width = value
-
-    @property
-    def height(self):
-        if self.rotation % 2 == 0:
-            return self._height
-        else:
-            return self._width
-
-    @height.setter
-    def height(self, value):
-        self._height = value
-
-    @property
-    def channels(self):
-        if self._channels is None:
-            raise RuntimeError("channels not set")
-        return self._channels
-
-    @channels.setter
-    def channels(self, value):
-        if self._channels is not None and len(value) != len(self._channels):
-            raise ValueError("Number of channels must match existing channels")
-        self._channels = value
-
-    @property
-    def channel_arrangement(self):
-        if self._channel_arrangement is None:
-            raise RuntimeError("channel_arrangement not set")
-        return self._channel_arrangement
-
-    @channel_arrangement.setter
-    def channel_arrangement(self, value):
-        if isinstance(value, np.ndarray):
-            value = value.tolist()
-        self._channel_arrangement = value  # [[[0,1]]] # First level: frames, second level: y within frame, third level: x within frame
-
-    @property
-    def channel_mapping(self):
-        if self._channel_mapping is None:
-            self._channel_mapping = [self.unit_mapping, ] * (self.number_of_channels - 1)
-        return self._channel_mapping
-
-    @channel_mapping.setter
-    def channel_mapping(self, value):
-        self._channel_mapping = value
-
-    @property
-    def channel_indices(self):
-        return xr.DataArray(np.array(self.channel_arrangement).flatten(), dims='channel')
-
-    @property
-    def number_of_channels_per_frame(self):
-        return np.product(self.channel_arrangement.shape[1:])
-
-    @property
-    def illumination_arrangement(self):
-        return self._illumination_arrangement
-
-    @illumination_arrangement.setter
-    def illumination_arrangement(self, illumination_arrangement):
-        self._illumination_arrangement = list(illumination_arrangement)
-        # frame_indices = self.frame_indices
-        # illumination_indices = self.illumination_indices
-        # self._illumination_index_per_frame = xr.DataArray(
-        #     np.resize(self.illumination_arrangement, (len(frame_indices), len(illumination_indices))),
-        #     dims=('frame', 'illumination'),
-        #     coords={'frame': frame_indices, 'illumination': illumination_indices})
-        self._illumination_index_per_frame = xr.DataArray(
-            np.resize(self._illumination_arrangement, (self.number_of_frames)),
-            dims=('frame'),
-            coords={'frame': self.frame_indices}, name='illumination')
-        # TODO: Add name to other indices or remove this name
-
-    @property
-    def illumination_indices(self):
-        return xr.DataArray(list(range(len(self.illuminations))), dims='illumination')
-
-    @property
-    def illumination_index_per_frame(self):
-        if self._illumination_index_per_frame is None:
-            raise RuntimeError("illumination_arrangement or illumination_index_per_frame not set")
-        return self._illumination_index_per_frame
-
-    @illumination_index_per_frame.setter
-    def illumination_index_per_frame(self, illumination_index_per_frame):
-        self._illumination_index_per_frame = illumination_index_per_frame
-        self._illumination_arrangement = list(illumination_index_per_frame)
-
-    @property
-    def illumination_indices_in_movie(self):
-        return np.unique(self.illumination_index_per_frame)
-
-    @property
-    def pixel_to_stage_coordinates_transformation(self):
-        #TODO: Check whether the flipping implementation is correct for different microscopes, i.e. whether the stage coordinates are flipped with respect to the pixel coordinates and whether this is correctly implemented by flipping the stage coordinates in the translation part of the transformation.
-        pixels_to_um = AffineTransform(scale=self.pixel_size)
-        pixels_um_to_stage_coordinates_um = AffineTransform(translation=np.flip(self.stage_coordinates))
-        pixels_to_stage_coordinates_um = pixels_to_um + pixels_um_to_stage_coordinates_um
-        return pixels_to_stage_coordinates_um
-
-    @property
-    def width_metric(self):
-        return self.width * self.pixel_size[0]
-
-    @property
-    def height_metric(self):
-        return self.height * self.pixel_size[1]
-
-    @property
-    def boundaries(self):
-        horizontal_boundaries = np.array([0, self.width])
-        vertical_boundaries = np.array([0, self.height])
-        return np.vstack([horizontal_boundaries, vertical_boundaries]).T
-
-    @property
-    def boundaries_metric(self):
-        # Formatted as two coordinates, with the lowest and highest x and y values respectively
-        horizontal_boundaries = np.array([0, self.width_metric])
-        vertical_boundaries = np.array([0, self.height_metric])
-        return np.vstack([horizontal_boundaries, vertical_boundaries]).T
-
-    @property
-    def boundaries_stage(self):
-        return self.pixel_to_stage_coordinates_transformation(self.channels[0].boundaries)
-
-    @property
-    def channel_width(self):
-        """int : Width of this channel in pixels (read-only)"""
-        return self.width // len(self.channel_arrangement[0][0])
-
-    @property
-    def channel_height(self):
-        """int : Height of this channel in pixels (read-only)"""
-        return self.height // len(self.channel_arrangement[0])
-
-    def read_metadata(self):
-        """Read and parse file header.
-
-        Calls the subclass-specific _read_metadata() method.
-        """
-        self._read_metadata()
-        self.metadata_is_read = True
-
-    def read_frame(self, frame_index, **kwargs):
-        """Read a single frame from the movie.
-
-        Parameters
-        ----------
-        frame_index : int
-            Index of frame to read
-        **kwargs
-            Additional keyword arguments passed to read_frames()
-
-        Returns
-        -------
-        np.ndarray or xr.DataArray
-            Single frame image data
-        """
-        return self.read_frames([frame_index], **kwargs).squeeze(axis=0)
-
-    def read_frames(self, frame_indices=None, apply_corrections=True, xarray=True, flatten_channels=False):
-        """Read multiple frames from the movie.
-
-        Parameters
-        ----------
-        frame_indices : list or np.ndarray, optional
-            Indices of frames to read. If None, reads all frames (default: None)
-        apply_corrections : bool, optional
-            If True, apply flatfield/darkfield corrections (default: True)
-        xarray : bool, optional
-            If True, return xarray DataArray; else return numpy array (default: True)
-        flatten_channels : bool, optional
-            If True, combine channels back into spatial dimensions (default: False)
-
-        Returns
-        -------
-        np.ndarray or xr.DataArray
-            Array of image frames with shape (frame, channel, y, x)
-        """
-        if frame_indices is None:
-            frame_indices = self.frame_indices.values
-
-        frames = self._read_frames(frame_indices)
-        frames = np.rot90(frames, self.rotation, axes=(1, 2))
-
-        if len(self.channel_arrangement) > 1:
-            raise NotImplementedError('Channel arrangement where frames indicated different channels not implemented')
-            # Perhaps remove the outermost layer from channel_configuration
-            # Or add this to separate and flatten channels
-
-        frames = self.separate_channels(frames, self.channel_arrangement)
-
-        if apply_corrections:  # and self.correct_images
-            frames = self.apply_corrections(frames, frame_indices)
-
-        if xarray:
-            frames = self.frames_to_xarray_dataarray(frames, frame_indices)
-
-        if flatten_channels:
-            frames = self.flatten_channels(frames, self.channel_arrangement)
-
-        return frames
-
-    @property
-    def channel_rows(self):
-        """int : Number of channel rows in channel arrangement"""
-        return len(self.channel_arrangement[0])
-
-    @property
-    def channel_columns(self):
-        """int : Number of channel columns in channel arrangement"""
-        return len(self.channel_arrangement[0][0])
-
-    @staticmethod
-    def separate_channels(frames, channel_arrangement):
-        """Separate channels from spatial dimensions.
-
-        Splits frames from single image dimension into separate channel dimension
-        based on channel_arrangement pattern.
-
-        Parameters
-        ----------
-        frames : np.ndarray or xr.DataArray
-            Input frames with channels arranged spatially
-        channel_rows : int
-            Number of channel rows in channel arrangement
-        channel_columns : int
-            Number of channel columns in channel arrangement
-
-        Returns
-        -------
-        np.ndarray or xr.DataArray
-            Frames with channel as separate dimension
-        """
-
-        channel_arrangement = np.array(channel_arrangement)
-        channel_frames, channel_rows, channel_columns = channel_arrangement.shape
-
-        frames = xr.apply_ufunc(
-            expand_axes, frames, input_core_dims=[['y', 'x']], output_core_dims=[['channel', 'y', 'x']],
-            exclude_dims=set(['y', 'x']),
-            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
-                    "to_axes": (frames.ndim,) * 2, "new_axes_positions": [-3]}
-        )
-
-        order = channel_arrangement.flatten()
-        inverse_order = np.argsort(order)
-        frames = frames[..., inverse_order, :, :]
-
-        return frames
-
-    @staticmethod
-    def flatten_channels(frames, channel_arrangement):
-        """Combine channel dimension back into spatial dimensions.
-
-        Parameters
-        ----------
-        frames : np.ndarray or xr.DataArray
-            Frames with channel as separate dimension
-        channel_rows : int
-            Number of channel rows in channel arrangement
-        channel_columns : int
-            Number of channel columns in channel arrangement
-
-        Returns
-        -------
-        np.ndarray or xr.DataArray
-            Frames with channels arranged spatially
-        """
-        channel_arrangement = np.array(channel_arrangement)
-        channel_frames, channel_rows, channel_columns = channel_arrangement.shape
-
-        order = channel_arrangement.flatten()
-        frames = frames[..., order, :, :]
-
-        return xr.apply_ufunc(
-            expand_axes, frames, input_core_dims=[['channel', 'y', 'x']], output_core_dims=[['y', 'x']],
-            exclude_dims=set(['x', 'y']),
-            kwargs={"expand_into": (channel_rows, channel_columns), "from_axes": (-2, -1),
-                    "to_axes": (-3, -3),
-                    "inverse": True, "squeeze": True}
-        )
-
-    def frames_to_xarray_dataarray(self, frames, frame_indices):
-        """Convert frame array to xarray DataArray with coordinates.
-
-        Parameters
-        ----------
-        frames : np.ndarray
-            Frame array to convert
-        frame_indices : array-like
-            Frame indices for coordinates
-
-        Returns
-        -------
-        xr.DataArray
-            DataArray with frame, channel, y, x dimensions and coordinates
-        """
-        frames = xr.DataArray(frames,
-                              dims=('frame', 'channel', 'y', 'x'),
-                              coords={'frame': frame_indices,
-                                      'illumination': self.illumination_index_per_frame[frame_indices],
-                                      'channel': self.channels})
-
-        if self.time is not None:
-            frames = frames.assign_coords(time=self.time[frames.frame])
-
-        return frames
-
-    def get_channel_indices_from_names(self, channel_names):
-        if channel_names in [None, 'all']:
-            channel_indices = np.arange(len(self.channels))
-            return channel_indices
-
-        if not (isinstance(channel_names, list) or isinstance(channel_names, tuple)):
-            channel_names = [channel_names]
-        channel_indices = []
-        for channel_name in channel_names:
-            if isinstance(channel_name, int):
-                if channel_name < 0 or channel_name >= len(self.channels):
-                    raise ValueError(f'Channel index "{channel_name}" out of range')
-                channel_index = channel_name
-            else:
-                if channel_name not in self.channels:
-                    raise ValueError(f'Unknown channel name "{channel_name}"')
-                channel_index = self.channels.index(channel_name)
-            channel_indices.append(channel_index)
-        return channel_indices
-
     def saveas_tif(self):
         tif_filepath = self.writepath.joinpath(self.name + '.tif')
         tif_filepath.unlink(missing_ok=True)
@@ -833,19 +909,6 @@ class Movie:
         for i in range(self.number_of_frames):
             frame = self.read_frames([i], apply_corrections=False, xarray=False)
             tifffile.imwrite(tif_filepath, frame, append=True)
-
-    ### IMAGES ###
-
-    @property
-    def images_directory(self):
-        return self.directory / (self.name + '_images')
-
-    def clear_images(self):
-        """Clear all saved projection images for this movie."""
-        for file in self.images_directory.glob(f'{self.name}_*.tif'):
-            file.unlink()
-        if self.images_directory.exists() and not any(self.images_directory.iterdir()):
-            self.images_directory.rmdir()
 
     def project_frames(self, frame_indices, projection='average', **read_frames_kwargs):
         image = self.separate_channels(np.zeros((self.height, self.width)).astype('float64'), self.channel_arrangement)
@@ -919,13 +982,13 @@ class Movie:
             raise ValueError(f'Incorrect frame indices, choose frames between 0 and {self.number_of_frames - 1}')
 
         illumination_indices = self.get_illumination_indices_from_names(illuminations)
-        illumination_index = np.intersect1d(illumination_indices, self.illumination_indices_in_movie)[0]
+        illumination_indices = np.intersect1d(illumination_indices, self.illumination_indices_in_movie)
         illuminations = [self.illuminations[i] for i in illumination_indices]
 
         # Select frame_indices with illumination
-        frame_indices = frame_indices[self.illumination_index_per_frame.values[frame_indices] == illumination_index]
+        frame_indices = frame_indices[np.isin(self.illumination_index_per_frame.values[frame_indices], illumination_indices)]
         if len(frame_indices) == 0:
-            raise ValueError(f'No frames found for illumination {illumination}')
+            raise ValueError(f'No frames found for illuminations {illuminations}')
 
         if projection is None:
             image = self.read_frames(frame_indices, apply_corrections=apply_corrections, xarray=True, flatten_channels=False)
@@ -955,6 +1018,24 @@ class Movie:
         image.attrs["image_configuration"] = image.attrs.pop("configuration")
 
         return image
+
+    # def make_projection_images(self, projection='average', frame_range=(0, 20)):
+    #     # Perhaps put this in make_projection_image as a special type of cmap
+    #     for illumination_index in range(self.number_of_illuminations_in_movie):
+    #         image = self.make_projection_image(projection, frame_range=(0,20), illumination=illumination_index,
+    #                                            flatten_channels=False)
+    #         channel_images = []
+    #         for channel_index in range(self.number_of_channels):
+    #             channel_image = image[channel_index]
+    #             channel_image = (channel_image - self.intensity_range[0]) / (self.intensity_range[1] - self.intensity_range[0]) # TODO: make separate intensity range for each channel
+    #             # channel_images.append(self.channels[channel_index].colour_map(channel_image, bytes=True))
+    #             channel_images.append(channel_image)
+    #
+    #         images_combined = np.hstack(channel_images)
+    #         filename = Movie.image_info_to_filename(self.name, fov_index=self.fov_index, projection=projection,
+    #                                                 frame_range=frame_range, illumination=illumination_index)
+    #         filepath = self.writepath.joinpath(filename)
+    #         plt.imsave(filepath.with_suffix('.png'), images_combined)
 
     def get_image(self, load=True, only_save_projections=True, **image_configuration):
         """
@@ -1028,7 +1109,7 @@ class Movie:
         save_image = self.flatten_channels(image, channel_arrangement)
         if filetype in ['tif', 'tiff']:
             if hasattr(self, 'pixel_size'):
-                resolution = 1 / self.pixel_size
+                resolution = 1 / np.array(self.pixel_size)
             else:
                 resolution = None
             tifffile.imwrite(filepath.with_suffix('.tif'), save_image,
@@ -1061,9 +1142,15 @@ class Movie:
 
         return image
 
-    ## Image visualization
+    def clear_images(self):
+        """Clear all saved projection images for this movie."""
+        for file in self.images_directory.glob(f'{self.name}_*.tif'):
+            file.unlink()
+        if self.images_directory.exists() and not any(self.images_directory.iterdir()):
+            self.images_directory.rmdir()
 
-    def show_image(self, figure=None, axes=None, unit='pixel', imshow_configuration=None, interactive=False, **image_configuration):
+    def show_image(self, figure=None, axes=None, unit='pixel', imshow_configuration=None, interactive=False,
+                   **image_configuration):
         #TODO: Finish docstring
         """
         Show a projection image of the movie.
@@ -1072,7 +1159,7 @@ class Movie:
             tuple: (figure, axes)
         """
         # Split configuration based on inspect??
-
+        # load_image = load_image, only_save_projections = only_save_projections,
         image = self.get_image(**image_configuration)
 
         if unit == 'pixel':
@@ -1089,78 +1176,31 @@ class Movie:
             return
         else:
             figure, axes = show_single_image(image[0], figure=figure, axes=axes, imshow_configuration=imshow_configuration)
+            image_configuration.pop('load', None)
             title = self.image_configuration_to_filename(self.name, **image_configuration)
             figure.suptitle(title)
             return figure, axes
 
-    # def make_projection_images(self, projection='average', frame_range=(0, 20)):
-    #     # Perhaps put this in make_projection_image as a special type of cmap
-    #     for illumination_index in range(self.number_of_illuminations_in_movie):
-    #         image = self.make_projection_image(projection, frame_range=(0,20), illumination=illumination_index,
-    #                                            flatten_channels=False)
-    #         channel_images = []
-    #         for channel_index in range(self.number_of_channels):
-    #             channel_image = image[channel_index]
-    #             channel_image = (channel_image - self.intensity_range[0]) / (self.intensity_range[1] - self.intensity_range[0]) # TODO: make separate intensity range for each channel
-    #             # channel_images.append(self.channels[channel_index].colour_map(channel_image, bytes=True))
-    #             channel_images.append(channel_image)
-    #
-    #         images_combined = np.hstack(channel_images)
-    #         filename = Movie.image_info_to_filename(self.name, fov_index=self.fov_index, projection=projection,
-    #                                                 frame_range=frame_range, illumination=illumination_index)
-    #         filepath = self.writepath.joinpath(filename)
-    #         plt.imsave(filepath.with_suffix('.png'), images_combined)
+    ### CORRECTIONS ###
 
-    # def make_average_image(self, **kwargs):
-    #     """ Construct an average image
-    #     Determine average image for a number_of_frames starting at start_frame.
-    #     i.e. [start_frame, start_frame + number_of_frames)
-    #
-    #     Parameters
-    #     ----------
-    #     start_frame : int
-    #         Frame to start with
-    #     number_of_frames : int
-    #         Number of frames to average over
-    #     write : bool
-    #         If true, the a tif file will be saved in the writepath
-    #
-    #     Returns
-    #     -------
-    #     np.ndarray
-    #         2d image array with the average image
-    #
-    #     """
-    #     return self.make_projection_image('average', **kwargs)
-    #
-    # def make_maximum_projection(self, **kwargs):
-    #     """ Construct a maximum projection image
-    #     Determine maximum projection image for a number_of_frames starting at start_frame.
-    #     i.e. [start_frame, start_frame + number_of_frames)
-    #
-    #     Parameters
-    #     ----------
-    #     start_frame : int
-    #         Frame to start with
-    #     number_of_frames : int
-    #         Number of frames to average over
-    #     write : bool
-    #         If true, the a tif file will be saved in the writepath
-    #
-    #     Returns
-    #     -------
-    #     np.ndarray
-    #         2d image array with the maximum projection image
-    #     """
-    #
-    #     return self.make_projection_image('maximum', **kwargs)
+    @property
+    def corrections_filepath(self):
+        if hasattr(self, 'fov_index') and self.fov_index is not None:
+            corrections_filepath = self.filepath.with_name(self.name + f'_fov{self.fov_index:03d}' + '.nc')
+        else:
+            corrections_filepath = self.filepath.with_name(self.name + '.nc')
+        return corrections_filepath
 
-    def show(self):
-        from papylio.gui.image_widget import ImageWidgetSingle
-        ImageWidgetSingle(image=self)
-
-    ### BACKGROUND CORRECTION ###
-
+    @property
+    def corrections(self):
+        if self.corrections_filepath.exists():
+            with xr.open_dataset(self.corrections_filepath, engine='h5netcdf') as dataset:
+                corrections = xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
+                                   if 'correction' in key}).load()
+        else:
+            corrections = xr.Dataset()
+        corrections = corrections.merge(self._common_corrections, compat='override')
+        return corrections
     # Do we really need this?
     def determine_general_background_correction(self, method='median', frame_range=(0, 20), use_existing=False):
         from papylio.movie.background_correction import determine_single_value_background_correction
@@ -1168,9 +1208,9 @@ class Movie:
         if use_existing and 'general_background_correction' in self.corrections:
             return
         # self.temporal_background_correction = self.spatial_background_correction = None
-        self.save_corrections(general_background_correction=None)
+        # self.save_corrections(general_background_correction=None)
 
-        frame_indices = self.frame_indices[slice(*frame_range)].values
+        frame_indices = self.frame_indices[slice(*frame_range)]
         with self:
             frames = self.read_frames(frame_indices=frame_indices, apply_corrections=True, xarray=False)
 
@@ -1199,10 +1239,10 @@ class Movie:
         if use_existing and 'temporal_background_correction' in self.corrections:
             return
 
-        self.save_corrections(temporal_illumination_correction=None,
-                              temporal_background_correction=None,
-                              spatial_background_correction=None,
-                              general_background_correction=None)
+        # self.save_corrections(temporal_illumination_correction=None,
+        #                       temporal_background_correction=None,
+        #                       spatial_background_correction=None,
+        #                       general_background_correction=None)
 
         frames = self.read_frames(frame_indices=None, apply_corrections=True, xarray=False)
 
@@ -1230,7 +1270,7 @@ class Movie:
         if use_existing and 'spatial_background_correction' in self.corrections:
             return
 
-        self.save_corrections(spatial_background_correction=None, general_background_correction=None)
+        # self.save_corrections(spatial_background_correction=None, general_background_correction=None)
 
         frame_indices = self.frame_indices[slice(*frame_range)]#.values
         with self:
@@ -1255,41 +1295,6 @@ class Movie:
 
         self.save_corrections(spatial_background_correction=spatial_background_correction)#,
 
-    @property
-    def corrections(self):
-        if hasattr(self, 'fov_index') and self.fov_index is not None:
-            corrections_filepath = self.filepath.with_name(self.name + f'_fov{self.fov_index:03d}' + '_corrections.nc')
-        else:
-            corrections_filepath = self.filepath.with_name(self.name + '_corrections.nc')
-
-        if corrections_filepath.exists():
-            corrections = xr.load_dataset(corrections_filepath, engine='h5netcdf')
-        else:
-            corrections = xr.Dataset()
-        corrections = corrections.merge(self._common_corrections, compat='override')
-        return corrections
-
-    @property
-    def configuration(self):
-        configuration = {name: getattr(self, name) for name in ['rotation', 'channels', 'channel_arrangement', 'illuminations', 'illumination_arrangement']}
-        for name, correction in self.corrections.data_vars.items():
-            if 'configuration' in correction.attrs:
-                configuration[name] = correction.attrs['configuration']
-            else:
-                configuration[name] = None
-        return configuration
-
-    @property
-    def corrections_filepath(self):
-        if hasattr(self, 'fov_index') and self.fov_index is not None:
-            corrections_filepath = self.filepath.with_name(self.name + f'_fov{self.fov_index:03d}' + '_corrections.nc')
-        else:
-            corrections_filepath = self.filepath.with_name(self.name + '_corrections.nc')
-        return corrections_filepath
-
-    def reset_corrections(self):
-        self.corrections_filepath.unlink(missing_ok=True)
-
     def save_corrections(self, **kwargs):
         corrections_filepath = self.corrections_filepath
         if corrections_filepath.exists():
@@ -1303,6 +1308,9 @@ class Movie:
             else:
                 corrections[name] = correction
         corrections.to_netcdf(corrections_filepath, mode='w', engine='h5netcdf')
+
+    def reset_corrections(self):
+        self.corrections_filepath.unlink(missing_ok=True)
 
 # # @njit
     def apply_corrections(self, frames, frame_indices):
@@ -1336,24 +1344,29 @@ class Movie:
         return frames
 
     def show_correction(self, correction_name, save=True, **kwargs):
+        # TODO: Make show_single_image function that can handle multiple channels and illuminations
         correction = self.corrections[correction_name]
         number_of_illuminations = len(correction.illumination)
-        figure, axes = plt.subplots(1, number_of_illuminations+1, gridspec_kw=dict(width_ratios=(4,)*number_of_illuminations + (0.15,)),
-                                    figsize=(4*number_of_illuminations+0.15, 4), layout='tight')
-        for i, illumination_index in enumerate(correction.illumination):
-            axes[i].axis('off')
-            image = axes[i].imshow(self.flatten_channels(correction.sel(illumination=illumination_index)), **kwargs)
-            axes[i].set_title(f'Illumination {illumination_index.item()}', fontsize=8)
+        number_of_channels = len(correction.channel)
+        # figure, axes = plt.subplots(1, number_of_channels * number_of_illuminations + 1, gridspec_kw=dict(width_ratios=(2,)*number_of_channels*number_of_illuminations + (0.15,)),
+                                    # figsize=(2*number_of_channels*number_of_illuminations+0.15, 4), layout='tight')
+        figure, axes = plt.subplots(1, number_of_channels * number_of_illuminations, figsize=(2*number_of_channels*number_of_illuminations+0.15, 4), layout='tight')
+        for illumination_index, illumination in enumerate(correction.illumination):
+            # axes[i].axis('off')
+            # image = axes[i].imshow(self.flatten_channels(correction.sel(illumination=illumination_index)), **kwargs)
+            show_single_image(correction.sel(illumination=illumination_index), figure=figure, axes=axes[illumination_index*number_of_channels:(illumination_index+1)*number_of_channels], imshow_configuration=kwargs)
+            for channel_index, channel in enumerate(correction.channel):
+                axes[illumination_index*number_of_channels + channel_index].set_title(f'Illumination {illumination.item()}\nChannel {channel.item()}', fontsize=8)
 
-        cax = axes[-1]
-        figure.colorbar(image, aspect=50, cax=cax)
-        cax.set_ylabel('Intensity (a.u.)')
-        if correction_name == 'flatfield_correction':
-            cax.set_ylabel('Correction factor')
-
-        # cax.axes.ticklabel_format(scilimits=(0, 0))
-        for spine in cax.spines.values():
-            spine.set_visible(False)
+        # cax = axes[-1]
+        # figure.colorbar(image, aspect=50, cax=cax)
+        # cax.set_ylabel('Intensity (a.u.)')
+        # if correction_name == 'flatfield_correction':
+        #     cax.set_ylabel('Correction factor')
+        #
+        # # cax.axes.ticklabel_format(scilimits=(0, 0))
+        # for spine in cax.spines.values():
+        #     spine.set_visible(False)
 
         figure.suptitle(f'{self.name} - {correction_name}', fontsize=8)
 
@@ -1391,7 +1404,6 @@ def make_colour_map(colour, N=256):
         values[:, 0] = values[:, 1] = values[:, 2] = np.linspace(0, 1, N)
 
     return ListedColormap(values)
-
 
 def expand_axes(frames, expand_into, from_axes=-1, to_axes=None, new_axes_positions=[], inverse=False, squeeze=False):
     """Expand/split array axes along specified dimensions.
@@ -1517,7 +1529,7 @@ def show_single_image(image, figure=None, axes=None, imshow_configuration=None):
 
     for i, (im, axis) in enumerate(zip(image, axes.flatten())):
         axis.imshow(im, **imshow_configuration)
-        axis.set_title(image.channel[i].item().capitalize())
+        axis.set_title(str(image.channel[i].item()).capitalize())
         axis.set_xlabel('x')# + unit_string)
         if i > 0:
             axis.tick_params(left=False, bottom=True, labelleft=False, labelbottom=True)
