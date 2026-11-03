@@ -160,8 +160,8 @@ class Experiment:
         self.add_files(self.main_path, test_duplicates=False)
 
         self.common_image_corrections = xr.Dataset()
-        self.load_darkfield_correction()
-        self.load_flatfield_correction()
+        # self.load_darkfield_correction()
+        # self.load_flatfield_correction()
 
         # Find mapping file
         # for file in self.files:
