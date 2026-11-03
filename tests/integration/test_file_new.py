@@ -9,7 +9,7 @@ def file():
 
     with temporary_data(relative_path) as path:
         from papylio import Experiment
-        exp = Experiment(path.parent)
+        exp = Experiment(path.parent, microscope='BN-TIRF')
         file = exp.files[0]
         file.illumination_arrangement = [0]
 

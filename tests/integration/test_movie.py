@@ -65,8 +65,22 @@ def test_corrections(experiment):
     movie = experiment.files[1].movie
     movie.make_projection_image()
 
-def test_nd2_fileformat(shared_datadir):
+import pytest
+import numpy as np
+from pathlib import Path
+from tests.integration.temporary_data import temporary_data
+
+@pytest.fixture
+def nd2_movie():
+    relative_path = Path(r'nd2/4 - 10 nt - 000.nd2')
+
+    with temporary_data(relative_path) as path:
+        from papylio.movie.movie import Movie
+        movie = Movie(path, microscope='TIR-S')
+        movie.dataset.set_attribute(illumination_arrangement = [1])
+        yield movie
+
+def test_nd2_fileformat(nd2_movie):
     from papylio.movie.movie import Movie
     # movie = Movie(shared_datadir / 'nd2' / 'Bead slide.nd2')
-    movie = Movie(shared_datadir / 'nd2' / '4 - 10 nt - 000.nd2')
-    movie.make_projection_image()
+    nd2_movie.make_image()
