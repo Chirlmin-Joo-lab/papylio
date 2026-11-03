@@ -5,22 +5,28 @@ import netCDF4
 from functools import cached_property
 import json
 
-class SingleMoleculeDataset:
+class Dataset:
     def __init__(self, path, root_path=None):
         self.path = path
         self._variables = None
         self._attributes = None
+        self._exists = False
 
     # def create(self):
     #     xr.Dataset().to_netcdf(self.filepath, engine='netcdf4')
 
     def __repr__(self) -> str:
         """Return a string representation of the File object."""
-        return xr.open_dataset(self.path).__repr__()
+        with xr.open_dataset(self.path) as ds:
+            return repr(ds)
 
     def __contains__(self, name):
-        return name in self.variable_names or name in self.attributes
+        if self.path.exists():
+            return name in self.variable_names or name in self.attributes
+        else:
+            return False
     #
+
     # def __enter__(self):
     #     """Context manager entry point. Opens file for reading."""
     #     if self._with_counter == 0:
@@ -34,17 +40,22 @@ class SingleMoleculeDataset:
     #         self.ds.close()
 
     def __getattr__(self, name):
-        if not name.startswith('_') and name != 'path':
+        if not name.startswith('_') and name != 'path' and self.exists:
             if name in self.variable_names:
                 with xr.open_dataset(self.path) as ds:
                     return ds[name].load()
-            elif name in self.attributes:
+            if name in self.attributes:
                 return self.attributes[name]
-        else:
-            raise AttributeError(
-                f"{type(self).__name__!r} object has no attribute {name!r}",
-                name=name, obj=self,
-            )
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {name!r}",
+            name=name, obj=self,
+        )
+
+    @property
+    def exists(self):
+        if not self._exists:
+            self._exists = self.path.exists()
+        return self._exists
 
     @property
     def ds(self):
@@ -64,7 +75,23 @@ class SingleMoleculeDataset:
         #     return tuple(ds.variables)
 
     def refresh_variable_names(self):
-        self.__dict__.pop('variables', None)
+        self.__dict__.pop('variable_names', None)
+
+    @property
+    def coordinate_names(self):
+        if self.exists:
+            with netCDF4.Dataset(self.path) as ds:
+                return set(ds.getncattr('coordinates').split(' ') if 'coordinates' in ds.ncattrs() else ())
+        else:
+            return set()
+
+    @coordinate_names.setter
+    def coordinate_names(self, value):
+        for name in value:
+            if not name in self.variable_names:
+                raise ValueError(f"Coordinate {name} does not exist in dataset")
+        with netCDF4.Dataset(self.path, 'a') as ds:
+            ds.setncattr('coordinates', ' '.join(value))
 
     @property
     def attributes(self):
@@ -90,19 +117,26 @@ class SingleMoleculeDataset:
             self._attributes = None
 
     def set_coordinate(self, **kwargs):
+        coordinate_names = self.coordinate_names
         xr.Dataset(coords=kwargs).to_netcdf(self.path, mode='a')
         self.refresh_variable_names()
+        self.coordinate_names = coordinate_names.union(set(kwargs.keys()))
 
-    def set_variable(self, data, **kwargs):
-        """
-        Save data as a variable in the netCDF dataset.
 
-        Parameters:
-            data (numpy.ndarray or xarray.DataArray): The data to save.
-            **kwargs: Additional arguments for xarray.DataArray.
-        """
-        da = xr.DataArray(data, **kwargs)
-        da.to_dataset().to_netcdf(self.path, mode='a')
+    # def set_variable(self, data, **kwargs):
+    #     """
+    #     Save data as a variable in the netCDF dataset.
+    #
+    #     Parameters:
+    #         data (numpy.ndarray or xarray.DataArray): The data to save.
+    #         **kwargs: Additional arguments for xarray.DataArray.
+    #     """
+    #     da = xr.DataArray(data, **kwargs)
+    #     da.to_dataset().to_netcdf(self.path, mode='a')
+    #     self.refresh_variable_names()
+
+    def set_variable(self, **kwargs):
+        xr.Dataset(kwargs).to_netcdf(self.path, mode='a')
         self.refresh_variable_names()
 
 
@@ -122,5 +156,15 @@ def _decode_attributes(attributes):
                 value = np.array(json.loads(value))
             except (json.JSONDecodeError, ValueError):
                 pass  # ordinary string, or ragged list: leave as is
+        elif isinstance(value, np.generic):
+            value = value.item()
+        elif isinstance(value, np.ndarray):
+            value = value.tolist()
         decoded[name] = value
     return decoded
+
+
+class SingleMoleculeDataset(Dataset):
+    def __init__(self, path, root_path=None):
+        super().__init__(path, root_path)
+
