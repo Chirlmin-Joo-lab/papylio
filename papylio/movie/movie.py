@@ -408,8 +408,8 @@ class Movie:
 
     @channels.setter
     def channels(self, value):
-        # if 'channel' in self.dataset and len(value) != len(self.dataset.channel):
-        #     raise ValueError("Number of channels must match existing channels")
+        if 'channel' in self.dataset and len(value) != len(self.dataset.channel):
+            raise ValueError("Number of channels must match existing channels")
         self.dataset.set_coordinate(channel=value)
 
     @property
