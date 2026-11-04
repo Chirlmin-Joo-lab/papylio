@@ -28,7 +28,7 @@ from papylio.gui.classification_widget import ClassificationWidget
 from papylio.gui.mapping_widget import MappingWidget
 from papylio.gui.extraction_widget import ExtractionWidget
 from papylio.gui.kinetics_widget import KineticsWidget
-from papylio.gui.histogram_widget import HistogramWidget
+#from papylio.gui.histogram_widget import HistogramWidget
 from papylio.gui.common_layouts import HelpDialog
 from papylio.gui.image_widget import ImageWidget, ImageCanvas
 from papylio.gui.scripts_widget import ScriptBox
@@ -339,6 +339,7 @@ class MainWindow(QMainWindow):
         selected_files = self.experiment.selectedFiles + [None]
         for widget in self.tab_widgets:
             widget.file = selected_files[0]
+            t =1
             # if hasattr(widget, "set_file"):
             #      widget.set_file(selected_files[0])
             if hasattr(widget, "image_canvas"):

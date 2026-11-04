@@ -157,7 +157,7 @@ class Plot_Configuration(QWidget):
                     plot_settings[var] = {}
 
             if 'active' not in plot_settings[var]:
-                if var in ['intensity', 'FRET']:
+                if var in ['intensity_total', 'FRET']:
                     plot_settings[var]['active'] = True
                 else:
                     plot_settings[var]['active'] = False
@@ -196,7 +196,7 @@ class Plot_Configuration(QWidget):
             if 'secondary' not in plot_settings[var]:
                 plot_settings[var]['secondary'] = False
 
-            if 'intensity' in var or var == 'FRET':
+            if 'intensity' in var or 'intensity_total' in var or var == 'FRET':
                 illuminations = np.unique(self.dataset.illumination)
                 if len(illuminations) > 1:
                     plot_settings[var]['split_illuminations'] = False
@@ -452,7 +452,7 @@ class HistogramPlotWindow(QWidget):
 
         if plot_settings is None:
             plot_settings = {
-                'intensity': {
+                'intensity_total': {
                     'active': True,
                     'n_bins': 200,
                     'color': ('g', 'r')
@@ -467,10 +467,7 @@ class HistogramPlotWindow(QWidget):
         #force write FRET settings (to avoid auto-scaling on outliers)
         plot_settings['FRET']['plot_range'] = (-0.05, 1.05)
         plot_settings['FRET']['n_bins'] = 200
-        #bins=y_range = np.linspace(plot_settings['FRET']['plot_range'][0],
-        #                              plot_settings['FRET']['plot_range'][1],
-        #                              plot_settings['FRET']['n_bins'] + 1)
-        #plot_settings['FRET']['n_bins'] = bins
+
 
         # Store the initial file for assignment after the UI is constructed.
         self._file = None
