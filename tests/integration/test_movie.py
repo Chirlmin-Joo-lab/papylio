@@ -142,6 +142,9 @@ def test_temporal_background_correction(movie_two_channels):
 def test_general_background_correction(movie_two_channels):
     movie_two_channels.determine_general_background_correction()
 
+def test_show_corrections(movie_two_channels):
+    movie_two_channels.determine_spatial_background_correction()
+    movie_two_channels.show_correction('spatial_background_correction')
 
 
 

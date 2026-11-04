@@ -1334,7 +1334,7 @@ class Movie:
         for illumination_index, illumination in enumerate(correction.illumination):
             # axes[i].axis('off')
             # image = axes[i].imshow(self.flatten_channels(correction.sel(illumination=illumination_index)), **kwargs)
-            show_single_image(correction.sel(illumination=illumination_index), figure=figure, axes=axes[illumination_index*number_of_channels:(illumination_index+1)*number_of_channels], imshow_configuration=kwargs)
+            show_single_image(correction.sel(illumination=illumination), figure=figure, axes=axes[illumination_index*number_of_channels:(illumination_index+1)*number_of_channels], imshow_configuration=kwargs)
             for channel_index, channel in enumerate(correction.channel):
                 axes[illumination_index*number_of_channels + channel_index].set_title(f'Illumination {illumination.item()}\nChannel {channel.item()}', fontsize=8)
 
