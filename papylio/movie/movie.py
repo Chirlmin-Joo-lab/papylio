@@ -408,8 +408,8 @@ class Movie:
 
     @channels.setter
     def channels(self, value):
-        if 'channel' in self.dataset and len(value) != len(self.dataset.channel):
-            raise ValueError("Number of channels must match existing channels")
+        # if 'channel' in self.dataset and len(value) != len(self.dataset.channel):
+        #     raise ValueError("Number of channels must match existing channels")
         self.dataset.set_coordinate(channel=value)
 
     @property
@@ -497,13 +497,15 @@ class Movie:
 
     @property
     def illuminations(self):
-        if 'illuminations' not in self.dataset:
+        if 'illumination' not in self.dataset:
             raise RuntimeError("illuminations not set")
-        return self.dataset.illuminations
+        return self.dataset.illumination.values.tolist()
 
     @illuminations.setter
     def illuminations(self, value):
-        self.dataset.set_attribute(illuminations=value)
+        if 'illumination' in self.dataset and len(value) != len(self.dataset.illumination):
+            raise ValueError("Number of illuminations must match existing illuminations")
+        self.dataset.set_coordinate(illumination=value)
 
     @property
     def illumination_arrangement(self):
@@ -1193,12 +1195,13 @@ class Movie:
 
     @property
     def corrections(self):
-        if self.corrections_filepath.exists():
-            with xr.open_dataset(self.corrections_filepath, engine='h5netcdf') as dataset:
-                corrections = xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
-                                   if 'correction' in key}).load()
-        else:
-            corrections = xr.Dataset()
+        # if self.corrections_filepath.exists():
+        #     with xr.open_dataset(self.corrections_filepath, engine='h5netcdf') as dataset:
+        #         corrections = xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
+        #                            if 'correction' in key}).load()
+        # else:
+        #     corrections = xr.Dataset()
+        corrections = self.dataset.get_variables('correction')
         corrections = corrections.merge(self._common_corrections, compat='override')
         return corrections
     # Do we really need this?
@@ -1214,12 +1217,8 @@ class Movie:
         with self:
             frames = self.read_frames(frame_indices=frame_indices, apply_corrections=True, xarray=False)
 
-        general_background_correction = xr.DataArray(0, dims=('illumination', 'channel'),
-                                                      coords={'channel': self.channel_indices,
-                                                              'illumination': self.illumination_indices},
-                                                      name='general_background_correction')
-
-        # corrections = self.corrections
+        general_background_correction = xr.DataArray(np.zeros((self.number_of_illuminations, self.number_of_channels)),
+                                                      dims=('illumination', 'channel'))
 
         for illumination, channel in itertools.product(self.illumination_indices_in_movie,
                                                        np.array(self.channel_indices)):
@@ -1231,7 +1230,7 @@ class Movie:
 
         add_configuration_to_dataarray(general_background_correction, Movie.determine_general_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
-        self.save_corrections(general_background_correction=general_background_correction)
+        self.dataset.set_variable(general_background_correction=general_background_correction)
 
     def determine_temporal_background_correction(self, method='median', use_existing=False):
         from papylio.movie.background_correction import determine_temporal_background_correction
@@ -1246,10 +1245,8 @@ class Movie:
 
         frames = self.read_frames(frame_indices=None, apply_corrections=True, xarray=False)
 
-        temporal_background_correction = xr.DataArray(0, dims=('frame', 'channel'),
-                                                      coords={'frame': self.frame_indices,
-                                                              'channel': self.channel_indices},
-                                                      name='temporal_background_correction')
+        temporal_background_correction = xr.DataArray(np.zeros((self.number_of_frames, self.number_of_channels)),
+                                                      dims=('frame', 'channel'))
 
         for illumination, channel in itertools.product(self.illumination_indices_in_movie, np.array(self.channel_indices)):
 
@@ -1262,7 +1259,7 @@ class Movie:
         add_configuration_to_dataarray(temporal_background_correction, Movie.determine_temporal_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
 
-        self.save_corrections(temporal_background_correction=temporal_background_correction)
+        self.dataset.set_variable(temporal_background_correction=temporal_background_correction)
 
     def determine_spatial_background_correction(self, method='median_filter', frame_range=(0, 20), use_existing=False,
                                                 **kwargs):
@@ -1277,10 +1274,7 @@ class Movie:
             frames = self.read_frames(frame_indices=frame_indices, apply_corrections=True, xarray=False)
 
         spatial_background_correction = xr.DataArray(np.zeros((self.number_of_illuminations,) + frames.shape[1:]),
-                                                     dims=('illumination', 'channel', 'y', 'x'),
-                                                     coords={'illumination': self.illumination_indices,
-                                                             'channel': self.channel_indices, },
-                                                     name='spatial_background_correction')
+                                                     dims=('illumination', 'channel', 'y', 'x'))
 
         for illumination, channel in itertools.product(self.illumination_indices_in_movie,
                                                        np.array(self.channel_indices)):
@@ -1293,24 +1287,10 @@ class Movie:
         add_configuration_to_dataarray(spatial_background_correction, Movie.determine_spatial_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
 
-        self.save_corrections(spatial_background_correction=spatial_background_correction)#,
+        self.dataset.set_variable(spatial_background_correction=spatial_background_correction)
 
-    def save_corrections(self, **kwargs):
-        corrections_filepath = self.corrections_filepath
-        if corrections_filepath.exists():
-            corrections = xr.load_dataset(corrections_filepath, engine='h5netcdf')
-        else:
-            corrections = xr.Dataset()
-        for name, correction in kwargs.items():
-            # correction = getattr(self, name)
-            if correction is None:
-                corrections = corrections.drop_vars(name, errors='ignore')
-            else:
-                corrections[name] = correction
-        corrections.to_netcdf(corrections_filepath, mode='w', engine='h5netcdf')
-
-    def reset_corrections(self):
-        self.corrections_filepath.unlink(missing_ok=True)
+    def clear_corrections(self):
+        self.dataset.clear_variables('correction')
 
 # # @njit
     def apply_corrections(self, frames, frame_indices):
