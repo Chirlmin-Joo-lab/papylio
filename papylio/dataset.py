@@ -122,7 +122,6 @@ class Dataset:
         self.refresh_variable_names()
         self.coordinate_names = coordinate_names.union(set(kwargs.keys()))
 
-
     # def set_variable(self, data, **kwargs):
     #     """
     #     Save data as a variable in the netCDF dataset.
@@ -135,9 +134,28 @@ class Dataset:
     #     da.to_dataset().to_netcdf(self.path, mode='a')
     #     self.refresh_variable_names()
 
-    def set_variable(self, **kwargs):
+    def set_variable(self, overwrite=False, **kwargs):
+        if not overwrite and any(name in self.variable_names for name in kwargs):
+            raise ValueError("One or more variable names already exist. Use overwrite=True to overwrite existing variables.")
         xr.Dataset(kwargs).to_netcdf(self.path, mode='a')
         self.refresh_variable_names()
+
+    def get_variables(self, search_string):
+        return xr.Dataset({name: getattr(self, name) for name in self.variable_names if search_string in name})
+
+    def clear_variables(self, search_string):
+        ds = self.ds
+        dropped_variable_names = [name for name in self.variable_names if search_string in name]
+        ds = ds.drop_vars(dropped_variable_names)
+        ds.to_netcdf(self.path, mode='w')
+
+    def clear_dataset(self):
+        self.path.unlink(missing_ok=True)
+        self._variables = None
+        self._attributes = None
+        self._exists = False
+        self.refresh_variable_names()
+
 
 
 def _encode_attributes(attributes):
