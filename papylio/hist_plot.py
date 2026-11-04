@@ -100,18 +100,24 @@ class Plot_Configuration(QWidget):
 
     @dataset.setter
     def dataset(self, dataset):
-        self._dataset = dataset
-        self._trace_variables_dataset = [name for name, da in self._dataset.data_vars.items() if
-                                         da.dims and da.dims[0] == "molecule" and da.dims[-1] == "frame"]
+        if dataset is not None and (hasattr(value, 'frame') or hasattr(value, 'time')):
+            #self._dataset = dataset
+            # if 'intensity' in self._dataset:
+            #     self._dataset['intensity_total'] = self._dataset['intensity'].sum('channel')
+            self._trace_variables_dataset = [name for name, da in self._dataset.data_vars.items() if
+                                             da.dims and da.dims[0] == "molecule" and da.dims[-1] == "frame"]
 
-        self._add_missing_plot_settings_from_dataset()
+            self._add_missing_plot_settings_from_dataset()
 
-        self._add_plot_settings_to_model()
+            self._add_plot_settings_to_model()
 
-        self._enable_dataset_variables()
-        self.canvas.plot_settings = self.plot_settings
+            self._enable_dataset_variables()
+            self.canvas.plot_settings = self.plot_settings
 
-        self.parent().setFocus()
+            self.parent().setFocus()
+        else:
+            self._dataset = None
+            self.setDisabled(True)
 
     def _enable_trace_variable(self, variable):
         """Enable the specified trace variable in the model."""
@@ -157,7 +163,7 @@ class Plot_Configuration(QWidget):
                     plot_settings[var] = {}
 
             if 'active' not in plot_settings[var]:
-                if var in ['intensity_total', 'FRET']:
+                if var in ['intensity', 'intensity_total', 'FRET']:
                     plot_settings[var]['active'] = True
                 else:
                     plot_settings[var]['active'] = False
