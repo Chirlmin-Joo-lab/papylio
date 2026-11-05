@@ -725,7 +725,17 @@ class File:
             coordinates (xarray.DataArray): The coordinates to set.
         """
         self.dataset.set_variable(coordinates=coordinates.drop_vars('file', errors='ignore'))
+        # TODO: Perhaps move this to the selection and make show_traces independent from selected.
+        self.add_selected_to_dataset()
+        self.add_molecule_in_file_to_dataset()
         self.add_file_to_dataset()
+
+    def add_selected_to_dataset(self):
+        # TODO: Perhaps rename to selection
+        self.dataset.set_coordinate(selected=xr.DataArray([True] * self.number_of_molecules, dims=('molecule')))
+
+    def add_molecule_in_file_to_dataset(self):
+        self.dataset.set_coordinate(molecule_in_file=xr.DataArray(np.arange(self.number_of_molecules), dims=('molecule')))
 
     def add_file_to_dataset(self):
         file = xr.DataArray([str(self.relative_path)] * self.number_of_molecules, dims=('molecule',))
@@ -1943,7 +1953,7 @@ class File:
             split_illuminations (bool, optional): Whether to split traces by illumination. Default is True.
             **kwargs: Additional arguments for TracePlotWindow.
         """
-        dataset = self.dataset
+        dataset = self.dataset.ds
 
         save_path = self.experiment.main_path.joinpath('Trace plots')
         if not save_path.is_dir():
