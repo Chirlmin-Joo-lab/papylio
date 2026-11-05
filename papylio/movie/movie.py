@@ -459,6 +459,12 @@ class Movie:
         """int : Height of this channel in pixels (read-only)"""
         return self.height // len(self.channel_arrangement[0])
 
+    @property
+    def channel_boundaries(self):
+        horizontal_boundaries = np.array([0, self.channel_width])
+        vertical_boundaries = np.array([0, self.channel_height])
+        return np.vstack([horizontal_boundaries, vertical_boundaries]).T
+
     def get_channel_indices_from_names(self, channel_names):
         if channel_names in [None, 'all']:
             channel_indices = np.arange(len(self.channels))

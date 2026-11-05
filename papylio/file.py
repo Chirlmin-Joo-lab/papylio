@@ -258,59 +258,6 @@ class File:
 
     @property
     @return_none_when_executed_by_pycharm
-    def rotation(self):
-        # TODO: If it is variable is retrieved and the dataset is present, then the value should be retrieved from the dataset and set to the movie\
-        return self.movie.rotation
-
-    @rotation.setter
-    def rotation(self, value):
-        self.movie.rotation = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def channels(self):
-        return self.movie.channels
-
-    @channels.setter
-    def channels(self, value):
-        self.movie.channels = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def number_of_channels(self):
-        return len(self.channels)
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def channel_arrangement(self):
-        return self.movie.channel_arrangement
-
-    @channel_arrangement.setter
-    def channel_arrangement(self, value):
-        self.movie.channel_arrangement = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def illuminations(self):
-        return self.movie.illuminations
-
-    @illuminations.setter
-    def illuminations(self, value):
-        self.movie.illuminations = value
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def illumination_arrangement(self):
-        return self.movie.illumination_arrangement
-
-    @illumination_arrangement.setter
-    def illumination_arrangement(self, value):
-        self.movie.illumination_arrangement = value
-
-
-
-    @property
-    @return_none_when_executed_by_pycharm
     def number_of_molecules(self):
         """Return the number of molecules in the file's dataset."""
         try:
@@ -347,12 +294,12 @@ class File:
         if channel_index > 0:
             coordinates = self.mappings[channel_index-1].transform_coordinates(coordinates, inverse=True)
 
-        coordinates = coordinates.expand_dims(channel=np.arange(self.number_of_channels), axis=1).copy()
+        coordinates = coordinates.expand_dims(channel=self.channels, axis=1).copy()
 
         for i in range(self.number_of_channels)[1:]:
             coordinates[:,i,:] = self.mappings[i-1].transform_coordinates(coordinates[:,i,:], inverse=False)
 
-        coordinates = coordinates_within_margin(coordinates, bounds=self.movie.boundaries, margin=0)
+        coordinates = coordinates_within_margin(coordinates, bounds=self.channel_boundaries, margin=0)
         self.coordinates = coordinates
 
     def coordinates_from_channel(self, channel):
@@ -427,25 +374,25 @@ class File:
                 return dataset.getncattr(attribute_name) if attribute_name in dataset.ncattrs() else None
         return None
 
-    def _init_dataset(self, number_of_molecules):
-        """
-        Initialize the netCDF dataset for this file.
-
-        Parameters:
-            number_of_molecules (int): The number of molecules to initialize the dataset with.
-        """
-        selected = xr.DataArray(False, dims=('molecule',), coords={'molecule': range(number_of_molecules)}, name='selected')
-        add_configuration_to_dataarray(selected)
-        selected.attrs['configuration'] = json.dumps([])
-        selected.attrs['selection_configurations'] = json.dumps({})
-
-        dataset = selected.to_dataset().assign_coords(molecule_in_file=('molecule', selected.molecule.values))
-        dataset = dataset.reset_index('molecule', drop=True)
-        dataset = dataset.assign_coords({'file': ('molecule', [str(self.relative_path).encode()] * number_of_molecules)})
-        encoding = {'file': {'dtype': '|S'}, 'selected': {'dtype': bool}}
-        dataset.attrs['channel_arrangement'] = json.dumps(np.array(self.movie.channel_arrangement).tolist())
-        dataset.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
-        self.extensions.add('.nc')
+    # def _init_dataset(self, number_of_molecules):
+    #     """
+    #     Initialize the netCDF dataset for this file.
+    #
+    #     Parameters:
+    #         number_of_molecules (int): The number of molecules to initialize the dataset with.
+    #     """
+    #     selected = xr.DataArray(False, dims=('molecule',), coords={'molecule': range(number_of_molecules)}, name='selected')
+    #     add_configuration_to_dataarray(selected)
+    #     selected.attrs['configuration'] = json.dumps([])
+    #     selected.attrs['selection_configurations'] = json.dumps({})
+    #
+    #     dataset = selected.to_dataset().assign_coords(molecule_in_file=('molecule', selected.molecule.values))
+    #     dataset = dataset.reset_index('molecule', drop=True)
+    #     dataset = dataset.assign_coords({'file': ('molecule', [str(self.relative_path).encode()] * number_of_molecules)})
+    #     encoding = {'file': {'dtype': '|S'}, 'selected': {'dtype': bool}}
+    #     dataset.attrs['channel_arrangement'] = json.dumps(np.array(self.movie.channel_arrangement).tolist())
+    #     dataset.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+    #     self.extensions.add('.nc')
 
     def find_extensions(self):
         """
@@ -618,7 +565,7 @@ class File:
                               apply_corrections=False, path=self.experiment.main_path, filename='darkfield', filetype='tif')
         self.experiment.load_darkfield_correction()
 
-    def find_coordinates(self, channels=(0, 1),
+    def find_coordinates(self, channels=None,
                          image_configuration=None, sliding_window=None,
                          peak_finding_configuration=None, margin=10, fit_peaks=True, remove_peaks_with_close_neighbors=None):
         """
@@ -630,6 +577,9 @@ class File:
 
         For configuration options see the "find_coordinates" section in the default configuration file.
         """
+
+        if channels is None:
+            channels = self.channels
 
         if image_configuration is None:
             image_configuration = dict()
@@ -669,7 +619,7 @@ class File:
                                                                   cutoff='image_median', fraction_of_peak_max=0.25)
 
         coordinates = xr.DataArray(coordinates, dims=('molecule', 'dimension'),
-                                   coords={'dimension': [b'x', b'y']}, name='coordinates')
+                                   coords={'dimension': ['x', 'y'],}, name='coordinates')
 
         add_configuration_to_dataarray(coordinates, File.find_coordinates, locals(), units='pixel')
 
@@ -764,14 +714,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def coordinates(self):
         """Return the molecule coordinates from the netCDF dataset."""
-        if self.absolute_path.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
-                if hasattr(dataset, 'coordinates'):
-                    return dataset['coordinates'].load()
-                else:
-                    return None
-        else:
-            return None
+        return self.dataset.coordinates
 
     @coordinates.setter
     def coordinates(self, coordinates):
@@ -781,9 +724,13 @@ class File:
         Parameters:
             coordinates (xarray.DataArray): The coordinates to set.
         """
-        # Reset current .nc file
-        self._init_dataset(len(coordinates.molecule))
-        coordinates.drop_vars('file', errors='ignore').to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
+        self.dataset.set_variable(coordinates=coordinates.drop_vars('file', errors='ignore'))
+        self.add_file_to_dataset()
+
+    def add_file_to_dataset(self):
+        file = xr.DataArray([str(self.relative_path)] * self.number_of_molecules, dims=('molecule',))
+        file.encoding = {'dtype': 'S1'}
+        self.dataset.set_coordinate(file=file)
 
     def extract_traces(self, mask_size, neighbourhood_size=11, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
@@ -1016,7 +963,7 @@ class File:
         #TODO: Update this for the new image style and for multiple mappings
 
         if projection_image_configuration is None:
-            projection_image_configuration = dict(frame_range=(0,20), projection='average')
+            projection_image_configuration = dict(frames=slice(0,20), projection='average')
 
         if peak_finding_configuration is None:
             #TODO: Also make it possible to input just a dict, instead of a list of dicts
@@ -1028,21 +975,23 @@ class File:
         print(transformation_type)
 
         coordinates_per_channel = []
-        for i, channel_image in enumerate(image):
-            coordinates = find_peaks(image=channel_image, **peak_finding_configuration[i])
+        for i in range(self.number_of_channels):
+            image_i = image[:, i:i+1, :, :]
+            coordinates = find_peaks(image=image_i, **peak_finding_configuration[i])
 
+            #TODO: perhaps move the parts below to find_peaks or a find_molecules function.
             # TODO: Check that it goes well if there are no coordinates left
             if margin:
-                coordinates = coordinates_within_margin(coordinates, image[i], margin=margin)
+                coordinates = coordinates_within_margin(coordinates, image_i, margin=margin)
 
             # TODO: Make gaussian width configurable or derive from psf size
             if fit_peaks:
-                coordinates = coordinates_after_gaussian_fit(coordinates, image[i], gaussian_width=5)
+                coordinates = coordinates_after_gaussian_fit(coordinates, image_i, gaussian_width=5)
 
             # TODO: Make radius, cutoff and fraction_of_peak_max configurable or derive from psf size
             # TODO: Make sure this handles empty arrays well
             if remove_peaks_with_close_neighbors:
-                coordinates = coordinates_without_intensity_at_radius(coordinates, image[i], radius=3,
+                coordinates = coordinates_without_intensity_at_radius(coordinates, image_i, radius=3,
                                                                       cutoff='image_median', fraction_of_peak_max=0.25)
 
             if coordinates.size == 0:  # should throw a error message to warm no acceptor molecules found
@@ -1087,8 +1036,7 @@ class File:
     @mappings.setter
     def mappings(self, mappings):
         self._mappings = mappings
-        if self.has_movie:
-            self.movie.channel_mappings = mappings
+        self.movie.channel_mappings = mappings
 
     def show_mapping_in_image(self, axes=None, save=True, unit='pixel', projection_image_configuration=None, imshow_configuration=None):
         """
