@@ -370,6 +370,14 @@ class Movie:
     def boundaries_stage(self):
         return self.pixel_to_stage_coordinates_transformation(self.channels[0].boundaries)
 
+    @property
+    def psf_size(self):
+        return self.dataset.psf_size
+
+    @psf_size.setter
+    def psf_size(self, value):
+        self.dataset.set_attribute(psf_size=value)
+
     ### FRAMES & TIME ###
 
     @property

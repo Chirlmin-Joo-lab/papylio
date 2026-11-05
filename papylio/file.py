@@ -732,7 +732,7 @@ class File:
         file.encoding = {'dtype': 'S1'}
         self.dataset.set_coordinate(file=file)
 
-    def extract_traces(self, mask_size, neighbourhood_size=11, background_correction=None, alpha_correction=None,
+    def extract_traces(self, mask_size='auto', neighbourhood_size=11, background_correction=None, alpha_correction=None,
                        gamma_correction=None):
         """
         Extract intensity traces for each molecule from the movie.
@@ -749,19 +749,13 @@ class File:
             print('No molecules found, perform `find_coordinates` first')
             return
 
-        if self.movie is None:
-            raise FileNotFoundError('No movie file was found')
-
         print(f'Extracting traces in {self}')
 
-        if mask_size == 'TIR-T' or mask_size == 'TIR-V':
-            mask_size = 1.291
-        elif mask_size == 'TIR-S 1.5x 2x2':
-            mask_size = 0.8
-        elif mask_size == 'TIR-S 1x 2x2':
-            mask_size = 0.55
-        elif mask_size == 'BN-TIRF':
-            mask_size = 1.01
+        if mask_size == 'auto':
+            if 'psf_size' in self.dataset:
+                mask_size = self.psf_size
+            else:
+                raise ValueError('No psf_size found in dataset attributes, please provide a mask_size or determine the psf_size first')
 
         intensity = extract_traces(self.movie, self.coordinates, mask_size=mask_size,
                                    neighbourhood_size=neighbourhood_size)
@@ -770,22 +764,15 @@ class File:
         intensity.attrs['configuration'] = json.dumps(dict(mask_size=mask_size, neighbourhood_size=neighbourhood_size))
         intensity.attrs['movie_configuration'] = json.dumps(self.movie.configuration)
 
-        if self.movie.time is not None: # hasattr(self.movie, 'time')
-            intensity = intensity.assign_coords(time=self.movie.time)
+        self.dataset.set_variable(intensity=intensity)
 
-        intensity = intensity.assign_coords(illumination=self.movie.illumination_index_per_frame)
-
-        intensity.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
-
-        if 'intensity_raw' in self.data_vars:
-            intensity_raw = self.intensity
-            intensity_raw.name = 'intensity_raw'
-            intensity_raw.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
+        if 'intensity_raw' in self.dataset:
+            self.dataset.set_variable(intensity_raw=self.intensity)
 
         if background_correction is not None or alpha_correction is not None or gamma_correction is not None:
             self.apply_trace_corrections(background_correction, alpha_correction, gamma_correction)
 
-        if self.movie.number_of_channels > 1:
+        if self.number_of_channels > 1:
             self.calculate_FRET()
 
     def apply_trace_corrections(self, background_correction=None, alpha_correction=None,
@@ -800,20 +787,18 @@ class File:
         """
         from papylio.trace_correction import trace_correction
 
-        if 'intensity_raw' in self.data_vars:
+        if 'intensity_raw' in self.dataset:
             intensity_raw = self.intensity_raw
         else:
             intensity_raw = self.intensity
-            intensity_raw.name = 'intensity_raw'
-            intensity_raw.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
+            self.dataset.set_variable(intensity_raw=intensity_raw)
 
         intensity = trace_correction(intensity_raw, background_correction, alpha_correction, gamma_correction)
-        intensity.name = 'intensity'
         initial_configuration = intensity.attrs['configuration']
         add_configuration_to_dataarray(intensity, File.apply_trace_corrections, locals(), units='a.u.') # TODO: Link to units in movie metadata?
         intensity.attrs['configuration'] = initial_configuration[:-1] + ', ' + intensity.attrs['configuration'][1:]
 
-        intensity.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
+        self.dataset.set_variable(intensity=intensity)
 
         if 'FRET' in self.data_vars:
             self.calculate_FRET()
@@ -823,7 +808,7 @@ class File:
         intensity = self.intensity
         FRET = calculate_FRET(intensity)
         FRET.attrs = intensity.attrs
-        FRET.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
+        self.dataset.set_variable(FRET=FRET)
 
     def get_traces(self, selected=False):
         """
@@ -1995,8 +1980,8 @@ def calculate_FRET(intensity):
         xarray.DataArray: The FRET efficiency.
     """
     # TODO: Make suitable for mutliple colours
-    donor = intensity.sel(channel=0, drop=True)
-    acceptor = intensity.sel(channel=1, drop=True)
+    donor = intensity.isel(channel=0, drop=True)
+    acceptor = intensity.isel(channel=1, drop=True)
     FRET = acceptor / (donor + acceptor)
     FRET.name = 'FRET'
     return FRET

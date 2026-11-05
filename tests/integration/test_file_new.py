@@ -36,4 +36,4 @@ def test_find_coordinates(file):
 
 def test_extract_traces(file):
     file.find_coordinates(image_configuration=dict(frames=slice(0,20), projection='average'))
-    file.extract_traces(1)
+    file.extract_traces()
