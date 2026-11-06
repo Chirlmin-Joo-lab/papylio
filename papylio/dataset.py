@@ -140,16 +140,20 @@ class Dataset:
         xr.Dataset(kwargs).to_netcdf(self.path, mode='a')
         self.refresh_variable_names()
 
+    def get_variable_names(self, search_string):
+        return [name for name in self.variable_names if search_string in name]
+
     def get_variables(self, search_string):
-        return xr.Dataset({name: getattr(self, name) for name in self.variable_names if search_string in name})
+        return xr.Dataset({name: getattr(self, name) for name in self.get_variable_names(search_string)})
 
     def clear_variables(self, search_string):
         ds = self.ds
         dropped_variable_names = [name for name in self.variable_names if search_string in name]
         ds = ds.drop_vars(dropped_variable_names)
         ds.to_netcdf(self.path, mode='w')
+        self.refresh_variable_names()
 
-    def clear_dataset(self):
+    def clear(self):
         self.path.unlink(missing_ok=True)
         self._variables = None
         self._attributes = None

@@ -41,3 +41,22 @@ def test_extract_traces(file):
 def test_show_traces(file):
     test_extract_traces(file)
     file.show_traces()
+
+def test_create_selection(file):
+    test_extract_traces(file)
+    file.create_selection(variable='intensity_total', channel=None, aggregator='max', operator='<', threshold=10000)
+
+def test_clear_selection(file):
+    test_create_selection(file)
+    file.clear_selections()
+
+def test_apply_selections(file):
+    test_extract_traces(file)
+    file.create_selection(variable='intensity_total', channel=None, aggregator='max', operator='<', threshold=10000, name='selection_intensity_total_maximum')
+    file.create_selection(variable='FRET', channel=None, aggregator='mean', operator='>', threshold=0.5, name='selection_FRET_mean')
+    file.apply_selections()
+    file.apply_selections(None)
+    file.apply_selections('selection_intensity_total_maximum', 'selection_FRET_mean')
+    file.apply_selections('selection_intensity_total_maximum', add_to_current=True)
+    file.clear_selections()
+    file.apply_selections()

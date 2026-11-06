@@ -1124,21 +1124,6 @@ class File:
 
         return da
 
-    def set_dataset_coordinate(self, **kwargs):
-        xr.Dataset(coords=kwargs).to_netcdf(
-            self.absolute_path, engine='netcdf4', mode='a'
-        )
-
-    def set_variable(self, data, **kwargs):
-        """
-        Save data as a variable in the netCDF dataset.
-
-        Parameters:
-            data (numpy.ndarray or xarray.DataArray): The data to save.
-            **kwargs: Additional arguments for xarray.DataArray.
-        """
-        da = xr.DataArray(data, **kwargs)
-        da.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
 
     @property
     @return_none_when_executed_by_pycharm
@@ -1150,9 +1135,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def selections(self):
         """Return all selection variables from the dataset."""
-        with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
-            return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
-                               if key.startswith('selection_')}).load()
+        return self.dataset.get_variables('selection_')
 
     def create_selection(self, variable, channel, aggregator, operator, threshold, name=None):
         # TODO: Make this more general like classification
@@ -1197,7 +1180,7 @@ class File:
         if not name.startswith('selection_'):
             name = 'selection_' + name
 
-        self.set_variable(selection, name=name)
+        self.set_variable(**{name: selection})
 
     def copy_selections_to_selected_files(self):
         """Copy current selections and active selection state to all selected files in the experiment."""
@@ -1216,7 +1199,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def selection_names(self):
         """Return the names of all available selections."""
-        return list(self.selections.data_vars.keys())
+        return self.dataset.get_variable_names('selection_')
 
     @property
     @return_none_when_executed_by_pycharm
@@ -1225,13 +1208,8 @@ class File:
         return json.loads(self.selected.attrs['configuration'])
 
     def clear_selections(self):
-        """Clear all selections and reset the active selection state."""
-        dataset = self.dataset
-        dataset = dataset.drop_vars([name for name in dataset.data_vars.keys() if name.startswith('selection_')])
-        encoding = {
-            var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
-        }
-        dataset.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        self.dataset.clear_variables('selection_')
+        self.apply_selections()
 
     def selection_configurations(self, *selection_names):
         """
@@ -1276,7 +1254,7 @@ class File:
         if not selection_names or selection_names[0] in [None, 'none', 'None']:
             selection_names = []
             selected = self.selected
-            selected[:] = False
+            selected[:] = True
         else:
             for selection_name in selection_names:
                 if selection_name not in all_selection_names:
@@ -1298,7 +1276,7 @@ class File:
         add_configuration_to_dataarray(selected)
         selected.attrs['configuration'] = json.dumps(selection_names)
         selected.attrs['selection_configurations'] = json.dumps(self.selection_configurations(*selection_names))
-        self.set_variable(selected, name='selected')
+        self.set_variable(selected=selected, overwrite=True)
 
     @property
     @return_none_when_executed_by_pycharm
