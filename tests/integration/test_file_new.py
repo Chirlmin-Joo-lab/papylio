@@ -9,9 +9,15 @@ def file():
 
     with temporary_data(relative_path) as path:
         from papylio import Experiment
-        exp = Experiment(path.parent, microscope='BN-TIRF')
+        exp = Experiment(path.parent, microscope=None)#, microscope='BN-TIRF')
         file = exp.files[0]
+        file.rotation = 1
+        file.channels = ['green', 'red']
+        file.channel_arrangement = [[[0,1]]]
+        file.illuminations = ['green', 'red']
         file.illumination_arrangement = [0]
+
+        file.psf_size = 1.01
 
         yield file
 
@@ -60,3 +66,23 @@ def test_apply_selections(file):
     file.apply_selections('selection_intensity_total_maximum', add_to_current=True)
     file.clear_selections()
     file.apply_selections()
+
+def test_create_classification(file):
+    test_extract_traces(file)
+    selection = file.selected
+    selection[20:] = False
+    file.set_variable(selected=selection, overwrite=True)
+    file.create_classification(name='classification_threshold', classification_type='threshold',
+                                      variable='intensity_total', classification_configuration=dict(threshold=500, rolling='median', window_size=5))
+    file.create_classification(name='classification_hmm', classification_type='hmm', variable='FRET')
+    # file.create_classification(**json.loads(file_output.classification_test.attrs['configuration']))
+
+def test_clear_classifications(file):
+    test_create_classification(file)
+    file.clear_classifications()
+
+def test_apply_classifications(file):
+    test_create_classification(file)
+    file.apply_classifications(classification_threshold=-1, classification_hmm=[None, 0, 1])
+    file.apply_classifications(add_to_current=True, classification_hmm=[None, 2, 3])
+

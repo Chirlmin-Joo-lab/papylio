@@ -64,18 +64,33 @@ class Dataset:
     @ds.setter
     def ds(self, value):
         value.to_netcdf(self.path, mode='a')
-        self.refresh_variable_names()
+        self.refresh_variable_info()
         self._attributes = None
 
     @cached_property
-    def variable_names(self):
+    def variable_info(self):
+        """Return a dictionary with information about all variables in the dataset."""
+        info = {}
         with netCDF4.Dataset(self.path) as ds:
-            return tuple(ds.variables.keys())
+            for name in ds.variables:
+                info[name] = {
+                    'dimensions': ds[name].dimensions,
+                    'shape': ds[name].shape,
+                    'dtype': str(ds[name].dtype),
+                    # 'attrs': dict(ds[name].ncattrs()),
+                }
+        return info
+
+    def refresh_variable_info(self):
+        self.__dict__.pop('variable_info', None)
+
+    @property
+    def variable_names(self):
+        return list(self.variable_info.keys())
+        # with netCDF4.Dataset(self.path) as ds:
+        #     return tuple(ds.variables.keys())
         # with xr.open_dataset(self.path) as ds:
         #     return tuple(ds.variables)
-
-    def refresh_variable_names(self):
-        self.__dict__.pop('variable_names', None)
 
     @property
     def coordinate_names(self):
@@ -119,7 +134,7 @@ class Dataset:
     def set_coordinate(self, **kwargs):
         coordinate_names = self.coordinate_names
         xr.Dataset(coords=kwargs).to_netcdf(self.path, mode='a')
-        self.refresh_variable_names()
+        self.refresh_variable_info()
         self.coordinate_names = coordinate_names.union(set(kwargs.keys()))
 
     # def set_variable(self, data, **kwargs):
@@ -138,7 +153,7 @@ class Dataset:
         if not overwrite and any(name in self.variable_names for name in kwargs):
             raise ValueError("One or more variable names already exist. Use overwrite=True to overwrite existing variables.")
         xr.Dataset(kwargs).to_netcdf(self.path, mode='a')
-        self.refresh_variable_names()
+        self.refresh_variable_info()
 
     def get_variable_names(self, search_string):
         return [name for name in self.variable_names if search_string in name]
@@ -151,14 +166,14 @@ class Dataset:
         dropped_variable_names = [name for name in self.variable_names if search_string in name]
         ds = ds.drop_vars(dropped_variable_names)
         ds.to_netcdf(self.path, mode='w')
-        self.refresh_variable_names()
+        self.refresh_variable_info()
 
     def clear(self):
         self.path.unlink(missing_ok=True)
         self._variables = None
         self._attributes = None
         self._exists = False
-        self.refresh_variable_names()
+        self.refresh_variable_info()
 
 
 

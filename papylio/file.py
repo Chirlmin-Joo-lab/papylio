@@ -810,7 +810,7 @@ class File:
 
         self.dataset.set_variable(intensity=intensity)
 
-        if 'FRET' in self.data_vars:
+        if 'FRET' in self.dataset.variable_names:
             self.calculate_FRET()
 
     def calculate_FRET(self):
@@ -1283,24 +1283,21 @@ class File:
     def classification(self):
         """Get the default classification for molecules in this file."""
         # Or add a standard classification datavar in the dataset?
-        if not 'classification' in self.data_vars:
+        if not 'classification' in self.dataset.variable_names:
             self.apply_classifications()
-        classification = self.__getattr__('classification')
-        return classification
+        return self.dataset.classification
 
     @property
     @return_none_when_executed_by_pycharm
     def classifications(self):
         """Return all classification variables from the dataset."""
-        with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
-            return xr.Dataset({value.name: value for key, value in dataset.data_vars.items()
-                               if key.startswith('classification_')}).load()
+        return self.dataset.get_variables('classification_')
 
     @property
     @return_none_when_executed_by_pycharm
     def classification_names(self):
         """Return the names of all available classifications."""
-        return list(self.classifications.data_vars.keys())
+        return self.dataset.get_variable_names('classification_')
 
     def classification_configurations(self, classification_names='all'):
         """
@@ -1346,6 +1343,14 @@ class File:
             traces = variable
             variable = traces.name
 
+        if name is None:
+            name = classification_type
+        if not name.startswith('classification_'):
+            name = 'classification_' + name
+
+        if name in self.dataset.variable_names:
+            raise ValueError(f'Classification {name} already exists, choose a different name or delete the existing classifications first')
+
         if select is not None:
             traces = traces.sel(**select)
 
@@ -1370,34 +1375,12 @@ class File:
 
         classification_configuration = json.loads(ds.classification.attrs['configuration'])
         add_configuration_to_dataarray(ds.classification, File.create_classification, locals())
-
-        if name is None:
-            name = classification_type
-        if not name.startswith('classification_'):
-            name = 'classification_' + name
         ds = ds.rename({'classification': name})
 
-        ds.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='a')
+        self.dataset.set_variable(**ds)
 
         if apply is not None:
             self.apply_classifications(add_to_current=True, **{name: apply})
-
-    def classify_hmm(self, variable, seed=0, n_states=2, threshold_state_mean=None,
-                     level='molecule'):  # , use_selection=True, use_classification=True):
-        #TODO: Depricate this
-        """
-        Create an HMM-based classification.
-
-        Parameters:
-            variable (str): The name of the variable to classify.
-            seed (int, optional): Random seed for HMM. Default is 0.
-            n_states (int, optional): Number of states for HMM. Default is 2.
-            threshold_state_mean (float, optional): Threshold for state mean.
-            level (str, optional): The level at which to perform HMM ('molecule' or 'frame'). Default is 'molecule'.
-        """
-        self.create_classification(name='hmm', classification_type='hmm', variable=variable,
-                                   classification_configuration=dict(seed=seed, n_states=n_states,
-                                threshold_state_mean=threshold_state_mean, level=level))
 
     def apply_classifications(self, add_to_current=False, **classification_assignment):
         """
@@ -1418,7 +1401,7 @@ class File:
             if classification_name not in all_classification_names:
                 raise ValueError(f'Classification {classification_name} does not exist')
 
-        classification_combined = np.zeros((len(self.molecule), len(self.frame)), 'int8')
+        classification_combined = np.zeros((self.number_of_molecules, self.number_of_frames), 'int8')
 
         for classification_name, state_indices in classification_assignment.items():
             if not classification_name.startswith('classification'):
@@ -1443,23 +1426,17 @@ class File:
                     if state_indices[i] is not None:
                         classification_combined[(classification == c).values] = state_indices[i]
 
-        classification_combined = xr.DataArray(classification_combined)
+        classification_combined = xr.DataArray(classification_combined, dims=('molecule','frame'))
         add_configuration_to_dataarray(classification_combined)
         classification_combined.attrs['configuration'] = json.dumps(classification_assignment)
         classification_combined.attrs['classification_configurations'] = json.dumps(self.classification_configurations(list(classification_assignment.keys())))
 
-        self.set_variable(classification_combined, name='classification', dims=('molecule','frame'))
+        self.dataset.set_variable(classification=classification_combined, overwrite=True)
 
     def clear_classifications(self):
-        """Clear all classifications and reset the active classification state."""
-        dataset = self.dataset
-        dataset = dataset.drop_vars([name for name in dataset.data_vars.keys() if name.startswith('classification_')])
-        # for name, da in dataset.data_vars.items():
-        #     da.encoding['dtype'] = da.dtype
-        encoding = {
-            var: {"dtype": 'bool'} for var in dataset.data_vars if dataset[var].dtype == bool
-        }
-        dataset.to_netcdf(self.absolute_path.with_suffix('.nc'), engine='netcdf4', mode='w', encoding=encoding)
+        """Clear all classifications from the dataset."""
+        self.dataset.clear_variables('classification_')
+        self.apply_classifications()
 
 
     @property
