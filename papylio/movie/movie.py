@@ -289,13 +289,13 @@ class Movie:
 
     @property
     def rotation(self):
-        if self._rotation is None:
+        if 'rotation' not in self.dataset:
             raise RuntimeError("rotation not set")
-        return self._rotation
+        return self.dataset.rotation
 
     @rotation.setter
     def rotation(self, value):
-        self._rotation = value
+        self.dataset.set_attribute(rotation=value)
 
     @property
     def movie_size(self):
