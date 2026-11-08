@@ -27,10 +27,13 @@ def mapping_file():
 
     with temporary_data(relative_path) as path:
         from papylio import Experiment
-        exp = Experiment(path.parent, microscope='BN-TIRF')
+        exp = Experiment(path.parent, microscope=None) #microscope='BN-TIRF')
         file = exp.files[0]
+        file.rotation = 1
+        file.channels = ['green', 'red']
+        file.channel_arrangement = [[[0,1]]]
+        file.illuminations = ['green', 'red']
         file.illumination_arrangement = [0]
-
         yield file
 
 def test_perform_mapping(mapping_file):

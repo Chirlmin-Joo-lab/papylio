@@ -1215,7 +1215,7 @@ class Movie:
         #                            if 'correction' in key}).load()
         # else:
         #     corrections = xr.Dataset()
-        corrections = self.dataset.get_variables('correction')
+        corrections = self.dataset.search_variables('correction')
         corrections = corrections.merge(self._common_corrections, compat='override')
         return corrections
     # Do we really need this?

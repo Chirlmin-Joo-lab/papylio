@@ -820,40 +820,6 @@ class File:
         FRET.attrs = intensity.attrs
         self.dataset.set_variable(FRET=FRET)
 
-    def get_traces(self, selected=False):
-        """
-        Get all data variables that have a 'frame' dimension (traces).
-
-        Parameters:
-            selected (bool, optional): Whether to return traces only for selected molecules. Default is False.
-
-        Returns:
-            xarray.Dataset: The traces dataset.
-        """
-        dataset = self.dataset
-
-        included_data_var_names = []
-        for name in list(dataset.data_vars.keys()):
-            if 'frame' in dataset[name].dims:
-                included_data_var_names.append(name)
-
-        traces = dataset[included_data_var_names]
-
-        if selected:
-            traces = traces.sel(molecule=dataset.selected)
-
-        return traces
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def traces_names(self):
-        """Return names of data variables that are traces (have 'frame' as the last dimension)."""
-        # return list(self.classifications.data_vars.keys())
-        return [
-            name for name, da in self.data_vars.items()
-            if da.dims and da.dims[-1] == "frame"
-        ]
-
     def plot_hmm_rates(self, name=None):
         # TODO: Check this out and what we want to do with it.
         """
@@ -1135,7 +1101,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def selections(self):
         """Return all selection variables from the dataset."""
-        return self.dataset.get_variables('selection_')
+        return self.dataset.search_variables('selection_')
 
     def create_selection(self, variable, channel, aggregator, operator, threshold, name=None):
         # TODO: Make this more general like classification
@@ -1199,7 +1165,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def selection_names(self):
         """Return the names of all available selections."""
-        return self.dataset.get_variable_names('selection_')
+        return self.dataset.search_variable_names('selection_')
 
     @property
     @return_none_when_executed_by_pycharm
@@ -1291,13 +1257,13 @@ class File:
     @return_none_when_executed_by_pycharm
     def classifications(self):
         """Return all classification variables from the dataset."""
-        return self.dataset.get_variables('classification_')
+        return self.dataset.search_variables('classification_')
 
     @property
     @return_none_when_executed_by_pycharm
     def classification_names(self):
         """Return the names of all available classifications."""
-        return self.dataset.get_variable_names('classification_')
+        return self.dataset.search_variable_names('classification_')
 
     def classification_configurations(self, classification_names='all'):
         """

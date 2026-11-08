@@ -155,11 +155,15 @@ class Dataset:
         xr.Dataset(kwargs).to_netcdf(self.path, mode='a')
         self.refresh_variable_info()
 
-    def get_variable_names(self, search_string):
+    def search_variable_names(self, search_string):
         return [name for name in self.variable_names if search_string in name]
 
-    def get_variables(self, search_string):
-        return xr.Dataset({name: getattr(self, name) for name in self.get_variable_names(search_string)})
+    def get_variables(self, variable_names):
+        return xr.Dataset({name: getattr(self, name) for name in variable_names})
+
+    def search_variables(self, search_string):
+        variable_names = self.search_variable_names(search_string)
+        return self.get_variables(variable_names)
 
     def clear_variables(self, search_string):
         ds = self.ds
@@ -205,3 +209,29 @@ class SingleMoleculeDataset(Dataset):
     def __init__(self, path, root_path=None):
         super().__init__(path, root_path)
 
+    @property
+    def trace_names(self):
+        """Return names of data variables that are traces (have 'frame' as the last dimension)."""
+        return [
+            name for name, info in self.variable_info
+            if info.dimensions[-1] == "frame"
+        ]
+
+    def get_traces(self, selected=False):
+        """
+        Get all data variables that have a 'frame' dimension (traces).
+
+        Parameters:
+            selected (bool, optional): Whether to return traces only for selected molecules. Default is False.
+
+        Returns:
+            xarray.Dataset: The traces dataset.
+        """
+        dataset = self.dataset
+
+        traces = self.get_variables(self.trace_names)
+
+        if selected:
+            traces = traces.sel(molecule=dataset.selected)
+
+        return traces
