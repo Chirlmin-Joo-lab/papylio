@@ -113,12 +113,11 @@ class ImageCanvas(FigureCanvas):
             self._file = None
             self.figure.clf()
             self.draw()
+        self.highlighted_molecule = None
 
     def set_highlighted_molecule(self, value):
         self.highlighted_molecule=value
         self.refresh()
-
-
 
     def refresh(self):
         self.figure.clf()
