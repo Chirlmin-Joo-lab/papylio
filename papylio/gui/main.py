@@ -21,7 +21,7 @@ import numpy as np
 import papylio as pp
 from papylio import Experiment, File
 from papylio.trace_plot import TracePlotWindow
-from papylio.hist_plot import HistogramPlotWindow
+from papylio.histogram_plot import HistogramPlotWindow
 from papylio.gui.setup_widget import SetUpWidget
 from papylio.gui.selection_widget import SelectionWidget
 from papylio.gui.classification_widget import ClassificationWidget

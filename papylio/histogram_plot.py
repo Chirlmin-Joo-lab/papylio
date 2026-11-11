@@ -115,6 +115,7 @@ class Plot_Configuration(QWidget):
             self.canvas.plot_settings = self.plot_settings
 
             self.parent().setFocus()
+            self.setDisabled(False)
         else:
             self._dataset = None
             self.setDisabled(True)
@@ -621,7 +622,7 @@ class HistogramPlotWindow(QWidget):
             self.canvas.figure.clear()
             self.canvas.histogram_axes = {}
             self.canvas.draw()
-            self.setDisabled(True)
+            # self.setDisabled(True)
         else:
             self.dataset = file.dataset
             self.plot_configuration.dataset = file.dataset
