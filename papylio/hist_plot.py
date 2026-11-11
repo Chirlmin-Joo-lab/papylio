@@ -100,11 +100,11 @@ class Plot_Configuration(QWidget):
 
     @dataset.setter
     def dataset(self, dataset):
-        if dataset is not None and (hasattr(value, 'frame') or hasattr(value, 'time')):
-            #self._dataset = dataset
-            # if 'intensity' in self._dataset:
-            #     self._dataset['intensity_total'] = self._dataset['intensity'].sum('channel')
-            self._trace_variables_dataset = [name for name, da in self._dataset.data_vars.items() if
+        if dataset is not None and (hasattr(dataset, 'frame') or hasattr(dataset, 'time')):
+            self._dataset = dataset
+            if 'intensity' in self._dataset:
+                self._dataset['intensity_total'] = self._dataset['intensity'].sum('channel')
+            self._trace_variables_dataset = [name for name, da in dataset.data_vars.items() if
                                              da.dims and da.dims[0] == "molecule" and da.dims[-1] == "frame"]
 
             self._add_missing_plot_settings_from_dataset()
@@ -461,7 +461,7 @@ class HistogramPlotWindow(QWidget):
                 'intensity_total': {
                     'active': True,
                     'n_bins': 200,
-                    'color': ('g', 'r')
+                    'color': ('k',)
                 },
                 'FRET': {
                     'active': True,
