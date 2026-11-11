@@ -180,7 +180,7 @@ class ClassificationWidget(QWidget):
             self.stack_layout.addWidget(form_widget)
 
     def _run_classification(self):
-        self.request_top_tab_change.emit(2)
+        self.emitrequest_top_tab_change(1)
         method_name = self.method_selector.currentText()
         if not method_name:
             QMessageBox.warning(self, "No method", "Please select a classification method.")

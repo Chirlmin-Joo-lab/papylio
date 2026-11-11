@@ -260,7 +260,7 @@ class MappingWidget(QWidget):
                   <li> hover over group boxes to inspect settings source </li>
                   <li> adapt settings if wished </li>
                   <li> press 'Map' </li>
-                </ul>
+                </ol>
 
                 <h3>More help</h3>
                 <p>
