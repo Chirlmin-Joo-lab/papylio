@@ -6,6 +6,8 @@ SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
 REPO_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..', '..'))
 version_file = os.path.join(REPO_ROOT, 'papylio', '_version.py')
 
+import papylio
+version_str = papylio.get_version()
 with open(version_file, 'w') as f:
     f.write(f'version = "{version_str}"\n')
 
