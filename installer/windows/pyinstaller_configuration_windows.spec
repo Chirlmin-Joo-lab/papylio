@@ -2,38 +2,10 @@
 import os
 from PyInstaller.utils.hooks import collect_all
 
-SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
-REPO_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..', '..'))
-version_file = os.path.join(REPO_ROOT, 'papylio', '_version.py')
-
-import papylio
-version_str = papylio.get_version()
-
-print(f"Current working directory: {os.getcwd()}", flush=True)
-print(f"Spec file: {SPEC}", flush=True)
-print(f"Repository root: {REPO_ROOT}", flush=True)
-print(f"Papylio imported from: {papylio.__file__}", flush=True)
-print(f"Version to write: {version_str}", flush=True)
-print(f"Writing version file: {version_file}", flush=True)
-
-with open(version_file, 'w') as f:
-    f.write(f'version = "{version_str}"\n')
-
-print(f"Version file exists: {os.path.isfile(version_file)}", flush=True)
-with open(version_file, encoding='utf-8') as f:
-    print(f"Version file contents: {f.read().strip()}", flush=True)
-
-# Ensure datas uses the correct absolute path
-datas = [
-    (os.path.join(REPO_ROOT, 'papylio'), 'papylio'),
-    (version_file, 'papylio')
-]
-
 # Explicitly include the generated file in datas
-# datas = [
-#    ('..\\..\\papylio', 'papylio'),
-#    (version_file, 'papylio')  # This forces _version.py into the papylio folder
-#]
+datas = [
+    ('..\\..\\papylio', 'papylio'),
+]
 
 binaries = []
 hiddenimports = ['papylio', 'numpy', 'matplotlib', 'pathlib2', 'cv2', 'tabulate', 'scipy',
