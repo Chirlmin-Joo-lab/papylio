@@ -2,19 +2,24 @@
 import os
 from PyInstaller.utils.hooks import collect_all
 
-# Generate _version.py before building
-import papylio
-version_str = papylio.get_version()
-version_file = os.path.join('..', '..', 'papylio', '_version.py')
+SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
+REPO_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..', '..'))
+version_file = os.path.join(REPO_ROOT, 'papylio', '_version.py')
 
 with open(version_file, 'w') as f:
     f.write(f'version = "{version_str}"\n')
 
-# Explicitly include the generated file in datas
+# Ensure datas uses the correct absolute path
 datas = [
-    ('..\\..\\papylio', 'papylio'),
-    (version_file, 'papylio')  # This forces _version.py into the papylio folder
+    (os.path.join(REPO_ROOT, 'papylio'), 'papylio'),
+    (version_file, 'papylio')
 ]
+
+# Explicitly include the generated file in datas
+# datas = [
+#    ('..\\..\\papylio', 'papylio'),
+#    (version_file, 'papylio')  # This forces _version.py into the papylio folder
+#]
 
 binaries = []
 hiddenimports = ['papylio', 'numpy', 'matplotlib', 'pathlib2', 'cv2', 'tabulate', 'scipy',
