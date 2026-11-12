@@ -55,7 +55,9 @@ jobs:
         shell: powershell
         run: |
           python -m PyInstaller installer\windows\pyinstaller_configuration_windows.spec --clean --noconfirm
-
+          Write-Host "Expected version file: $((Resolve-Path .).Path)\papylio\_version.py"
+          Get-Item papylio\_version.py | Format-List FullName, Length
+          Get-Content papylio\_version.py
       # Replace this section with whatever installer generator
       # you use, e.g. Inno Setup.
       - name: Install Inno Setup
