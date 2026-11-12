@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+            fetch-depth: 0
 
       - name: Set up micromamba
         uses: mamba-org/setup-micromamba@v2
@@ -52,14 +54,16 @@ jobs:
             $label = $env:EVENT_RELEASE_TAG
             $version = $label -replace '^v', ''
           } else {
-            $tag = (git describe --tags --abbrev=0).Trim()
-            if ($LASTEXITCODE -ne 0) { throw "Could not find a Git tag" }
+            $tag = git describe --tags --abbrev=0 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $tag) {
+              git tag --list
+              throw "No version tag is reachable from this commit. Choose a base release tag for this branch."
+            }
+            $tag = $tag.Trim() -replace '^v', ''
 
-            $tag = $tag -replace '^v', ''
-            $sha = (git rev-parse --short=9 HEAD).Trim()
+            $sha = git rev-parse --short=9 HEAD
             if ($LASTEXITCODE -ne 0) { throw "Could not determine Git commit" }
-
-            $version = "$tag+g$sha"
+            $version = "$tag+g$($sha.Trim())"
             $label = "v$version"
           }
 
