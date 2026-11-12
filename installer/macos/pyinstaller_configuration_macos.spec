@@ -7,6 +7,9 @@ import papylio
 version_str = papylio.get_version()
 version_file = os.path.join('..', '..', 'papylio', '_version.py')
 
+print(version_str)
+print(version_file)
+
 with open(version_file, 'w') as f:
     f.write(f'version = "{version_str}"\n')
 
