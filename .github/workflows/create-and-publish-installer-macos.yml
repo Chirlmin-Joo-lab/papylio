@@ -20,15 +20,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Determine release tag
-        shell: bash
-        run: |
-          if [ -n "${{ github.event.release.tag_name }}" ]; then
-            echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
-          else
-            echo "RELEASE_TAG=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
-          fi
-
       - name: Set up micromamba
         uses:  mamba-org/setup-micromamba@v2
         with:
@@ -50,6 +41,41 @@ jobs:
           which python
           python --version
           python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
+
+      - name: Set version and generate package version file
+        shell: bash -el {0}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            label="$EVENT_RELEASE_TAG"
+            version="${label#v}"
+          else
+            if ! tag=$(git describe --tags --abbrev=0 2>/dev/null); then
+              git tag --list
+              echo "No version tag is reachable from this commit. Choose a base release tag for this branch." >&2
+              exit 1
+            fi
+            tag="${tag#v}"
+
+            if ! sha=$(git rev-parse --short=9 HEAD); then
+              echo "Could not determine Git commit" >&2
+              exit 1
+            fi
+            version="${tag}+g${sha}"
+            label="v${version}"
+          fi
+
+          echo "PAPYLIO_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${label}" >> "$GITHUB_ENV"
+
+          version_file="$GITHUB_WORKSPACE/papylio/_version.py"
+          printf 'version = "%s"\n' "$version" > "$version_file"
+          echo "Generated: $version_file"
+          cat "$version_file"
+
+          python -c 'import os, papylio; print("Imported from:", papylio.__file__); print("Papylio version:", papylio.__version__); assert papylio.__version__ == os.environ["PAPYLIO_VERSION"], "Unexpected Papylio version"'
 
       - name: Build application
         shell: bash -el {0}

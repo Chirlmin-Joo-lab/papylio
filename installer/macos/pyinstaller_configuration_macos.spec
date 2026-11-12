@@ -2,21 +2,8 @@
 import os
 from PyInstaller.utils.hooks import collect_all
 
-# Generate _version.py before building
-import papylio
-version_str = papylio.get_version()
-version_file = os.path.join('..', '..', 'papylio', '_version.py')
-
-print(version_str)
-print(version_file)
-
-with open(version_file, 'w') as f:
-    f.write(f'version = "{version_str}"\n')
-
-# Explicitly include the generated file in datas
 datas = [
     ('../../papylio', 'papylio'),
-    (version_file, 'papylio')
 ]
 
 binaries = []
