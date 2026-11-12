@@ -19,15 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Determine release tag
-        shell: bash
-        run: |
-          if [ -n "${{ github.event.release.tag_name }}" ]; then
-            echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
-          else
-            echo "RELEASE_TAG=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
-          fi
+        with:
+            fetch-depth: 0
 
       - name: Set up micromamba
         uses: mamba-org/setup-micromamba@v2
@@ -51,11 +44,47 @@ jobs:
           python --version
           python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
 
+      - name: Set version and generate package version file
+        shell: powershell
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ($env:EVENT_NAME -eq "release") {
+            $label = $env:EVENT_RELEASE_TAG
+            $version = $label -replace '^v', ''
+          } else {
+            $tag = git describe --tags --abbrev=0 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $tag) {
+              git tag --list
+              throw "No version tag is reachable from this commit. Choose a base release tag for this branch."
+            }
+            $tag = $tag.Trim() -replace '^v', ''
+
+            $sha = git rev-parse --short=9 HEAD
+            if ($LASTEXITCODE -ne 0) { throw "Could not determine Git commit" }
+            $version = "$tag+g$($sha.Trim())"
+            $label = "v$version"
+          }
+
+          "PAPYLIO_VERSION=$version" | Add-Content $env:GITHUB_ENV
+          "RELEASE_TAG=$label" | Add-Content $env:GITHUB_ENV
+
+          $versionFile = Join-Path $PWD "papylio\_version.py"
+          Set-Content -Path $versionFile -Value "version = `"$version`"" -Encoding utf8
+          Write-Host "Generated: $versionFile"
+          Get-Content $versionFile
+
+          python -c "import papylio; print('Imported from:', papylio.__file__); print('Papylio version:', papylio.__version__)"
+
+
       - name: Build application
         shell: powershell
         run: |
           python -m PyInstaller installer\windows\pyinstaller_configuration_windows.spec --clean --noconfirm
-
+          Write-Host "Expected version file: $((Resolve-Path .).Path)\papylio\_version.py"
+          Get-Item papylio\_version.py | Format-List FullName, Length
+          Get-Content papylio\_version.py
       # Replace this section with whatever installer generator
       # you use, e.g. Inno Setup.
       - name: Install Inno Setup
@@ -65,8 +94,8 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
-          $version = $env:RELEASE_TAG -replace '^v', ''
-          iscc /DMyAppVersion="$version" installer\windows\inno_setup_configuration.iss
+          iscc /DMyAppVersion="${env:PAPYLIO_VERSION}" installer\windows\inno_setup_configuration.iss
+
 
       - name: Rename installer
         shell: powershell

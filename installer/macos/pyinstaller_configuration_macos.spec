@@ -1,6 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
-datas = [('../../papylio', 'papylio')]
+
+datas = [
+    ('../../papylio', 'papylio'),
+]
+
 binaries = []
 hiddenimports = ['papylio', 'numpy', 'matplotlib', 'pathlib2', 'cv2', 'tabulate', 'scipy',
                   'skimage', 'skimage.transform', 'yaml', 'pandas', 'seaborn', 'nd2reader',
