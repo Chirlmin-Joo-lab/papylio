@@ -4,10 +4,18 @@ from PyInstaller.utils.hooks import collect_all
 
 # Generate _version.py before building
 import papylio
-with open(os.path.join('..', '..', 'papylio', '_version.py'), 'w') as f:
-    f.write(f'version = "{papylio.get_version()}"\n')
+version_str = papylio.get_version()
+version_file = os.path.join('..', '..', 'papylio', '_version.py')
 
-datas = [('../../papylio', 'papylio')]
+with open(version_file, 'w') as f:
+    f.write(f'version = "{version_str}"\n')
+
+# Explicitly include the generated file in datas
+datas = [
+    ('../../papylio', 'papylio'),
+    (version_file, 'papylio')
+]
+
 binaries = []
 hiddenimports = ['papylio', 'numpy', 'matplotlib', 'pathlib2', 'cv2', 'tabulate', 'scipy',
                   'skimage', 'skimage.transform', 'yaml', 'pandas', 'seaborn', 'nd2reader',
