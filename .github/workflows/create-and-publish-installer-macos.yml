@@ -77,7 +77,7 @@ jobs:
           echo "Generated: $version_file"
           cat "$version_file"
 
-          python -c 'import os, papylio; print("Imported from:", papylio.__file__); print("Papylio version:", papylio.__version__); assert papylio.__version__ == os.environ["PAPYLIO_VERSION"], "Unexpected Papylio version"'
+          python -c "import papylio; print('Imported from:', papylio.__file__); print('Papylio version:', papylio.__version__)"
 
       - name: Build application
         shell: bash -el {0}

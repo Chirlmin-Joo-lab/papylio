@@ -77,7 +77,6 @@ jobs:
 
           python -c "import papylio; print('Imported from:', papylio.__file__); print('Papylio version:', papylio.__version__)"
 
-
       - name: Build application
         shell: powershell
         run: |
