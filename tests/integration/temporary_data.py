@@ -5,7 +5,7 @@ import tempfile
 from contextlib import contextmanager
 
 @contextmanager
-def temporary_data(relative_path, root_path=None):
+def temporary_data(relative_path='', root_path=None):
     if root_path is None:
         root_path = Path(__file__).parent / 'data'
     relative_path = Path(relative_path)
@@ -15,7 +15,9 @@ def temporary_data(relative_path, root_path=None):
         destination = Path(temporary_directory) / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
         print(temporary_directory)
-        shutil.copy(source, destination)
+        if source != root_path:
+            shutil.copy(source, destination)
+            # shutil.copytree(source, destination)
 
         try:
             yield destination
