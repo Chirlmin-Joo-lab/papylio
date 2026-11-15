@@ -89,3 +89,7 @@ def test_apply_classifications(file):
     file.apply_classifications(classification_threshold=-1, classification_hmm=[None, 0, 1])
     file.apply_classifications(add_to_current=True, classification_hmm=[None, 2, 3])
 
+def test_determine_dwells_from_classification(file):
+    test_apply_classifications(file)
+    file.determine_dwells_from_classification(selected=True)
+

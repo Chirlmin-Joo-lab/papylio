@@ -8,7 +8,6 @@ import json
 class Dataset:
     def __init__(self, path, root_path=None):
         self.path = path
-        self._variables = None
         self._attributes = None
         self._exists = False
 
@@ -22,7 +21,7 @@ class Dataset:
 
     def __contains__(self, name):
         if self.path.exists():
-            return name in self.variable_names or name in self.attributes
+            return name in self.variable_names() or name in self.attributes
         else:
             return False
     #
@@ -41,7 +40,9 @@ class Dataset:
 
     def __getattr__(self, name):
         if not name.startswith('_') and name != 'path' and self.exists:
-            if name in self.variable_names:
+            if name in self.group_names:
+                return xr.load_dataset(self.path, group=name)
+            if name in self.variable_names():
                 with xr.open_dataset(self.path) as ds:
                     return ds[name].load()
             if name in self.attributes:
@@ -64,29 +65,54 @@ class Dataset:
     @ds.setter
     def ds(self, value):
         value.to_netcdf(self.path, mode='a')
-        self.refresh_variable_info()
+        self.refresh_structure()
+        self._attributes = None
+
+    @property
+    def dt(self):
+        return xr.load_datatree(self.path)
+
+    @dt.setter
+    def dt(self, value):
+        value.to_netcdf(self.path, mode='a')
+        self.refresh_structure()
         self._attributes = None
 
     @cached_property
-    def variable_info(self):
+    def structure(self):
         """Return a dictionary with information about all variables in the dataset."""
-        info = {}
-        with netCDF4.Dataset(self.path) as ds:
-            for name in ds.variables:
-                info[name] = {
-                    'dimensions': ds[name].dimensions,
-                    'shape': ds[name].shape,
-                    'dtype': str(ds[name].dtype),
-                    # 'attrs': dict(ds[name].ncattrs()),
-                }
-        return info
+        if not self.path.exists():
+            return {}
 
-    def refresh_variable_info(self):
-        self.__dict__.pop('variable_info', None)
+        def collect(group):
+            structure = {}
+            for name, var in group.variables.items():
+                structure[name] = {
+                    'dimensions': var.dimensions,
+                    'shape': var.shape,
+                    'dtype': str(var.dtype),
+                    # 'attrs': {k: var.getncattr(k) for k in var.ncattrs()},
+                }
+            for group_name, subgroup in group.groups.items():
+                structure[group_name] = collect(subgroup)
+            return structure
+
+        with netCDF4.Dataset(self.path) as ds:
+            return collect(ds)
+
+    def refresh_structure(self):
+        self.__dict__.pop('structure', None)
 
     @property
-    def variable_names(self):
-        return list(self.variable_info.keys())
+    def group_names(self):
+        return [key for key, value in self.structure.items() if 'dtype' not in value]
+
+    def variable_names(self, group=None):
+        if group is not None:
+            structure = self.structure.get(group, {})
+        else:
+            structure = self.structure
+        return [key for key, value in structure.items() if 'dtype' in value]
         # with netCDF4.Dataset(self.path) as ds:
         #     return tuple(ds.variables.keys())
         # with xr.open_dataset(self.path) as ds:
@@ -103,7 +129,7 @@ class Dataset:
     @coordinate_names.setter
     def coordinate_names(self, value):
         for name in value:
-            if not name in self.variable_names:
+            if not name in self.variable_names():
                 raise ValueError(f"Coordinate {name} does not exist in dataset")
         with netCDF4.Dataset(self.path, 'a') as ds:
             ds.setncattr('coordinates', ' '.join(value))
@@ -134,7 +160,7 @@ class Dataset:
     def set_coordinate(self, **kwargs):
         coordinate_names = self.coordinate_names
         xr.Dataset(coords=kwargs).to_netcdf(self.path, mode='a')
-        self.refresh_variable_info()
+        self.refresh_structure()
         self.coordinate_names = coordinate_names.union(set(kwargs.keys()))
 
     # def set_variable(self, data, **kwargs):
@@ -149,14 +175,14 @@ class Dataset:
     #     da.to_dataset().to_netcdf(self.path, mode='a')
     #     self.refresh_variable_names()
 
-    def set_variable(self, overwrite=False, **kwargs):
-        if not overwrite and any(name in self.variable_names for name in kwargs):
+    def set_variable(self, overwrite=False, group=None, **kwargs):
+        if not overwrite and any(name in self.variable_names(group=group) for name in kwargs):
             raise ValueError("One or more variable names already exist. Use overwrite=True to overwrite existing variables.")
-        xr.Dataset(kwargs).to_netcdf(self.path, mode='a')
-        self.refresh_variable_info()
+        xr.Dataset(kwargs).to_netcdf(self.path, group=group, mode='a')
+        self.refresh_structure()
 
-    def search_variable_names(self, search_string):
-        return [name for name in self.variable_names if search_string in name]
+    def search_variable_names(self, search_string, group=None):
+        return [name for name in self.variable_names(group=group) if search_string in name]
 
     def get_variables(self, variable_names):
         return xr.Dataset({name: getattr(self, name) for name in variable_names})
@@ -165,19 +191,23 @@ class Dataset:
         variable_names = self.search_variable_names(search_string)
         return self.get_variables(variable_names)
 
-    def clear_variables(self, search_string):
-        ds = self.ds
-        dropped_variable_names = [name for name in self.variable_names if search_string in name]
-        ds = ds.drop_vars(dropped_variable_names)
-        ds.to_netcdf(self.path, mode='w')
-        self.refresh_variable_info()
+    def clear_variables(self, search_string, group=None):
+        dt = self.dt
+        ds = dt[group or '/'].to_dataset(inherit=False)
+        dropped_variable_names = [name for name in self.variable_names(group=group) if search_string in name]
+        dt[group or '/'].dataset = ds.drop_vars(dropped_variable_names)
+        dt.to_netcdf(self.path, mode='w')
+        self.refresh_structure()
+
+    def clear_group(self, group):
+        self.dt.drop_nodes(group).to_netcdf(self.path, mode='w')
+        self.refresh_structure()
 
     def clear(self):
         self.path.unlink(missing_ok=True)
-        self._variables = None
         self._attributes = None
         self._exists = False
-        self.refresh_variable_info()
+        self.refresh_structure()
 
 
 
@@ -213,8 +243,8 @@ class SingleMoleculeDataset(Dataset):
     def trace_names(self):
         """Return names of data variables that are traces (have 'frame' as the last dimension)."""
         return [
-            name for name, info in self.variable_info
-            if info.dimensions[-1] == "frame"
+            name for name, info in self.structure
+            if 'dimensions' in info and info.dimensions[-1] == "frame"
         ]
 
     def get_traces(self, selected=False):

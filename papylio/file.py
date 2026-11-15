@@ -346,34 +346,6 @@ class File:
         dataset = self.dataset
         return dataset.sel(molecule=dataset.selected)
 
-    @property
-    @return_none_when_executed_by_pycharm
-    def data_vars(self):
-        """Return the data variables of the netCDF dataset."""
-        if self.absolute_path.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
-                return dataset.data_vars
-        else:
-            return xr.Dataset().data_vars
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def dataset_attributes(self):
-        """Return the global attributes of the netCDF dataset."""
-        if self.absolute_path.with_suffix('.nc').exists():
-            with xr.open_dataset(self.absolute_path.with_suffix('.nc'), engine='netcdf4') as dataset:
-                return dataset.attrs
-        else:
-            return {}
-
-    def get_dataset_attribute(self, attribute_name):
-        #TODO: Check whether this is necessary
-        dataset_filepath = self.absoluteFilePath.with_suffix('.nc')
-        if dataset_filepath.exists():
-            with netCDF4.Dataset(dataset_filepath) as dataset:
-                return dataset.getncattr(attribute_name) if attribute_name in dataset.ncattrs() else None
-        return None
-
     # def _init_dataset(self, number_of_molecules):
     #     """
     #     Initialize the netCDF dataset for this file.
@@ -810,7 +782,7 @@ class File:
 
         self.dataset.set_variable(intensity=intensity)
 
-        if 'FRET' in self.dataset.variable_names:
+        if 'FRET' in self.dataset.variable_names():
             self.calculate_FRET()
 
     def calculate_FRET(self):
@@ -1249,7 +1221,7 @@ class File:
     def classification(self):
         """Get the default classification for molecules in this file."""
         # Or add a standard classification datavar in the dataset?
-        if not 'classification' in self.dataset.variable_names:
+        if not 'classification' in self.dataset.variable_names():
             self.apply_classifications()
         return self.dataset.classification
 
@@ -1314,7 +1286,7 @@ class File:
         if not name.startswith('classification_'):
             name = 'classification_' + name
 
-        if name in self.dataset.variable_names:
+        if name in self.dataset.variable_names():
             raise ValueError(f'Classification {name} already exists, choose a different name or delete the existing classifications first')
 
         if select is not None:
@@ -1434,7 +1406,7 @@ class File:
         """
         # TODO: Make it possible to pass multiple traces.
         classification = self.classification
-        classification = classification.assign_coords(molecule=self.molecule)
+        classification = classification.assign_coords(molecule=classification.molecule)
         traces = getattr(self, variable)
 
         if selected:
@@ -1494,20 +1466,20 @@ class File:
     def dwells(self):
         """Load and return the dwell times dataset."""
         if self.has_dwells:
-            return xr.load_dataset(self.dwells_path, engine='netcdf4')
+            return self.dataset.dwells
         else:
             raise RuntimeError("No dwell times found in the file. Please run 'determine_dwells_from_classification' first.")
 
     @dwells.setter
     def dwells(self, value):
         if value is None:
-            self.dwells_path.unlink(missing_ok=True)
+            self.dataset.clear_group('dwells')
         else:
-            value.to_netcdf(self.dwells_path, engine='netcdf4', mode='w')
+            self.dataset.set_variable(group='dwells', **value)
 
     @property
     def has_dwells(self):
-        return self.dwells_path.exists()
+        return 'dwells' in self.dataset.group_names
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
