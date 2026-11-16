@@ -74,7 +74,7 @@ def test_create_classification(file):
     test_extract_traces(file)
     selection = file.selected
     selection[20:] = False
-    file.set_variable(selected=selection, overwrite=True)
+    file.set_variables(selected=selection, overwrite=True)
     file.create_classification(name='classification_threshold', classification_type='threshold',
                                       variable='intensity_total', classification_configuration=dict(threshold=500, rolling='median', window_size=5))
     file.create_classification(name='classification_hmm', classification_type='hmm', variable='FRET')

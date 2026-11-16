@@ -696,7 +696,7 @@ class File:
         Parameters:
             coordinates (xarray.DataArray): The coordinates to set.
         """
-        self.dataset.set_variable(coordinates=coordinates.drop_vars('file', errors='ignore'))
+        self.dataset.set_variables(coordinates=coordinates.drop_vars('file', errors='ignore'))
         # TODO: Perhaps move this to the selection and make show_traces independent from selected.
         self.add_selected_to_dataset()
         self.add_molecule_in_file_to_dataset()
@@ -746,10 +746,10 @@ class File:
         intensity.attrs['configuration'] = json.dumps(dict(mask_size=mask_size, neighbourhood_size=neighbourhood_size))
         intensity.attrs['movie_configuration'] = json.dumps(self.movie.configuration)
 
-        self.dataset.set_variable(intensity=intensity)
+        self.dataset.set_variables(intensity=intensity)
 
         if 'intensity_raw' in self.dataset:
-            self.dataset.set_variable(intensity_raw=self.intensity)
+            self.dataset.set_variables(intensity_raw=self.intensity)
 
         if background_correction is not None or alpha_correction is not None or gamma_correction is not None:
             self.apply_trace_corrections(background_correction, alpha_correction, gamma_correction)
@@ -773,16 +773,16 @@ class File:
             intensity_raw = self.intensity_raw
         else:
             intensity_raw = self.intensity
-            self.dataset.set_variable(intensity_raw=intensity_raw)
+            self.dataset.set_variables(intensity_raw=intensity_raw)
 
         intensity = trace_correction(intensity_raw, background_correction, alpha_correction, gamma_correction)
         initial_configuration = intensity.attrs['configuration']
         add_configuration_to_dataarray(intensity, File.apply_trace_corrections, locals(), units='a.u.') # TODO: Link to units in movie metadata?
         intensity.attrs['configuration'] = initial_configuration[:-1] + ', ' + intensity.attrs['configuration'][1:]
 
-        self.dataset.set_variable(intensity=intensity)
+        self.dataset.set_variables(intensity=intensity)
 
-        if 'FRET' in self.dataset.variable_names():
+        if 'FRET' in self.dataset.variable_names:
             self.calculate_FRET()
 
     def calculate_FRET(self):
@@ -790,7 +790,7 @@ class File:
         intensity = self.intensity
         FRET = calculate_FRET(intensity)
         FRET.attrs = intensity.attrs
-        self.dataset.set_variable(FRET=FRET)
+        self.dataset.set_variables(FRET=FRET)
 
     def plot_hmm_rates(self, name=None):
         # TODO: Check this out and what we want to do with it.
@@ -1073,7 +1073,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def selections(self):
         """Return all selection variables from the dataset."""
-        return self.dataset.search_variables('selection_')
+        return self.dataset.get_variables(search='selection_').to_dataset()
 
     def create_selection(self, variable, channel, aggregator, operator, threshold, name=None):
         # TODO: Make this more general like classification
@@ -1118,7 +1118,7 @@ class File:
         if not name.startswith('selection_'):
             name = 'selection_' + name
 
-        self.set_variable(**{name: selection})
+        self.set_variables(**{name: selection})
 
     def copy_selections_to_selected_files(self):
         """Copy current selections and active selection state to all selected files in the experiment."""
@@ -1146,7 +1146,7 @@ class File:
         return json.loads(self.selected.attrs['configuration'])
 
     def clear_selections(self):
-        self.dataset.clear_variables('selection_')
+        self.dataset.clear_variables(search='selection_')
         self.apply_selections()
 
     def selection_configurations(self, *selection_names):
@@ -1214,14 +1214,14 @@ class File:
         add_configuration_to_dataarray(selected)
         selected.attrs['configuration'] = json.dumps(selection_names)
         selected.attrs['selection_configurations'] = json.dumps(self.selection_configurations(*selection_names))
-        self.set_variable(selected=selected, overwrite=True)
+        self.set_variables(selected=selected, overwrite=True)
 
     @property
     @return_none_when_executed_by_pycharm
     def classification(self):
         """Get the default classification for molecules in this file."""
         # Or add a standard classification datavar in the dataset?
-        if not 'classification' in self.dataset.variable_names():
+        if not 'classification' in self.dataset.variable_names:
             self.apply_classifications()
         return self.dataset.classification
 
@@ -1229,7 +1229,7 @@ class File:
     @return_none_when_executed_by_pycharm
     def classifications(self):
         """Return all classification variables from the dataset."""
-        return self.dataset.search_variables('classification_')
+        return self.dataset.get_variables(search='classification_').to_dataset()
 
     @property
     @return_none_when_executed_by_pycharm
@@ -1286,7 +1286,7 @@ class File:
         if not name.startswith('classification_'):
             name = 'classification_' + name
 
-        if name in self.dataset.variable_names():
+        if name in self.dataset.variable_names:
             raise ValueError(f'Classification {name} already exists, choose a different name or delete the existing classifications first')
 
         if select is not None:
@@ -1315,7 +1315,7 @@ class File:
         add_configuration_to_dataarray(ds.classification, File.create_classification, locals())
         ds = ds.rename({'classification': name})
 
-        self.dataset.set_variable(**ds)
+        self.dataset.set_variables(**ds)
 
         if apply is not None:
             self.apply_classifications(add_to_current=True, **{name: apply})
@@ -1369,11 +1369,11 @@ class File:
         classification_combined.attrs['configuration'] = json.dumps(classification_assignment)
         classification_combined.attrs['classification_configurations'] = json.dumps(self.classification_configurations(list(classification_assignment.keys())))
 
-        self.dataset.set_variable(classification=classification_combined, overwrite=True)
+        self.dataset.set_variables(classification=classification_combined, overwrite=True)
 
     def clear_classifications(self):
         """Clear all classifications from the dataset."""
-        self.dataset.clear_variables('classification_')
+        self.dataset.clear_variables(search='classification_')
         self.apply_classifications()
 
 
@@ -1428,7 +1428,7 @@ class File:
         if 'configuration' in self.classification.attrs:
             dwells.attrs['applied_classifications'] = self.classification.attrs['configuration']
 
-        self.dwells = dwells
+        self.dataset.set_variables(dwells=dwells, overwrite=True)
 
     def classification_binary(self, positive_states_only=False, selected=False):
         """
@@ -1456,30 +1456,6 @@ class File:
         molecule_has_state = self.classification_binary(positive_states_only=True).any(dim='frame')
         number_of_states = molecule_has_state.sum(dim='state')
         return number_of_states
-
-    @property
-    def dwells_path(self):
-        return self.absolute_path.with_name(self.name + '_dwells').with_suffix('.nc')
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def dwells(self):
-        """Load and return the dwell times dataset."""
-        if self.has_dwells:
-            return self.dataset.dwells
-        else:
-            raise RuntimeError("No dwell times found in the file. Please run 'determine_dwells_from_classification' first.")
-
-    @dwells.setter
-    def dwells(self, value):
-        if value is None:
-            self.dataset.clear_group('dwells')
-        else:
-            self.dataset.set_variable(group='dwells', **value)
-
-    @property
-    def has_dwells(self):
-        return 'dwells' in self.dataset.group_names
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,

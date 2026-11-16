@@ -47,7 +47,7 @@ def file_output_with_selected(file_output):
     #TODO: This is not optimal, perhaps add selection to the file.
     selected = file_output.selected
     selected[[0,5,33]] = True
-    file_output.set_variable(selected)
+    file_output.set_variables(selected)
     return file_output
 
 def test_without_logging(experiment_hj_no_logging):
@@ -178,7 +178,7 @@ def test_create_classification(file_output):
 def test_classify_hmm(file_output):
     selection = file_output.selected
     selection[0:20] = True
-    file_output.set_variable(selection, name='selected')
+    file_output.set_variables(selection, name='selected')
     file_output.apply_classifications()
     file_output.classify_hmm('FRET')
     file_output.classify_hmm(file_output.intensity.sel(channel=0, drop=True))

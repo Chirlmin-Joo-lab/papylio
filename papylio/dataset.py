@@ -21,7 +21,7 @@ class Dataset:
 
     def __contains__(self, name):
         if self.path.exists():
-            return name in self.variable_names() or name in self.attributes
+            return name in self.variable_names or name in self.attributes
         else:
             return False
     #
@@ -42,7 +42,7 @@ class Dataset:
         if not name.startswith('_') and name != 'path' and self.exists:
             if name in self.group_names:
                 return xr.load_dataset(self.path, group=name)
-            if name in self.variable_names():
+            if name in self.variable_names:
                 with xr.open_dataset(self.path) as ds:
                     return ds[name].load()
             if name in self.attributes:
@@ -107,12 +107,13 @@ class Dataset:
     def group_names(self):
         return [key for key, value in self.structure.items() if 'dtype' not in value]
 
-    def variable_names(self, group=None):
-        if group is not None:
-            structure = self.structure.get(group, {})
-        else:
-            structure = self.structure
-        return [key for key, value in structure.items() if 'dtype' in value]
+    @property
+    def variable_names(self):
+        # if group is not None:
+        #     structure = self.structure.get(group, {})
+        # else:
+        #     structure = self.structure
+        return [key for key, value in self.structure.items()]# if 'dtype' in value]
         # with netCDF4.Dataset(self.path) as ds:
         #     return tuple(ds.variables.keys())
         # with xr.open_dataset(self.path) as ds:
@@ -129,7 +130,7 @@ class Dataset:
     @coordinate_names.setter
     def coordinate_names(self, value):
         for name in value:
-            if not name in self.variable_names():
+            if not name in self.variable_names:
                 raise ValueError(f"Coordinate {name} does not exist in dataset")
         with netCDF4.Dataset(self.path, 'a') as ds:
             ds.setncattr('coordinates', ' '.join(value))
@@ -175,40 +176,41 @@ class Dataset:
     #     da.to_dataset().to_netcdf(self.path, mode='a')
     #     self.refresh_variable_names()
 
-    def set_variable(self, overwrite=False, group=None, **kwargs):
-        if not overwrite and any(name in self.variable_names(group=group) for name in kwargs):
+    def set_variables(self, overwrite=False, **kwargs): # group=None,
+        # TODO: Check dimensions if overwrite = True? And in case dimension are different clear and write?
+        if not overwrite and any([name in self.variable_names for name in kwargs]): #(group=group) ):
             raise ValueError("One or more variable names already exist. Use overwrite=True to overwrite existing variables.")
-        xr.Dataset(kwargs).to_netcdf(self.path, group=group, mode='a')
+        xr.DataTree.from_dict(kwargs).to_netcdf(self.path, mode='a') # group=group  Not implemented yet in xarray
         self.refresh_structure()
 
-    def search_variable_names(self, search_string, group=None):
-        return [name for name in self.variable_names(group=group) if search_string in name]
+    def search_variable_names(self, search_string):
+        return [name for name in self.variable_names if search_string in name]
 
-    def get_variables(self, variable_names):
-        return xr.Dataset({name: getattr(self, name) for name in variable_names})
+    def get_variables(self, *args, search=None):
+        if search is not None:
+            args += tuple(self.search_variable_names(search))
 
-    def search_variables(self, search_string):
-        variable_names = self.search_variable_names(search_string)
-        return self.get_variables(variable_names)
+        return xr.DataTree.from_dict({name: getattr(self, name) for name in args})
 
-    def clear_variables(self, search_string, group=None):
-        dt = self.dt
-        ds = dt[group or '/'].to_dataset(inherit=False)
-        dropped_variable_names = [name for name in self.variable_names(group=group) if search_string in name]
-        dt[group or '/'].dataset = ds.drop_vars(dropped_variable_names)
-        dt.to_netcdf(self.path, mode='w')
+    def clear_variables(self, *args, search=None):#  , group=None): # This is not implemented in xarray yet.
+        if search is not None:
+            args += tuple(self.search_variable_names(search))
+
+        dt = self.dt # [group or '/'] # This is not implemented in xarray yet.
+        for arg in args:
+            del dt[arg]
+        dt.to_netcdf(self.path, mode='w')# , group=group) # This is not implemented in xarray yet.
         self.refresh_structure()
 
-    def clear_group(self, group):
-        self.dt.drop_nodes(group).to_netcdf(self.path, mode='w')
-        self.refresh_structure()
+    # def clear_group(self, group):
+    #     self.dt.drop_nodes(group).to_netcdf(self.path, mode='w')
+    #     self.refresh_structure()
 
-    def clear(self):
+    def clear_all(self):
         self.path.unlink(missing_ok=True)
         self._attributes = None
         self._exists = False
         self.refresh_structure()
-
 
 
 def _encode_attributes(attributes):
@@ -259,7 +261,7 @@ class SingleMoleculeDataset(Dataset):
         """
         dataset = self.dataset
 
-        traces = self.get_variables(self.trace_names)
+        traces = self.get_variables(self.trace_names).dataset
 
         if selected:
             traces = traces.sel(molecule=dataset.selected)

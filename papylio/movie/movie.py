@@ -1215,7 +1215,7 @@ class Movie:
         #                            if 'correction' in key}).load()
         # else:
         #     corrections = xr.Dataset()
-        corrections = self.dataset.search_variables('correction')
+        corrections = self.dataset.get_variables(search='correction').to_dataset()
         corrections = corrections.merge(self._common_corrections, compat='override')
         return corrections
     # Do we really need this?
@@ -1244,7 +1244,7 @@ class Movie:
 
         add_configuration_to_dataarray(general_background_correction, Movie.determine_general_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
-        self.dataset.set_variable(general_background_correction=general_background_correction)
+        self.dataset.set_variables(general_background_correction=general_background_correction)
 
     def determine_temporal_background_correction(self, method='median', use_existing=False):
         from papylio.movie.background_correction import determine_temporal_background_correction
@@ -1273,7 +1273,7 @@ class Movie:
         add_configuration_to_dataarray(temporal_background_correction, Movie.determine_temporal_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
 
-        self.dataset.set_variable(temporal_background_correction=temporal_background_correction)
+        self.dataset.set_variables(temporal_background_correction=temporal_background_correction)
 
     def determine_spatial_background_correction(self, method='median_filter', frame_range=(0, 20), use_existing=False,
                                                 **kwargs):
@@ -1301,7 +1301,7 @@ class Movie:
         add_configuration_to_dataarray(spatial_background_correction, Movie.determine_spatial_background_correction,
                                        locals(), units='a.u.') # TODO: Link to units in movie metadata?
 
-        self.dataset.set_variable(spatial_background_correction=spatial_background_correction)
+        self.dataset.set_variables(spatial_background_correction=spatial_background_correction)
 
     def clear_corrections(self):
         self.dataset.clear_variables('correction')

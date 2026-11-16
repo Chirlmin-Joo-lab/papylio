@@ -39,13 +39,13 @@ def test_set_dataset(dataset):
     assert dataset.ds.equals(ds)
 
 def test_variable_names(dataset):
-    dataset.variable_names()
+    dataset.variable_names
 
 def test_set_coordinate(dataset_empty):
     dataset_empty.set_coordinate(channel=['green','red'])
 
 def test_set_variable(dataset_empty):
-    dataset_empty.set_variable(test=xr.DataArray(np.arange(10), dims=('frame')))
+    dataset_empty.set_variables(test=xr.DataArray(np.arange(10), dims=('frame')))
 
 ### Attributes ###
 def test_set_attribute(dataset):
@@ -60,13 +60,14 @@ def test_set_attributes(dataset):
     assert dataset.channel_arrangement == np.array([[[0]]])
 
 def test_groups(dataset_empty):
-    dataset_empty.set_variable(test=xr.DataArray(np.arange(10), dims=('t')))
-    dataset_empty.set_variable(test2=xr.DataArray(np.arange(10), dims=('t')), group='test_group')
+    dataset_empty.set_variables(test=xr.DataArray(np.arange(10), dims=('t')))
+    dataset_empty.set_variables(test2=xr.DataArray(np.arange(10), dims=('t')), group='test_group')
     dataset_empty.structure
 
-def test_clear_groups(dataset_empty):
+def test_clear_variable(dataset_empty):
     dt = xr.DataTree(xr.Dataset(dict(test=xr.DataArray(np.arange(10), dims=('t')))))
     dataset_empty.dt = dt
-    dataset_empty.set_variable(test2=xr.DataArray(np.arange(10), dims=('t')), group='test_group')
-    dataset_empty.clear_group('test_group')
+    ds = xr.Dataset(dict(test2=xr.DataArray(np.arange(10), dims=('t'))))
+    dataset_empty.set_variables(test_group=ds)
+    dataset_empty.clear_variables('test_group')
     assert dataset_empty.dt.identical(dt)
