@@ -757,15 +757,15 @@ class File:
         if self.number_of_channels > 1:
             self.calculate_FRET()
 
-    def apply_trace_corrections(self, background_correction=None, alpha_correction=None,
-                       gamma_correction=None):
+    def apply_trace_corrections(self, background=None, alpha=None,
+                       gamma=None):
         """
         Apply corrections (background, alpha, gamma) to existing intensity traces.
 
         Parameters:
-            background_correction (optional): Background correction method.
-            alpha_correction (optional): Alpha correction factor.
-            gamma_correction (optional): Gamma correction factor.
+            background (optional): Background correction method.
+            alpha (optional): Alpha correction factor.
+            gamma (optional): Gamma correction factor.
         """
         from papylio.trace_correction import trace_correction
 
@@ -773,14 +773,14 @@ class File:
             intensity_raw = self.intensity_raw
         else:
             intensity_raw = self.intensity
-            self.dataset.set_variables(intensity_raw=intensity_raw)
+            self.dataset.set_variables(intensity_raw=intensity_raw, overwrite=True)
 
-        intensity = trace_correction(intensity_raw, background_correction, alpha_correction, gamma_correction)
+        intensity = trace_correction(intensity_raw, background, alpha, gamma)
         initial_configuration = intensity.attrs['configuration']
         add_configuration_to_dataarray(intensity, File.apply_trace_corrections, locals(), units='a.u.') # TODO: Link to units in movie metadata?
         intensity.attrs['configuration'] = initial_configuration[:-1] + ', ' + intensity.attrs['configuration'][1:]
 
-        self.dataset.set_variables(intensity=intensity)
+        self.dataset.set_variables(intensity=intensity, overwrite=True)
 
         if 'FRET' in self.dataset.variable_names:
             self.calculate_FRET()
@@ -790,7 +790,7 @@ class File:
         intensity = self.intensity
         FRET = calculate_FRET(intensity)
         FRET.attrs = intensity.attrs
-        self.dataset.set_variables(FRET=FRET)
+        self.dataset.set_variables(FRET=FRET, overwrite=True)
 
     def plot_hmm_rates(self, name=None):
         # TODO: Check this out and what we want to do with it.

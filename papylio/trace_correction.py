@@ -31,8 +31,8 @@ import numpy as np
 #     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 # from matplotlib.figure import Figure
 
-def trace_correction(intensity, background_correction=None, alpha_correction=None,
-                     gamma_correction=None):
+def trace_correction(intensity, background=None, alpha=None,
+                     gamma=None):
     """Apply a set of simple, deterministic corrections to intensity traces.
 
     This helper applies background subtraction, gamma scaling and alpha mixing
@@ -43,11 +43,11 @@ def trace_correction(intensity, background_correction=None, alpha_correction=Non
     ----------
     intensity : xarray.DataArray
         Intensity array with dims ('molecule','channel','frame') or similar
-    background_correction : tuple or list, optional
+    background : tuple or list, optional
         Per-channel background to subtract (bg_green, bg_red)
-    alpha_correction : float, optional
+    alpha : float, optional
         Cross-talk correction parameter (default: None)
-    gamma_correction : float, optional
+    gamma : float, optional
         Relative detection efficiency multiplier applied to channel 0
 
     Returns
@@ -56,17 +56,17 @@ def trace_correction(intensity, background_correction=None, alpha_correction=Non
         Corrected intensity array
     """
     intensity = intensity.copy()
-    if background_correction is not None:
-        intensity[dict(channel=0)] -= background_correction[0]
-        intensity[dict(channel=1)] -= background_correction[1]
-        intensity.attrs['background_correction'] = background_correction
-    if gamma_correction is not None:
-        intensity[dict(channel=0)] *= gamma_correction
-        intensity.attrs['gamma_correction'] = gamma_correction
-    if alpha_correction is not None:
-        intensity[dict(channel=0)] += alpha_correction * intensity[dict(channel=0)]
-        intensity[dict(channel=1)] -= alpha_correction * intensity[dict(channel=0)]
-        intensity.attrs['alpha_correction'] = alpha_correction
+    if background is not None:
+        intensity[dict(channel=0)] -= background[0]
+        intensity[dict(channel=1)] -= background[1]
+        intensity.attrs['background_correction'] = background
+    if gamma is not None:
+        intensity[dict(channel=0)] *= gamma
+        intensity.attrs['gamma_correction'] = gamma
+    if alpha is not None:
+        intensity[dict(channel=0)] += alpha * intensity[dict(channel=0)]
+        intensity[dict(channel=1)] -= alpha * intensity[dict(channel=0)]
+        intensity.attrs['alpha_correction'] = alpha
     # if delta_correction is not None:
     #     intensity[dict(channel=0)] *= self.delta_correction
 
