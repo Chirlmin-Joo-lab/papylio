@@ -72,8 +72,9 @@ class TracePlotWindow(QWidget):
                  show=True, split_illuminations=False, **kwargs):
 
         if plot_settings is None:
-            plot_settings = {'intensity': {'active': True, 'color': ('g', 'r')},
-                             'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
+            plot_settings = {}
+        #     plot_settings = {'intensity': {'active': True, 'color': ('g', 'r')},
+        #                      'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
 
         # To accomodate old arguments
         if 'plot_variables' in kwargs:
@@ -225,6 +226,7 @@ class TracePlotWindow(QWidget):
             self._dataset['selected'] = self._dataset.selected.astype('bool')
             if 'intensity' in self._dataset:
                 self._dataset['intensity_total'] = self._dataset['intensity'].sum('channel')
+                self._dataset['intensity_total'].attrs['plot_settings'] = '{}'
 
             self.plot_configuration.dataset = self._dataset
             self.set_selection()
@@ -521,6 +523,19 @@ class PlotConfiguration(QWidget):
                     plot_settings[var]['split_illuminations'] = False
                     for illumination in illuminations:
                         plot_settings[var][f'illumination_{illumination}'] = True
+
+            if 'order' not in plot_settings[var]:
+                if var == 'intensity_total':
+                    order = -4
+                elif var == 'intensity':
+                    order = -3
+                elif var == 'intensity_raw':
+                    order = -2
+                elif var == 'FRET':
+                    order = -1
+                else:
+                    order = 1000
+                plot_settings[var]['order'] = order
 
         # Normalize order values
         ordered_variables = sorted(plot_settings.keys(),
