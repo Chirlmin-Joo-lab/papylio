@@ -106,3 +106,6 @@ def test_analyze_dwells(file):
                         truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
                         fit_dwell_times_configuration={}, plot_dwell_analysis_configuration={})
 
+def test_plot_dwell_analysis(file):
+    test_analyze_dwells(file)
+    file.plot_dwell_analysis(plot_type='pdf', log=False, plot_range=(0, 3))
