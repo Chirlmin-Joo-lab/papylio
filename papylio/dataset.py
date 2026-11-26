@@ -91,6 +91,7 @@ class Dataset:
                     'dimensions': var.dimensions,
                     'shape': var.shape,
                     'dtype': str(var.dtype),
+
                     # 'attrs': {k: var.getncattr(k) for k in var.ncattrs()},
                 }
             for group_name, subgroup in group.groups.items():
@@ -261,8 +262,8 @@ class SingleMoleculeDataset(Dataset):
     def trace_names(self):
         """Return names of data variables that are traces (have 'frame' as the last dimension)."""
         return [
-            name for name, info in self.structure
-            if 'dimensions' in info and info.dimensions[-1] == "frame"
+            name for name, info in self.structure.items()
+            if 'dimensions' in info and info['dimensions'][0] == "molecule" and info['dimensions'][-1] == "frame"
         ]
 
     def get_traces(self, selected=False):
@@ -275,11 +276,62 @@ class SingleMoleculeDataset(Dataset):
         Returns:
             xarray.Dataset: The traces dataset.
         """
-        dataset = self.dataset
+        dataset = self.ds
 
-        traces = self.get_variables(self.trace_names).dataset
+        traces = self.get_variables(*self.trace_names).dataset
 
         if selected:
             traces = traces.sel(molecule=dataset.selected)
 
         return traces
+
+    def export_traces(self, path, trace_names=None):
+        if trace_names is None:
+            trace_names = self.trace_names
+
+        import pandas as pd
+        with pd.ExcelWriter(path, engine='openpyxl') as writer:
+            for name in trace_names:
+                da = self.get_variables(name)[name]
+                wide = to_wide_dataframe(da, column_dim='frame')
+                wide.to_excel(writer, sheet_name=name[:31])
+
+    def export_dwell_analysis(self, path):
+        df = self.dwell_analysis.to_dataframe()
+        df.to_excel(path)
+
+
+
+def to_wide_dataframe(da, column_dim = 'frame'):
+    """
+    One column per value of `column_dim`, one row per combination of the other dims.
+    Coordinates that depend only on `column_dim` become extra header rows (below the dim itself).
+    Coordinates that depend only on one of the other dims become extra row-index levels
+    (directly after that dim).
+    """
+    import pandas as pd
+
+    row_dims = [d for d in da.dims if d != column_dim]
+    wide = da.transpose(*row_dims, column_dim).to_series().unstack(column_dim)
+
+    def level_arrays(index, dims):
+        """Build (arrays, names) for an index: each dim followed by its single-dim coordinates."""
+        arrays, names = [], []
+        for dim in dims:
+            values = index.get_level_values(dim)
+            arrays.append(values)
+            names.append(dim)
+            for name, coord in da.coords.items():
+                if name != dim and coord.dims == (dim,):
+                    lookup = coord.to_series()               # index: dim
+                    arrays.append(lookup.reindex(values).values)
+                    names.append(name)
+        return arrays, names
+
+    row_arrays, row_names = level_arrays(wide.index, row_dims)
+    wide.index = pd.MultiIndex.from_arrays(row_arrays, names=row_names)
+
+    col_arrays, col_names = level_arrays(wide.columns, [column_dim])
+    wide.columns = pd.MultiIndex.from_arrays(col_arrays, names=col_names)
+
+    return wide
