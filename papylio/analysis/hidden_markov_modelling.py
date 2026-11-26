@@ -198,7 +198,27 @@ def hmm_n_states(input, n_states=2, threshold_state_mean=None, level='molecule')
                 # cov1 = dist1.covs[0,0]
                 # model = DenseHMM([Normal([mean1-cov1+cov1*state/n_states], [[cov1/10]]) for state in range(1, state+1)])
                 # TODO: Improve finding initial values, or at least make it similar to pomegranate 0.14.8
-                model = DenseHMM([Normal(),] * state)
+                # model = DenseHMM([Normal(),] * state)
+                X = np.concatenate(xis, axis=0).ravel()
+
+                # Initialize state means across the data range
+                means = np.quantile(
+                    X,
+                    np.linspace(0, 1, state + 2)[1:-1]
+                ).astype(np.float32)
+
+                # Shared initial variance
+                var = np.float32(max(np.var(X), 1e-6))
+
+                distributions = [
+                    Normal(
+                        means=np.array([mean], dtype=np.float32),
+                        covs=np.array([[var]], dtype=np.float32)
+                    )
+                    for mean in means
+                ]
+
+                model = DenseHMM(distributions)
                 model.fit(xis)
             except ValueError:
                 continue
@@ -343,7 +363,7 @@ def trace_classification_models(traces, classifications, models):
             new_classification = []
             for xii, cii in zip(xis, cis):
                 if cii[0] >= 0:
-                    new_classification.append(model.predict(xii.reshape(1,-1, 1)))
+                    new_classification.append(model.predict(xii.reshape(1,-1, 1)).numpy()[0])
                 else:
                     new_classification.append(-np.ones_like(cii))
             new_classification = np.hstack(new_classification)
