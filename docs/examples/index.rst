@@ -10,3 +10,4 @@ Examples
     merge_file_datasets
     plot_traces_overview
     combining_two_coordinate_sets
+    single_channel_experiment
