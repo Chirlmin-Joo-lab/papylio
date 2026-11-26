@@ -72,8 +72,9 @@ class TracePlotWindow(QWidget):
                  show=True, split_illuminations=False, **kwargs):
 
         if plot_settings is None:
-            plot_settings = {'intensity': {'active': True, 'color': ('g', 'r')},
-                             'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
+            plot_settings = {}
+        #     plot_settings = {'intensity': {'active': True, 'color': ('g', 'r')},
+        #                      'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
 
         # To accomodate old arguments
         if 'plot_variables' in kwargs:
@@ -225,6 +226,7 @@ class TracePlotWindow(QWidget):
             self._dataset['selected'] = self._dataset.selected.astype('bool')
             if 'intensity' in self._dataset:
                 self._dataset['intensity_total'] = self._dataset['intensity'].sum('channel')
+                self._dataset['intensity_total'].attrs['plot_settings'] = '{}'
 
             self.plot_configuration.dataset = self._dataset
             self.set_selection()
@@ -522,6 +524,19 @@ class PlotConfiguration(QWidget):
                     for illumination in illuminations:
                         plot_settings[var][f'illumination_{illumination}'] = True
 
+            if 'order' not in plot_settings[var]:
+                if var == 'intensity_total':
+                    order = -4
+                elif var == 'intensity':
+                    order = -3
+                elif var == 'intensity_raw':
+                    order = -2
+                elif var == 'FRET':
+                    order = -1
+                else:
+                    order = 1000
+                plot_settings[var]['order'] = order
+
         # Normalize order values
         ordered_variables = sorted(plot_settings.keys(),
                               key=lambda v: plot_settings[v].get('order', 1000))
@@ -765,6 +780,16 @@ class TraceArtist:
             for count, bar in zip(n, histogram_artist):
                 bar.set_width(count)
             # TODO: When you shift the view, change the y positions of the bars to the new view, if possible. use set_y
+
+    def set_histogram_range(self, plot_range):
+        """Update existing histogram bars to match a changed plot range."""
+        for plot_artist, histogram_artist in zip(self.plot_artists, self.histogram_artists):
+            counts, edges = np.histogram(plot_artist.get_ydata(), bins=len(histogram_artist), range=plot_range)
+            for count, lower, upper, bar in zip(counts, edges[:-1], edges[1:], histogram_artist):
+                bar.set_x(0)
+                bar.set_y(lower)
+                bar.set_width(count)
+                bar.set_height(upper - lower)
 
     def set_color(self, colors):
         """Set colors for plot and histogram artists."""
@@ -1116,11 +1141,11 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                 self.twin_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
             else:
                 self.plot_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
-        self.init_plot_artists()
-        # self.init_plots() # Perhaps this can be init_plot_artists only, but then probably the blit background needs to be updated.
 
-        # self.draw()  # full redraw
-        # self.bm.on_draw(None)
+        for trace_artist in self.get_trace_artists_with_attribute('plot_variable', plot_variable):
+            trace_artist.set_histogram_range(plot_range)
+
+        self.draw()
 
     def set_plot_color(self, plot_variable, colors):
         """Update colors for a specific plot variable."""
@@ -1518,5 +1543,4 @@ from papylio.plotting import histogram
 # app = wx.App(False)
 # frame = MyFrame(None, 'Small editor')
 # app.MainLoop()
-
 

@@ -34,6 +34,7 @@ def classify_threshold(traces, threshold, rolling=None, window_size=1):
         classification = classification.astype(int).rolling(frame=window_size, center=True, min_periods=1)
         classification = getattr(classification, rolling)(classification).astype(bool)
     classification = xr.DataArray(classification, dims=('molecule', 'frame'), name='classification')
+    classification.attrs = {}
     return classification
 
 #TODO: Add usage of the functions below to File
