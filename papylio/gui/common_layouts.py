@@ -20,8 +20,6 @@ from PySide2.QtWidgets import (QFormLayout, QDoubleSpinBox,QSpinBox, QComboBox,
 from PySide2.QtCore import Qt
 import sys
 
-
-
 class Expander(QWidget):
     def __init__(self, title, parent=None):
         super().__init__(parent)
@@ -73,11 +71,12 @@ class Group_Box(QGroupBox):
     def __init__(self, parent=None, title="title", highlight=False):
         super().__init__(parent)
         self.setTitle(title)
+        self.setMaximumWidth(250)
 
         base_style = """
         QGroupBox {
             border: 1px solid gray;
-            border-radius: 3px;
+            border-radius: 5px;
             margin-top: 10px;  /* space for title */
         }
 
@@ -94,6 +93,8 @@ class Group_Box(QGroupBox):
             font-weight: bold;
         }
         """
+
+
 
         if highlight:
             self.setStyleSheet(base_style + highlight_style)
@@ -126,7 +127,7 @@ def build_control_layouts(button_list):
     return controls
 
 def deep_get_config(d, keys, default=None):
-    #this function is used for linking a saved nested configurations to gui front
+    #this function is used for linking a saved nested configuration to gui front
     for key in keys:
         if isinstance(d, dict):
             d = d.get(key, default)
@@ -136,7 +137,7 @@ def deep_get_config(d, keys, default=None):
 
 #below a series of functions to link GUI elements to Papylio methods in generic fashion
 def get_input_type(annotation, default):
-    # Pick appropriate input type
+    # Pick appropriate input box type for a parameter
     if annotation == int or isinstance(default, int):
         widget = QSpinBox()
         widget.setRange(-1_000_000, 1_000_000)
@@ -154,26 +155,32 @@ def get_input_type(annotation, default):
             widget.setText(str(default))
     return widget
 
-def build_form(func):
-    # --- build the form for a function ---
+def build_form(func, skip_inputs=['image'], defaults={}):
+    # --- build form for a function with fitting input parameters.
+    # inputs to be skipped can be specified
     form_widget = QWidget()
     form = QFormLayout(form_widget)
     inputs = {}
+    #find all input parameters for this function:
     sig = inspect.signature(func)
     for param_name, param in sig.parameters.items():
-        if param_name in ['image']:
+        #exclude pre-set inputs:
+        if param_name in skip_inputs:
             continue
         default = param.default if param.default is not inspect.Parameter.empty else None
         annotation = param.annotation
         widget = get_input_type(annotation=annotation, default=default)
+        if param_name in defaults:
+            widget.setText(defaults[param_name])
         form.addRow(f"{param_name}:", widget)
         inputs[param_name] = widget
+
 
     return form_widget, inputs
 
 
 def build_parameters_input(method_name, inputs):
-    #build input for chosen method
+    #build input kwargs from input boxes for chosen method
     kwargs = {'method': method_name}
     for pname, widget in inputs.items():
         if isinstance(widget, (QSpinBox, QDoubleSpinBox)):

@@ -32,24 +32,32 @@ def __getattr__(name):
 def __dir__():
     return list(globals().keys()) + list(_LAZY_IMPORTS.keys())
 
+# from papylio.experiment import Experiment
+# from papylio.file import File
+# from papylio.movie.movie import Movie
+
 def get_version():
     import subprocess, datetime
 
     repo_root = Path(__file__).parent.parent
+    try:
+        __tag__ = subprocess.check_output(
+            ["git", "-C", str(repo_root), "describe", "--tags", "--abbrev=0"],
+            text=True,
+            stderr=subprocess.DEVNULL
+        ).strip()[1:]
 
-    __tag__ = subprocess.check_output(
-        ["git", "-C", str(repo_root), "describe", "--tags", "--abbrev=0"],
-        text=True,
-    ).strip()[1:]
+        __commit__ = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            text=True,
+            stderr = subprocess.DEVNULL
+        ).strip()[:9]
 
-    __commit__ = subprocess.check_output(
-        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-        text=True
-    ).strip()[:9]
+        __date__ = datetime.datetime.now().strftime("%Y%m%d")
 
-    __date__ = datetime.datetime.now().strftime("%Y%m%d")
-
-    return __tag__ + "+g" + __commit__ + ".d" + __date__
+        return __tag__ + "+g" + __commit__ + ".d" + __date__
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "0.0.0"
 
 try:
     from ._version import version as __version__

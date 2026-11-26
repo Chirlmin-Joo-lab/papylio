@@ -1,0 +1,119 @@
+name: Create and publish installer for Windows
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: papylio
+          environment-file: installer/windows/environment_windows.yml
+          cache-environment: true
+          init-shell: powershell
+          post-cleanup: 'all'
+
+#      - name: Install build dependencies
+#        shell: bash -el {0}
+#        run: |
+#          micromamba install -y pyinstaller
+
+      - name: Check environment
+        shell: powershell
+        run: |
+          micromamba info
+          Get-Command python
+          python --version
+          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
+
+      - name: Set version and generate package version file
+        shell: powershell
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ($env:EVENT_NAME -eq "release") {
+            $label = $env:EVENT_RELEASE_TAG
+            $version = $label -replace '^v', ''
+          } else {
+            $tag = git describe --tags --abbrev=0 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $tag) {
+              git tag --list
+              throw "No version tag is reachable from this commit. Choose a base release tag for this branch."
+            }
+            $tag = $tag.Trim() -replace '^v', ''
+
+            $sha = git rev-parse --short=9 HEAD
+            if ($LASTEXITCODE -ne 0) { throw "Could not determine Git commit" }
+            $version = "$tag+g$($sha.Trim())"
+            $label = "v$version"
+          }
+
+          "PAPYLIO_VERSION=$version" | Add-Content $env:GITHUB_ENV
+          "RELEASE_TAG=$label" | Add-Content $env:GITHUB_ENV
+
+          $versionFile = Join-Path $PWD "papylio\_version.py"
+          Set-Content -Path $versionFile -Value "version = `"$version`"" -Encoding utf8
+          Write-Host "Generated: $versionFile"
+          Get-Content $versionFile
+
+          python -c "import papylio; print('Imported from:', papylio.__file__); print('Papylio version:', papylio.__version__)"
+
+      - name: Build application
+        shell: powershell
+        run: |
+          python -m PyInstaller installer\windows\pyinstaller_configuration_windows.spec --clean --noconfirm
+          Write-Host "Expected version file: $((Resolve-Path .).Path)\papylio\_version.py"
+          Get-Item papylio\_version.py | Format-List FullName, Length
+          Get-Content papylio\_version.py
+      # Replace this section with whatever installer generator
+      # you use, e.g. Inno Setup.
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: powershell
+        run: |
+          iscc /DMyAppVersion="${env:PAPYLIO_VERSION}" installer\windows\inno_setup_configuration.iss
+
+
+      - name: Rename installer
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item `
+            "dist\Papylio setup.exe" `
+            "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe"
+
+      - name: Upload installer as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Papylio-${{ env.RELEASE_TAG }}-Windows-x64
+          path: dist\Papylio-${{ env.RELEASE_TAG }}-Windows-x64.exe
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${env:RELEASE_TAG}" "dist\Papylio-${env:RELEASE_TAG}-Windows-x64.exe" --clobber

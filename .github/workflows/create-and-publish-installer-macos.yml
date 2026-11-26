@@ -1,0 +1,109 @@
+name: Create and publish installer for macOS
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  build-macos:
+    name: Build macOS dmg
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up micromamba
+        uses:  mamba-org/setup-micromamba@v2
+        with:
+          environment-name: papylio
+          environment-file: installer/macos/environment_macos.yml
+          cache-environment: true
+          init-shell: bash
+          post-cleanup: 'all'
+
+#      - name: Install build dependencies
+#        shell: bash -el {0}
+#        run: |
+#          micromamba install -y pyinstaller dmgbuild
+
+      - name: Check environment
+        shell: bash -el {0}
+        run: |
+          micromamba info
+          which python
+          python --version
+          python -c "import PyInstaller; print('PyInstaller', PyInstaller.__version__)"
+
+      - name: Set version and generate package version file
+        shell: bash -el {0}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            label="$EVENT_RELEASE_TAG"
+            version="${label#v}"
+          else
+            if ! tag=$(git describe --tags --abbrev=0 2>/dev/null); then
+              git tag --list
+              echo "No version tag is reachable from this commit. Choose a base release tag for this branch." >&2
+              exit 1
+            fi
+            tag="${tag#v}"
+
+            if ! sha=$(git rev-parse --short=9 HEAD); then
+              echo "Could not determine Git commit" >&2
+              exit 1
+            fi
+            version="${tag}+g${sha}"
+            label="v${version}"
+          fi
+
+          echo "PAPYLIO_VERSION=${version}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${label}" >> "$GITHUB_ENV"
+
+          version_file="$GITHUB_WORKSPACE/papylio/_version.py"
+          printf 'version = "%s"\n' "$version" > "$version_file"
+          echo "Generated: $version_file"
+          cat "$version_file"
+
+          python -c "import papylio; print('Imported from:', papylio.__file__); print('Papylio version:', papylio.__version__)"
+
+      - name: Build application
+        shell: bash -el {0}
+        run: |
+          python -m PyInstaller installer/macos/pyinstaller_configuration_macos.spec --clean --noconfirm
+
+      - name: Build DMG
+        shell: bash -el {0}
+        run: |
+          dmgbuild -s installer/macos/dmgbuild_configuration.py \
+            "Papylio" \
+            dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg
+
+      - name: Upload DMG as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Papylio-${{ env.RELEASE_TAG }}-macOS-intel
+          path: dist/Papylio-${{ env.RELEASE_TAG }}-macOS-intel.dmg
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        shell: bash -el {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            "${RELEASE_TAG}" \
+            "dist/Papylio-${RELEASE_TAG}-macOS-intel.dmg" \
+            --clobber

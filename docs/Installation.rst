@@ -1,6 +1,22 @@
 Installation
 ============
 
+Standalone installation
+-----------------------
+The easiest way to install Papylio is as a standalone application.
+It provides a graphical user interface and additionally allows running custom Python code through Marimo notebooks.
+Note that only packages bundled with Papylio can be used in the notebooks.
+If you want to use additional packages, it is recommended to install Papylio through `conda or pip <Conda and pip_>`_ instead.
+
+The standalone application is available through the links below:
+
+- `Download for Windows`_
+- `Download for macOS`_
+
+All versions can be found on the `releases`_ page of the GitHub repository.
+
+.. _releases: https://github.com/Chirlmin-Joo-lab/papylio/releases
+
 Conda and pip
 -------------
 
@@ -18,11 +34,53 @@ or through using pip
 
 where it is recommended to make a separate virtual environment or conda environment for `papylio`.
 
-Anaconda Navigator
-------------------
+.. attention::
+
+   Installation on newer Apple Silicon (non-intel) Macs may give errors. This can be solved, for now, by installing the Intel version of Anaconda or conda.
+   Work is ongoing to update the dependencies to support Apple Silicon. If you encounter any issues, please report them on the `GitHub issues`_ page.
+
+.. _GitHub issues: https://github.com/Chirlmin-Joo-lab/papylio/issues/34
+
+Detailed conda installation steps
+---------------------------------
+For installation with conda, it is recommended to use `miniforge`_.
+
+1. Download and install `miniforge`_ (e.g. v26.5.3).
+2. Open Miniforge Prompt from the Windows start menu.
+3. Create a new environment by typing
+
+   .. code-block:: bash
+
+      conda create -n papylio
+
+   and hit enter.
+
+4. Activate the environment
+
+   .. code-block:: bash
+
+      conda activate papylio
+
+5. Install papylio
+
+   .. code-block:: bash
+
+      conda install papylio -c conda-forge
+
+6. Test the installation by running
+
+   .. code-block:: bash
+
+      python -m papylio
+
+   or find the papylio icon in the start menu and click it.
+
+
+Anaconda Navigator installation
+-------------------------------
 Papylio can also be installed through the Anaconda Navigator gui.
 
-1. Download and install `Anaconda Navigator`_. (e.g. v2.6.3)
+1. Download and install `Anaconda Navigator`_ (e.g. v2.6.3).
 2. Create a new environment
 
    - Go to the `Environments` tab
@@ -48,3 +106,4 @@ Papylio can also be installed through the Anaconda Navigator gui.
 
 
 .. _Anaconda Navigator: https://www.anaconda.com/products/navigator
+.. _Miniforge: https://conda-forge.org/download/

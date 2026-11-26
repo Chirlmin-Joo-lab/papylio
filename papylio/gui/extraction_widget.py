@@ -169,11 +169,11 @@ class ExtractionWidget(QWidget):
         self.setLayout(extraction_controls_layout)
 
         #collect peak finding methods for building flexible GUI forms
-        self.register_method_spot_detection('local-maximum-auto', find_peaks_local_maximum_auto)  #default  in GUI
-        self.register_method_spot_detection('absolute-threshold', find_peaks_absolute_threshold)
-        self.register_method_spot_detection('adaptive-threshold', find_peaks_adaptive_threshold)
-        self.register_method_spot_detection('local-maximum', find_peaks_local_maximum)
-        self.register_method_spot_detection('relative-local-maximum', find_peaks_relative_local_maximum)
+        self.register_method_for_spot_detection('local-maximum-auto', find_peaks_local_maximum_auto)  #default  in GUI
+        self.register_method_for_spot_detection('absolute-threshold', find_peaks_absolute_threshold)
+        self.register_method_for_spot_detection('adaptive-threshold', find_peaks_adaptive_threshold)
+        self.register_method_for_spot_detection('local-maximum', find_peaks_local_maximum)
+        self.register_method_for_spot_detection('relative-local-maximum', find_peaks_relative_local_maximum)
 
         self.file = None
 
@@ -192,18 +192,17 @@ class ExtractionWidget(QWidget):
     # -------------------------------------------------------------------------
     # Register methods dynamically and create their forms
     # -------------------------------------------------------------------------
-    def register_method_spot_detection(self, name, func):
+    def register_method_for_spot_detection(self, name, func):
         """Register a peak finding method, introspect arguments,
-        and build forms for spot_detection and acceptor channels"""
-
+        and build forms for spot_detection"""
         #spot_detection-------------------------:
-        form_widget_spot_detection, inputs_spot_detection = build_form(func)
+        skip_inputs=['image']
+        form_widget_spot_detection, inputs_spot_detection = build_form(func,skip_inputs)
         self.methods_spot_detection[name] = func
         self.method_forms_spot_detection[name] = (form_widget_spot_detection, inputs_spot_detection)
         self.method_selector_spot_detection.addItem(name) #add options to appropriate selector box
         if self.method_selector_spot_detection.count() == 1: # First registered method becomes default
             self._update_method_panel_spot_detection(name)
-
 
     def _update_method_panel_spot_detection(self, name):
         # Clear the old form
@@ -233,7 +232,6 @@ class ExtractionWidget(QWidget):
             find_coordinates_config=self.pass_buttons_to_config_for_find_coordinates()
             find_coordinates_config['peak_finding'] = spot_detection_kwargs
             config_find_coordinates = {**find_coordinates_config}
-            selected_files.movie.determine_spatial_background_correction(use_existing=True)
             selected_files.find_coordinates(**config_find_coordinates)
             self.parent.image.image_canvas.refresh()
             self.parent.update_plots()

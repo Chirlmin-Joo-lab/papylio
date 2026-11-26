@@ -1,7 +1,7 @@
 #import sys
 #import json
 from PySide2.QtWidgets import QHBoxLayout,  \
-    QPushButton, QTabWidget, QComboBox, QFormLayout, QWidget, QLabel, QVBoxLayout, QSpinBox
+    QPushButton, QTabWidget, QComboBox, QFormLayout, QWidget, QLineEdit, QVBoxLayout, QSpinBox
 from PySide2.QtCore import Qt
 
 #from papylio import File
@@ -43,9 +43,9 @@ class KineticsWidget(QWidget):
         frame_dwell_options_layout.addRow("multiple exponents:", self.button_multiple_exponents)
 
         # plot_range:
-        self.button_plot_range = QSpinBox()
-        self.button_plot_range.setToolTip('choose plot range (s)')
-        self.button_plot_range.setValue(2)
+        self.button_plot_range = QLineEdit()
+        self.button_plot_range.setToolTip('choose plot ranges (s)')
+        self.button_plot_range.setText("[(0,2), (0,4)]")
         frame_dwell_options_layout.addRow("plot_range:", self.button_plot_range)
 
 
@@ -127,7 +127,7 @@ class KineticsWidget(QWidget):
 
     def perform_dwell_times_sequence(self):
         self.fig_dwell_times.clear()
-        axes = self.fig_dwell_times.subplots(1, 2, sharex=True)
+        axes = self.fig_dwell_times.subplots(1, 2)#, sharex=False)
 
         selected_files = self.parent.experiment.selectedFiles
 
@@ -140,7 +140,7 @@ class KineticsWidget(QWidget):
         if selected_files:
             selected_files.serial.determine_dwells_from_classification(variable=variable, selected=True, inactivate_start_and_end_states=True)
             selected_files.serial.analyze_dwells(method=method, number_of_exponentials=[1, N_exponents])
-            selected_files.serial.plot_dwell_analysis(plot_range=(0, plot_range), axes=axes, log=False, save_path=None)
+            selected_files.serial.plot_dwell_analysis(plot_range=plot_range, axes=axes, log=False, save_path=None)
 
     def show_dwell_help(self):
 

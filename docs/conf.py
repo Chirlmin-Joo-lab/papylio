@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'papylio'
-copyright = '2025 - Chirlmin Joo lab'
+copyright = '2026 - Chirlmin Joo lab'
 # author = 'Ivo Severins, Sung Hyun Kim, Carolien Bastiaanssen, Iason Katechis, Margreet Docter, Roy Simons, Pim America, '
 html_logo = '_static/logo.png'
 
@@ -32,6 +32,13 @@ from pathlib2 import Path
 # release = f'develop-{sha[0:7]}'
 import papylio
 release = papylio.__version__
+
+release_main = release.split("+")[0]
+
+rst_epilog = f"""
+.. _Download for Windows: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release_main}/Papylio-v{release_main}-Windows-x64.exe
+.. _Download for macOS: https://github.com/Chirlmin-Joo-lab/papylio/releases/download/v{release_main}/Papylio-v{release_main}-macOS-intel.dmg
+"""
 
 # -- General configuration ---------------------------------------------------
 
@@ -79,6 +86,10 @@ autodoc_default_options = {
 # a list of builtin themes.
 #
 html_theme = 'sphinx_book_theme' # 'sphinx_rtd_theme'
+html_theme_options = {
+    "repository_url": "https://github.com/Chirlmin-Joo-lab/papylio",
+    "use_repository_button": True,
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

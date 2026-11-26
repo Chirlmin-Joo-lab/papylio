@@ -142,11 +142,11 @@ class MappingWidget(QWidget):
         self.setLayout(mapping_tab_layout)
 
         #collect peak finding methods for building flexible GUI forms
-        self.register_method('local-maximum-auto', find_peaks_local_maximum_auto)  #default  in GUI
-        self.register_method('absolute-threshold', find_peaks_absolute_threshold)
-        self.register_method('adaptive-threshold', find_peaks_adaptive_threshold)
-        self.register_method('local-maximum', find_peaks_local_maximum)
-        self.register_method('relative-local-maximum', find_peaks_relative_local_maximum)
+        self.register_method_for_donor_acceptor_spot_detection('local-maximum-auto', find_peaks_local_maximum_auto)  #default  in GUI
+        self.register_method_for_donor_acceptor_spot_detection('absolute-threshold', find_peaks_absolute_threshold)
+        self.register_method_for_donor_acceptor_spot_detection('adaptive-threshold', find_peaks_adaptive_threshold)
+        self.register_method_for_donor_acceptor_spot_detection('local-maximum', find_peaks_local_maximum)
+        self.register_method_for_donor_acceptor_spot_detection('relative-local-maximum', find_peaks_relative_local_maximum)
 
         self.file = None
 
@@ -166,11 +166,11 @@ class MappingWidget(QWidget):
     # -------------------------------------------------------------------------
     # Register methods dynamically and create their forms
     # -------------------------------------------------------------------------
-    def register_method(self, name, func):
+    def register_method_for_donor_acceptor_spot_detection(self, name, func):
         """Register a peak finding method, introspect arguments,
-        and build forms for donor and acceptor channels"""
+        and build forms in parallel for donor and acceptor channels"""
 
-        #donor-------------------------:
+        #donor -------------------------:
         form_widget_donor, inputs_donor = build_form(func)
         self.methods_donor[name] = func
         self.method_forms_donor[name] = (form_widget_donor, inputs_donor)
@@ -178,7 +178,7 @@ class MappingWidget(QWidget):
         if self.method_selector_donor.count() == 1: # First registered method becomes default
             self._update_method_panel_donor(name)
 
-        # acceptor-------------------------:
+        # acceptor -------------------------:
         form_widget_acceptor, inputs_acceptor = build_form(func)
         self.methods_acceptor[name] = func
         self.method_forms_acceptor[name] = (form_widget_acceptor, inputs_acceptor)
@@ -260,7 +260,7 @@ class MappingWidget(QWidget):
                   <li> hover over group boxes to inspect settings source </li>
                   <li> adapt settings if wished </li>
                   <li> press 'Map' </li>
-                </ul>
+                </ol>
 
                 <h3>More help</h3>
                 <p>

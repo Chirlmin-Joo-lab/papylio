@@ -37,10 +37,12 @@ dependencies:
 - notebook
 - jupyterlab-mathjax2
 - matchpoint=1.1
+- marimo
 - objectlist=1.0
 - git
 - perl
 - setuptools >=61.0.0
+- libdeflate=1.14 # Not a direct dependency, but higher versions give a dll error on Windows
 #- bioconda::logomaker=0.8
 # Logomaker has a matplotlib dependency, which installs PyQt
 # So please install manually if needed using

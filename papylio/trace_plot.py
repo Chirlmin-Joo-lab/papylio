@@ -65,15 +65,16 @@ class TracePlotWindow(QWidget):
     - Plot configuration panel for enabling/disabling variables and setting ranges
     - Selection support (show all / only selected / only unselected)
     """
-
+    set_highlighted_molecule = Signal(int)  # send selected molecule out
     def __init__(self, dataset=None,
                  plot_settings=None,
                  width=14, height=None, dataset_path=None, save_path=None, parent=None,
                  show=True, split_illuminations=False, **kwargs):
 
         if plot_settings is None:
-            plot_settings = {'intensity': {'active': True, 'color': ('g', 'r')},
-                             'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
+            plot_settings = {}
+        #     plot_settings = {'intensity': {'active': True, 'color': ('g', 'r')},
+        #                      'FRET': {'active': True, 'plot_range': (-0.05, 1.05), 'color': ('b')}}
 
         # To accomodate old arguments
         if 'plot_variables' in kwargs:
@@ -199,6 +200,7 @@ class TracePlotWindow(QWidget):
 
     def deactivate_line_edit(self):
         """Clear focus from the molecule index line edit field."""
+        self.set_highlighted_molecule.emit(self._molecule_index)
         self.molecule_index_field.clearFocus()  # Clear the focus from the line edit
 
     @property
@@ -224,6 +226,7 @@ class TracePlotWindow(QWidget):
             self._dataset['selected'] = self._dataset.selected.astype('bool')
             if 'intensity' in self._dataset:
                 self._dataset['intensity_total'] = self._dataset['intensity'].sum('channel')
+                self._dataset['intensity_total'].attrs['plot_settings'] = '{}'
 
             self.plot_configuration.dataset = self._dataset
             self.set_selection()
@@ -265,8 +268,10 @@ class TracePlotWindow(QWidget):
     @molecule_index.setter
     def molecule_index(self, molecule_index):
         self._molecule_index = molecule_index
+        #self.set_highlighted_molecule.emit(self._molecule_index)
         if self.dataset is not None and self.number_of_molecules_to_show > 0:
             self.molecule = self.dataset.isel(molecule=self.dataset_molecule_index)
+
         else:
             self.molecule = None
         self.molecule_index_field.setText(str(molecule_index))
@@ -291,8 +296,10 @@ class TracePlotWindow(QWidget):
         return len(self.dataset_molecule_indices_to_show)
 
     def set_molecule_index_from_molecule_index_field(self):
-        """Parse molecule index from the text field and update the current molecule."""
+        """Parse molecule index from the text field,
+        update the current molecule"""
         self.molecule_index = int(self.molecule_index_field.text())
+        #self.set_highlighted_molecule.emit(self._molecule_index)
 
     def next_molecule(self):
         """Navigate to the next molecule in the current dataset."""
@@ -307,6 +314,7 @@ class TracePlotWindow(QWidget):
     def update_current_molecule(self):
         """Refresh the display for the current molecule."""
         self.molecule_index = self.molecule_index
+
 
     @property
     def molecule(self):
@@ -515,6 +523,19 @@ class PlotConfiguration(QWidget):
                     plot_settings[var]['split_illuminations'] = False
                     for illumination in illuminations:
                         plot_settings[var][f'illumination_{illumination}'] = True
+
+            if 'order' not in plot_settings[var]:
+                if var == 'intensity_total':
+                    order = -4
+                elif var == 'intensity':
+                    order = -3
+                elif var == 'intensity_raw':
+                    order = -2
+                elif var == 'FRET':
+                    order = -1
+                else:
+                    order = 1000
+                plot_settings[var]['order'] = order
 
         # Normalize order values
         ordered_variables = sorted(plot_settings.keys(),
@@ -760,6 +781,16 @@ class TraceArtist:
                 bar.set_width(count)
             # TODO: When you shift the view, change the y positions of the bars to the new view, if possible. use set_y
 
+    def set_histogram_range(self, plot_range):
+        """Update existing histogram bars to match a changed plot range."""
+        for plot_artist, histogram_artist in zip(self.plot_artists, self.histogram_artists):
+            counts, edges = np.histogram(plot_artist.get_ydata(), bins=len(histogram_artist), range=plot_range)
+            for count, lower, upper, bar in zip(counts, edges[:-1], edges[1:], histogram_artist):
+                bar.set_x(0)
+                bar.set_y(lower)
+                bar.set_width(count)
+                bar.set_height(upper - lower)
+
     def set_color(self, colors):
         """Set colors for plot and histogram artists."""
         for plot_artist, color in zip(self.plot_artists, colors):
@@ -1000,7 +1031,7 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                 self.twin_axes[trace_artist.axis_name] = axis.twinx()
             axis = self.twin_axes[trace_artist.axis_name]
             axis.set_ylim(plot_settings['plot_range'])
-
+        plot_settings['color'] =  plot_settings['color'][0:len(y)]
         trace_artist.plot_artists = axis.plot(x, y.T)
         # molecule.intensity.plot.line(x='frame', ax=self.plot_axes[plot_variable], color=self.parent_window.colours[i])
         histogram_artists = (
@@ -1110,11 +1141,11 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                 self.twin_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
             else:
                 self.plot_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
-        self.init_plot_artists()
-        # self.init_plots() # Perhaps this can be init_plot_artists only, but then probably the blit background needs to be updated.
 
-        # self.draw()  # full redraw
-        # self.bm.on_draw(None)
+        for trace_artist in self.get_trace_artists_with_attribute('plot_variable', plot_variable):
+            trace_artist.set_histogram_range(plot_range)
+
+        self.draw()
 
     def set_plot_color(self, plot_variable, colors):
         """Update colors for a specific plot variable."""
@@ -1242,7 +1273,7 @@ if __name__ == "__main__":
 
 
     import papylio as pp
-    exp = pp.Experiment(r'C:\Users\ivoseverins\surfdrive\Promotie\Code\Python\traceAnalysis\twoColourExampleData\20141017 - Holliday junction - Copy')
+    exp = pp.Experiment(r'C:\Users\jkerssemakers\OneDrive - Delft University of Technology\Documents\GitHub\Papylio example dataset_flat')
     ds = exp.files[0].dataset
 
     from PySide6.QtWidgets import QApplication
@@ -1512,5 +1543,4 @@ from papylio.plotting import histogram
 # app = wx.App(False)
 # frame = MyFrame(None, 'Small editor')
 # app.MainLoop()
-
 

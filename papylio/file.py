@@ -72,7 +72,7 @@ class File:
         """
         self.perform_logging = False # It is set to False temporarily until the end of __init__.
 
-        self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected',
+        self.dataset_variables = ['molecule', 'frame', 'time', 'coordinates', 'background', 'intensity', 'FRET', 'selected', 'filtered',
                                   'molecule_in_file', 'illumination_correction', 'number_of_states', 'transition_rate', 'state_mean', 'classification']
 
         relative_filepath = Path(relative_filepath)
@@ -846,6 +846,7 @@ class File:
 
         intensity = trace_correction(intensity_raw, background_correction, alpha_correction, gamma_correction)
         intensity.name = 'intensity'
+        intensity.attrs = self.intensity.attrs
         initial_configuration = intensity.attrs['configuration']
         add_configuration_to_dataarray(intensity, File.apply_trace_corrections, locals(), units='a.u.') # TODO: Link to units in movie metadata?
         intensity.attrs['configuration'] = initial_configuration[:-1] + ', ' + intensity.attrs['configuration'][1:]
@@ -1918,7 +1919,7 @@ class File:
         axes.flatten()[0].set_ylabel('y'+unit_string)
         return figure, axes
 
-    def show_coordinates(self, axes=None, annotate=False, unit='pixel', scatter_configuration=None):
+    def show_coordinates(self, axes=None, annotate=False,  highlighted=None, unit='pixel', scatter_configuration=None):
         # TODO: Consider making this a QWidget
         """
         Show detected molecule coordinates on a plot.
@@ -1927,6 +1928,7 @@ class File:
             axes (optional): Matplotlib axes to plot on.
             annotate (bool, optional): Whether to enable interactive annotations.
             unit (str, optional): Unit for coordinates ('pixel' or 'metric'). Default is 'pixel'.
+            highlighted: allows extra plot layer for one or more higlighted points
             **scatter_configuration: Additional arguments for scatter plot.
         """
         if scatter_configuration is None:
@@ -1955,6 +1957,19 @@ class File:
 
             selected_coordinates = c.sel(molecule=self.selected.values)
             axis.scatter(*selected_coordinates.T, facecolors='none', edgecolors='green', **scatter_configuration)
+
+            if highlighted is not None:
+                #TODO temporal overrule (this is to be passed in)
+                #highlighted = self.selected.values
+
+                highlighted_coordinates=self.coordinates.sel(molecule=highlighted).stack(
+                   {'peak': ('molecule', 'channel')}).T.values
+                axis.scatter(highlighted_coordinates[:, 0], highlighted_coordinates[:, 1], facecolors='magenta',
+                             edgecolors='white', **kwargs)
+
+            if annotate:
+                annotation = axis.annotate("", xy=(0, 1.03), xycoords=axis.transAxes) # x in data units, y in axes fraction
+                annotation.set_visible(False)
 
         if annotate:
             annotation = axes[0].annotate("", xy=(0, 1.03), xycoords=axes[0].transAxes) # x in data units, y in axes fraction
@@ -1998,16 +2013,24 @@ class File:
 
             figure.canvas.mpl_connect("motion_notify_event", hover)
 
-    def show_coordinates_in_image(self, axes=None, unit='pixel', annotate=False, projection_image_configuration=None,
+    def show_coordinates_in_image(self, axes=None, unit='pixel', annotate=False, highlighted=None,
+                                  projection_image_configuration=None,
                                   imshow_configuration=None, scatter_configuration=None):
         # TODO: Finish docstring
         """
         Show projection image with overlaid molecule coordinates.
+
+        Parameters:
+            figure (optional): Matplotlib figure to plot on.
+            highlighted: allows one or more molecules to be highlighted
+            **kwargs: Additional arguments for show_image.
         """
 
         figure, axes = self.show_image(axes=axes, unit=unit, projection_image_configuration=projection_image_configuration,
                                        imshow_configuration=imshow_configuration)
-        self.show_coordinates(axes=axes, annotate=annotate, unit=unit, scatter_configuration=scatter_configuration)
+        self.show_coordinates(axes=axes, annotate=annotate, highlighted=highlighted, unit=unit,
+                              scatter_configuration=scatter_configuration)
+
         # plt.savefig(self.writepath.joinpath(self.name + '_ave_circles.png'), dpi=600)
 
     def show_traces(self, split_illuminations=True, **kwargs):

@@ -6,6 +6,7 @@ Provides a TifMovie subclass that uses tifffile to read multi-page TIFF stacks a
 import numpy as np
 import pandas as pd
 import xarray as xr
+import fnmatch
 
 from papylio.movie.movie import Movie
 from papylio.timer import Timer

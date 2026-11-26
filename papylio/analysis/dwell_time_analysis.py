@@ -868,6 +868,7 @@ def plot_dwell_time_histogram(dwell_times, bins='auto_discrete', range=None, sam
     # relative_counts = counts/(len(dwell_times) * np.diff(bin_edges))
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     ax.set_ylim(0,counts.max()*1.03)
+    # ax.set_xlim(range[0], range[1])
     return counts, bin_centers
 
 def empirical_cdf(dwell_times, sampling_interval):

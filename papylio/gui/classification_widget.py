@@ -15,7 +15,7 @@ from PySide6.QtCore import Qt, Signal
 
 from papylio.analysis.classification_simple import classify_threshold
 from papylio.analysis.hidden_markov_modelling import classify_hmm
-from papylio.gui.common_layouts import HelpDialog, build_control_layouts
+from papylio.gui.common_layouts import HelpDialog, build_control_layouts, build_form
 
 import numpy as np
 import inspect
@@ -126,8 +126,8 @@ class ClassificationWidget(QWidget):
         self.method_forms = {}  # method_name -> (widget, inputs)
         self.setLayout(main_layout)
 
-        self.register_method('threshold', classify_threshold)
-        self.register_method('hmm', classify_hmm)
+        self.register_method_for_classification('threshold', classify_threshold)
+        self.register_method_for_classification('hmm', classify_hmm)
         self.refresh_classifications()
 
     @property
@@ -154,47 +154,15 @@ class ClassificationWidget(QWidget):
     # -------------------------------------------------------------------------
     # Register methods dynamically and create their forms
     # -------------------------------------------------------------------------
-    def register_method(self, name, func):
+    def register_method_for_classification(self, name, func):
         """Register a classification method, introspect arguments, and build a form."""
-        #TODO: expand exclusion list per method to avoid listing irrelevant entries
+        #TODO: can we generalize this to common_layouts?
         self.methods[name] = func
-
         # --- build the form for the function ---
-        form_widget = QWidget()
-        form = QFormLayout(form_widget)
-        inputs = {}
-
-        sig = inspect.signature(func)
-        for param_name, param in sig.parameters.items():
-            if param_name in ['traces', 'classification', 'selection', 'seed','n_states', 'threshold_state_mean']:
-                continue
-
-            default = param.default if param.default is not inspect.Parameter.empty else None
-            annotation = param.annotation
-
-            # Pick appropriate input type
-            if annotation == int or isinstance(default, int):
-                widget = QSpinBox()
-                widget.setRange(-1_000_000, 1_000_000)
-                if default is not None:
-                    widget.setValue(default)
-            elif annotation == float or isinstance(default, float):
-                widget = QDoubleSpinBox()
-                widget.setRange(-1e9, 1e9)
-                widget.setDecimals(6)
-                if default is not None:
-                    widget.setValue(default)
-            else:
-                widget = QLineEdit()
-                if default not in (None, inspect.Parameter.empty):
-                    widget.setText(str(default))
-
-            form.addRow(f"{param_name}:", widget)
-            inputs[param_name] = widget
-
+        skip_inputs = ['traces', 'classification', 'selection', 'seed','n_states', 'threshold_state_mean']
+        form_widget, inputs=build_form(func, skip_inputs)
         self.method_forms[name] = (form_widget, inputs)
         self.method_selector.addItem(name)
-
         # First registered method becomes default
         if self.method_selector.count() == 1:
             self._update_method_panel(name)
@@ -212,7 +180,7 @@ class ClassificationWidget(QWidget):
             self.stack_layout.addWidget(form_widget)
 
     def _run_classification(self):
-        self.request_top_tab_change.emit(2)
+        self.emitrequest_top_tab_change(1)
         method_name = self.method_selector.currentText()
         if not method_name:
             QMessageBox.warning(self, "No method", "Please select a classification method.")
