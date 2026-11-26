@@ -781,6 +781,16 @@ class TraceArtist:
                 bar.set_width(count)
             # TODO: When you shift the view, change the y positions of the bars to the new view, if possible. use set_y
 
+    def set_histogram_range(self, plot_range):
+        """Update existing histogram bars to match a changed plot range."""
+        for plot_artist, histogram_artist in zip(self.plot_artists, self.histogram_artists):
+            counts, edges = np.histogram(plot_artist.get_ydata(), bins=len(histogram_artist), range=plot_range)
+            for count, lower, upper, bar in zip(counts, edges[:-1], edges[1:], histogram_artist):
+                bar.set_x(0)
+                bar.set_y(lower)
+                bar.set_width(count)
+                bar.set_height(upper - lower)
+
     def set_color(self, colors):
         """Set colors for plot and histogram artists."""
         for plot_artist, color in zip(self.plot_artists, colors):
@@ -1131,11 +1141,11 @@ class TracePlotCanvas(FigureCanvasQTAgg):
                 self.twin_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
             else:
                 self.plot_axes[axis_name].set_ylim(plot_range[0], plot_range[1])
-        self.init_plot_artists()
-        # self.init_plots() # Perhaps this can be init_plot_artists only, but then probably the blit background needs to be updated.
 
-        # self.draw()  # full redraw
-        # self.bm.on_draw(None)
+        for trace_artist in self.get_trace_artists_with_attribute('plot_variable', plot_variable):
+            trace_artist.set_histogram_range(plot_range)
+
+        self.draw()
 
     def set_plot_color(self, plot_variable, colors):
         """Update colors for a specific plot variable."""
@@ -1533,5 +1543,4 @@ from papylio.plotting import histogram
 # app = wx.App(False)
 # frame = MyFrame(None, 'Small editor')
 # app.MainLoop()
-
 
