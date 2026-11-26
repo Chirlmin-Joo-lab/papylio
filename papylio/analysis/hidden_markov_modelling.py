@@ -363,7 +363,7 @@ def trace_classification_models(traces, classifications, models):
             new_classification = []
             for xii, cii in zip(xis, cis):
                 if cii[0] >= 0:
-                    new_classification.append(model.predict(xii.reshape(1,-1, 1)))
+                    new_classification.append(model.predict(xii.reshape(1,-1, 1)).numpy()[0])
                 else:
                     new_classification.append(-np.ones_like(cii))
             new_classification = np.hstack(new_classification)
