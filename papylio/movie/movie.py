@@ -900,13 +900,13 @@ class Movie:
         if channels is not None:  # and self.number_of_illuminations_in_movie > 1:
             channel_indices = self.get_channel_indices_from_names(channels)
             channels = [self.channels[i] for i in channel_indices]
-            filename += f'_c-{''.join(str(channel) + '+' for channel in channels)}'[:-1]
+            filename += f"_c-{''.join(str(channel) + '+' for channel in channels)}"[:-1]
 
         illuminations = image_configuration.get('illuminations', None)
         if illuminations is not None:  # and self.number_of_illuminations_in_movie > 1:
             illumination_indices = self.get_illumination_indices_from_names(illuminations)
             illuminations = [self.illuminations[i] for i in illumination_indices]
-            filename += f'_i-{''.join(str(illumination) + '+' for illumination in illuminations)}'[:-1]
+            filename += f"_i-{''.join(str(illumination) + '+' for illumination in illuminations)}"[:-1]
 
         apply_corrections = image_configuration.get('apply_corrections', True)
         if not apply_corrections:
