@@ -177,9 +177,22 @@ class Dataset:
     #     self.refresh_variable_names()
 
     def set_variables(self, overwrite=False, **kwargs): # group=None,
-        # TODO: Check dimensions if overwrite = True? And in case dimension are different clear and write?
         if not overwrite and any([name in self.variable_names for name in kwargs]): #(group=group) ):
             raise ValueError("One or more variable names already exist. Use overwrite=True to overwrite existing variables.")
+
+        variables_to_clear = []
+        for name, value in kwargs.items():
+            if name in self.variable_names:
+                if isinstance(value, xr.Dataset):
+                    variables_to_clear.append(name)
+                elif isinstance(value, xr.DataArray) and (
+                        not value.dims == self.structure['FRET']['dimensions'] or
+                        not value.shape == self.structure['FRET']['shape']
+                ):
+                    variables_to_clear.append(name)
+
+        self.clear_variables(*variables_to_clear)
+
         xr.DataTree.from_dict(kwargs).to_netcdf(self.path, mode='a') # group=group  Not implemented yet in xarray
         self.refresh_structure()
 
@@ -193,6 +206,9 @@ class Dataset:
         return xr.DataTree.from_dict({name: getattr(self, name) for name in args})
 
     def clear_variables(self, *args, search=None):#  , group=None): # This is not implemented in xarray yet.
+        if not args:
+            return
+
         if search is not None:
             args += tuple(self.search_variable_names(search))
 
