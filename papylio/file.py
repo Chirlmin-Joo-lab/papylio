@@ -757,8 +757,7 @@ class File:
         if self.number_of_channels > 1:
             self.calculate_FRET()
 
-    def apply_trace_corrections(self, background=None, alpha=None,
-                       gamma=None):
+    def apply_trace_corrections(self, background=None, alpha=None, gamma=None):
         """
         Apply corrections (background, alpha, gamma) to existing intensity traces.
 
@@ -1459,7 +1458,7 @@ class File:
 
     def analyze_dwells(self, method='maximum_likelihood_estimation', number_of_exponentials=[1,2], state_names=None,
                        truncation=None, P_bounds=(-1, 1), k_bounds=(1e-9, np.inf), plot=False,
-                       fit_dwell_times_configuration={}, plot_dwell_analysis_configuration={}, save_file_path=None):
+                       fit_dwell_times_configuration=None, plot_dwell_analysis_configuration=None):
         """
         Analyze dwell times.
 
@@ -1478,6 +1477,12 @@ class File:
         Returns:
             xarray.Dataset: The dwell analysis results.
         """
+        if fit_dwell_times_configuration is None:
+            fit_dwell_times_configuration = {}
+
+        if plot_dwell_analysis_configuration is None:
+            plot_dwell_analysis_configuration = {}
+
         dwells = self.dwells
 
         # At the moment single-state states are already set at -128 so they don't need to be separated.
@@ -1499,15 +1504,9 @@ class File:
         if 'configuration' in dwells.attrs:
             dwell_analysis.attrs['dwells_configuration'] = dwells.attrs['configuration']
 
-        if save_file_path is None:
-            self.dwell_analysis = dwell_analysis
-            if plot:
-                self.plot_dwell_analysis(**plot_dwell_analysis_configuration)
-        else:
-            dwell_analysis.to_netcdf(self.absolute_path.with_name(save_file_path).with_suffix('.nc'),
-                                     engine='netcdf4', mode='w')
-            if plot:
-                plot_dwell_analysis(dwell_analysis, dwells, **plot_dwell_analysis_configuration)
+        self.dataset.set_variables(dwell_analysis=dwell_analysis, overwrite=True)
+        if plot:
+            self.plot_dwell_analysis(**plot_dwell_analysis_configuration)
 
         return dwell_analysis
 
@@ -1543,27 +1542,6 @@ class File:
                                         bins=bins, log=log, sharey=sharey, name=name, save_path=save_path)
 
         return axes[0].figure, axes
-
-    @property
-    @return_none_when_executed_by_pycharm
-    def dwell_analysis(self):
-        # TODO: Consider whether to save the dwell_analysis in an excel file instead of an nc file.
-        """Load and return the dwell analysis results from the netCDF file."""
-        # return pd.read_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
-        return xr.load_dataset(self.absolute_path.with_name(self.name + '_dwell_analysis').with_suffix('.nc'), engine='netcdf4')
-
-    @dwell_analysis.setter
-    def dwell_analysis(self, dwell_analysis):
-        """
-        Set dwell analysis results and save to the netCDF file.
-
-        Parameters:
-            dwell_analysis (xarray.Dataset): The dwell analysis results to save.
-        """
-        # dwell_analysis.to_excel(self.absoluteFilePath.with_name(self.name + '_dwell_analysis').with_suffix('.xlsx'))
-        # dataset = xr.DataArray(dataset, dims=('exponential', ' variable'))
-        dwell_analysis.to_netcdf(self.absolute_path.with_name(self.name + '_dwell_analysis').with_suffix('.nc'),
-                                 engine='netcdf4', mode='w')
 
     def state_count(self, selected=True, states=None):
         """
