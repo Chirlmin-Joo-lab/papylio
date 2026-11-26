@@ -1,7 +1,7 @@
 
-from PySide2.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, \
     QComboBox, QLineEdit, QSpinBox, QFormLayout, QButtonGroup, QRadioButton, QLabel, QMessageBox
-from PySide2.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from papylio import File
 from papylio.gui.common_layouts import (Expander, HelpDialog,Group_Box,
                                         build_control_layouts,make_push_button,

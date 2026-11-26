@@ -47,7 +47,7 @@ def coordinates_within_margin_selection(coordinates, image=None, bounds=None, ma
         return np.array([])
 
     if image is not None:
-        bounds = np.array([[0,0], [image.shape[1],image.shape[0]]])
+        bounds = np.array([[0,0], [image.shape[-1],image.shape[-2]]])
 
     if isinstance(margin, int):
         margin = np.array([margin, margin])
@@ -169,7 +169,7 @@ def crop(image, center, width):
         Cropped image patch
     """
     center = np.round(center).astype(int)
-    return image[(center[1]-width//2):(center[1]+width//2+1),(center[0]-width//2):(center[0]+width//2+1)]
+    return image[...,(center[1]-width//2):(center[1]+width//2+1),(center[0]-width//2):(center[0]+width//2+1)]
 
 
 # def twoD_gaussian(M, offset, amplitude, x0, y0, sigma_x, sigma_y):
@@ -253,6 +253,7 @@ def coordinates_after_gaussian_fit(coordinates, image, gaussian_width = 9, retur
     if len(coordinates) == 0:  # This statement may not be necessary. However, check the code thoroughly before you remove this.
         new_coordinates = coordinates
     else:
+        image = image[0, 0, :, :].values
         coordinates = coordinates_within_margin(coordinates, image=image, margin=gaussian_width//2+1)
 
         for i, coordinate in enumerate(coordinates):

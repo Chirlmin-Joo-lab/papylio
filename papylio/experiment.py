@@ -99,7 +99,7 @@ class Experiment:
 
     # TODO: Add presets for specific microscopes
     def __init__(self, main_path=None, channels=['g', 'r'], import_all=True, main_window=None,
-                 perform_logging=True, use_colorblind_friendly_colors=True, microscope=None):
+                 perform_logging=True, use_colorblind_friendly_colors=True, microscope='auto'):
         """Init method for the Experiment class
 
         Loads config file if it locates one in the main directory, otherwise it exports the default config file to the main directory.
@@ -127,12 +127,13 @@ class Experiment:
         self.perform_logging = perform_logging
 
         ### CONFIGURATION ###
+        #TODO: Load configuration from configuration file
         self.excluded_extensions = ['pdf', 'dat', 'db', 'py', 'yml', 'png', 'pdf', 'xlsx', 'md', 'txt']
         self.included_extensions = ['.nc']
         self.filename_suffixes = ['_ave', '_max', '_corrections', '_dwells', '_dwell_analysis']
         self.filename_suffixes += ['_sequencing_data', '_sequencing_match'] # TODO: Move sequencing related terms to sequencing.py
         self.excluded_names = ['darkfield', 'flatfield']
-        self.excluded_paths = ['Analysis', 'Sequencing data', 'Results']
+        self.excluded_paths = ['Analysis', 'Sequencing data', 'Results', '_images']
         #####################
 
 
@@ -159,8 +160,8 @@ class Experiment:
         self.add_files(self.main_path, test_duplicates=False)
 
         self.common_image_corrections = xr.Dataset()
-        self.load_darkfield_correction()
-        self.load_flatfield_correction()
+        # self.load_darkfield_correction()
+        # self.load_flatfield_correction()
 
         # Find mapping file
         # for file in self.files:
@@ -278,12 +279,12 @@ class Experiment:
     @property
     def file_paths(self):
         """list of pathlib.Path : List of relative file paths for all files in experiment"""
-        return [file.relative_filepath for file in self.files]
+        return [file.relative_path for file in self.files]
 
     @property
     def nc_file_paths(self):
         """list of pathlib.Path : List of relative NetCDF file paths for all files in experiment"""
-        return [file.relative_filepath.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
+        return [file.relative_path.with_suffix('.nc') for file in self.files if '.nc' in file.extensions]
 
     def find_file_paths_and_extensions(self, paths):
         """Find unique files in all subfolders and add them to the experiment
@@ -429,7 +430,7 @@ class Experiment:
                                                         'channel': movie.channel_indices})
             for file_path in file_paths:
                 flatfield = tifffile.imread(file_path)
-                image_info = Movie.image_info_from_filename(file_path.name)
+                image_info = Movie.image_configuration_from_filename(file_path.name)
                 illumination_index = image_info['illumination_index']
                 channel_indices = movie.channel_indices
                 flatfield_correction[dict(illumination=illumination_index, channel=channel_indices)] = \
@@ -562,7 +563,7 @@ class Experiment:
         if files is None:
             files = self.files
 
-        file_paths = [file.relative_filepath.with_suffix('.nc') for file in files if '.nc' in file.extensions]
+        file_paths = [file.relative_path.with_suffix('.nc') for file in files if '.nc' in file.extensions]
 
         with xr.open_mfdataset(file_paths, concat_dim='molecule', combine='nested') as ds:
             ds_sel = ds.query(query)  # HJ1_WT, HJ7_G116T
@@ -578,7 +579,7 @@ class Experiment:
         """
         df = pd.DataFrame(columns=['Number of molecules'])
         for i, file in enumerate(self.files):
-            n = str(file.relative_filepath)
+            n = str(file.relative_path)
             try:
                 nms = file.number_of_molecules
             except FileNotFoundError:

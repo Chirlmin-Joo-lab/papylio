@@ -313,7 +313,7 @@ class Experiment:
             files = self.files
         from objectlist import ObjectList
         return ObjectList([file for file in files
-                           if file.absolute_filepath.with_name(file.name + '_sequencing_match.nc').is_file()])
+                           if file.absolute_path.with_name(file.name + '_sequencing_match.nc').is_file()])
 
     def sequencing_matches(self, files=None):
         if files is None:
@@ -417,8 +417,6 @@ class File:
         self._sequencing_data = None
         self._sequencing_match = None
         # self.sequencing_match_old = None
-
-        self.dataset_variables += ['sequence', 'sequence_coordinates', 'sequence_quality', 'sequence_tile', 'sequence_variable']
 
         # if self.experiment.import_all is True:
         #     self.findAndAddExtensions()
