@@ -6,6 +6,7 @@ Defines the main application window and image canvas used by the Papylio GUI.
 import sys
 import PySide6
 import platform
+from PySide6.QtCore import Signal
 import sys
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QTreeView, QApplication, QMainWindow, \
@@ -369,7 +370,7 @@ class MainWindow(QMainWindow):
         print('add')
 
     def addFile(self, file, experimentNode):
-        folders = file.relativePath.parts
+        folders = file.directory.parts
 
         parentItem = experimentNode
         parentItem.setCheckable(True)

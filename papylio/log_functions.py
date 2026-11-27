@@ -9,6 +9,7 @@ import functools
 import sys
 from datetime import datetime
 import papylio
+import numpy as np
 
 def function_arguments(function, function_locals):
     """Extract function arguments from local variables.
@@ -25,12 +26,12 @@ def function_arguments(function, function_locals):
     dict
         Dictionary of parameter names to values
     """
-    signature_values = inspect.signature(function).parameters.values()
-    all_argument_values = {
-        parameter.name:
-            function_locals[parameter.name] for parameter
-        in signature_values if parameter.name != 'self' and parameter.name in function_locals
-    }
+    signature = inspect.signature(function)
+    filtered_locals = {key: value for key, value in function_locals.items() if key in signature.parameters}
+    bound_args = signature.bind_partial(**filtered_locals)
+    bound_args.apply_defaults()
+    all_argument_values = bound_args.arguments
+    all_argument_values.pop('self', None)
 
     if list(all_argument_values.keys())==['configuration']:
         all_argument_values = all_argument_values['configuration']
@@ -52,7 +53,19 @@ def function_arguments_json(function, function_locals):
     str
         JSON-serialized function arguments
     """
-    return json.dumps(function_arguments(function, function_locals))
+    arguments = function_arguments(function, function_locals)
+    arguments = prepare_function_arguments_for_json(arguments)
+    return json.dumps(arguments)
+
+def prepare_function_arguments_for_json(arguments):
+    for keyword, argument in arguments.items():
+        if isinstance(arguments[keyword], (slice, range)):
+            arguments[keyword] = str(argument)
+        elif isinstance(arguments[keyword], np.ndarray):
+            arguments[keyword] = arguments[keyword].tolist()
+        elif isinstance(arguments[keyword], dict):
+            arguments[keyword] = prepare_function_arguments_for_json(arguments[keyword])
+    return arguments
 
 def get_current_datetime():
     """Get current date and time as formatted string.

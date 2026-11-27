@@ -8,10 +8,11 @@ import matplotlib.pyplot as plt
 import cv2
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
+import xarray as xr
 import math
 
 
-def find_peaks(image=None, method='local-maximum', **kwargs):
+def find_peaks(image=None, method='local-maximum-auto', **kwargs):
     """Dispatch to a peak-finding method and return coordinates as Nx2 array.
 
     Parameters
@@ -29,6 +30,14 @@ def find_peaks(image=None, method='local-maximum', **kwargs):
     np.ndarray
         Array of shape (N,2) with (x,y) coordinates of detected peaks
     """
+    if image.ndim > 2:
+        if image.shape[0] > 1 or image.shape[1] > 1:
+            raise NotImplementedError('Peak finding is only implemented for 2D images, not for multi-channel or multi-frame images.')
+        else:
+            image = image[0,0,:,:]
+    if isinstance(image, xr.DataArray):
+        image = image.values
+
     if method == 'AKAZE':
         coordinates = analyze(image, **kwargs)[2]
     elif method == 'absolute-threshold':

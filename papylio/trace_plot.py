@@ -48,7 +48,7 @@ import json
 
 # from matplotlib.backends.qt_compat import QtWidgets
 from PySide6 import QtWidgets
-from matplotlib.backends.backend_qt5agg import (
+from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 
@@ -196,7 +196,8 @@ class TracePlotWindow(QWidget):
     def save_selection(self):
         """Save current selection state to the netCDF file."""
         if self.dataset_path is not None:
-            self.dataset.selected.astype('bool').to_netcdf(self.dataset_path, engine='netcdf4', mode='a')
+            with netCDF4.Dataset(self.dataset_path, "a") as nc:
+                nc.variables["selected"][:] = self.dataset.selected.values.astype(bool)
 
     def deactivate_line_edit(self):
         """Clear focus from the molecule index line edit field."""
