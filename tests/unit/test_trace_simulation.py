@@ -10,6 +10,8 @@ import pytest
 
 from papylio.simulation import (make_switching_probability_matrix,
                                 determine_equilibrium_fraction_of_each_state,
+                                check_starting_probabilities,
+                                add_blinking_and_bleaching_states,
                                 calculate_time_fraction_per_frame_in_each_state,
                                 simulate_switching_times_of_one_molecule,
                                 simulate_intensity_traces,
@@ -169,3 +171,95 @@ def test_noise_has_the_requested_standard_deviation():
     noise = simulated_traces.values - intensity_without_noise
     assert np.mean(noise) == pytest.approx(0, abs=1)
     assert np.std(noise) == pytest.approx(50, rel=0.02)
+
+
+# ---------------------------------------------------------------------------
+# starting probabilities, blinking and bleaching
+# ---------------------------------------------------------------------------
+
+def test_starting_probabilities_default_is_equilibrium():
+    assert check_starting_probabilities(None, transition_rate_matrix_two_states) == pytest.approx([1 / 3, 2 / 3])
+
+
+def test_wrong_starting_probabilities_give_an_error():
+    with pytest.raises(ValueError):
+        check_starting_probabilities([0.5, 0.2], transition_rate_matrix_two_states)        # doesn't add up to 1
+    with pytest.raises(ValueError):
+        check_starting_probabilities([1.0, 0, 0], transition_rate_matrix_two_states)       # 3 values for 2 states
+    with pytest.raises(ValueError):
+        check_starting_probabilities([1.5, -0.5], transition_rate_matrix_two_states)       # negative value
+
+
+@pytest.mark.parametrize('simulation_function', both_simulation_functions)
+def test_given_starting_probabilities_are_used(simulation_function):
+    # all molecules start in state 1
+    simulated_traces = simulation_function(number_of_states=2,
+                                           transition_rate_matrix=transition_rate_matrix_two_states,
+                                           number_of_molecules=50, number_of_frames=5, time_per_frame_in_seconds=0.1,
+                                           intensity_of_each_state_per_channel=intensity_of_each_state_per_channel_two_states,
+                                           starting_probabilities=[0, 1], seed=1)
+    assert np.all(simulated_traces.true_state.values[:, 0] == 1)
+
+
+def test_bleaching_adds_a_state_that_cannot_be_left():
+    transition_rate_matrix, intensity_of_each_state_per_channel, starting_probabilities = \
+        add_blinking_and_bleaching_states(transition_rate_matrix_two_states,
+                                          intensity_of_each_state_per_channel_two_states, bleaching_rate=0.1)
+    assert transition_rate_matrix.shape == (3, 3)
+    assert np.all(transition_rate_matrix[:2, 2] == 0.1)     # every state goes to bleached with the bleaching rate
+    assert np.all(transition_rate_matrix[2] == 0)           # nothing comes out of the bleached state
+    assert np.all(intensity_of_each_state_per_channel[2] == 0)
+    assert starting_probabilities == pytest.approx([1 / 3, 2 / 3, 0])
+
+
+def test_blinking_adds_a_dark_copy_of_every_state():
+    transition_rate_matrix, intensity_of_each_state_per_channel, starting_probabilities = \
+        add_blinking_and_bleaching_states(transition_rate_matrix_two_states,
+                                          intensity_of_each_state_per_channel_two_states,
+                                          blinking_rate=0.5, blinking_recovery_rate=5.0)
+    assert transition_rate_matrix.shape == (4, 4)
+    assert transition_rate_matrix[0, 2] == 0.5 and transition_rate_matrix[1, 3] == 0.5   # going dark
+    assert transition_rate_matrix[2, 0] == 5.0 and transition_rate_matrix[3, 1] == 5.0   # coming back
+    assert transition_rate_matrix[2, 3] == 2.0 and transition_rate_matrix[3, 2] == 1.0   # still switching while dark
+    assert np.all(intensity_of_each_state_per_channel[2:] == 0)
+    assert starting_probabilities == pytest.approx([1 / 3, 2 / 3, 0, 0])
+
+
+@pytest.mark.parametrize('simulation_function', both_simulation_functions)
+def test_molecules_stay_bleached(simulation_function):
+    transition_rate_matrix, intensity_of_each_state_per_channel, starting_probabilities = \
+        add_blinking_and_bleaching_states(transition_rate_matrix_two_states,
+                                          intensity_of_each_state_per_channel_two_states, bleaching_rate=1.0)
+    simulated_traces = simulation_function(number_of_states=3, transition_rate_matrix=transition_rate_matrix,
+                                           number_of_molecules=50, number_of_frames=200, time_per_frame_in_seconds=0.1,
+                                           intensity_of_each_state_per_channel=intensity_of_each_state_per_channel,
+                                           starting_probabilities=starting_probabilities, seed=1)
+    true_state = simulated_traces.true_state.values
+    for state_of_each_frame in true_state:
+        frames_bleached = np.flatnonzero(state_of_each_frame == 2)
+        if len(frames_bleached) > 0:
+            # once bleached, every later frame should be bleached too
+            assert np.all(state_of_each_frame[frames_bleached[0]:] == 2)
+    # with bleaching rate 1 per second, (almost) all molecules should be bleached after 20 s
+    assert np.mean(true_state[:, -1] == 2) > 0.95
+
+
+def test_file_simulate_traces_makes_a_dataset(tmp_path):
+    from papylio.file import File
+    file = File.simulate_traces(tmp_path, 'simulated_test',
+                                transition_rate_matrix=transition_rate_matrix_two_states,
+                                intensity_of_each_state_per_channel=intensity_of_each_state_per_channel_two_states,
+                                number_of_molecules=10, number_of_frames=50,
+                                standard_deviation_of_intensity_noise=50, bleaching_rate=0.1, seed=1)
+    assert tmp_path.joinpath('simulated_test.nc').exists()
+    intensity = file.intensity
+    assert intensity.dims == ('molecule', 'channel', 'frame')
+    assert intensity.shape == (10, 2, 50)
+    assert list(intensity.channel.values) == [0, 1]
+    assert 'true_state' in intensity.coords
+
+    # making it again with the same name should not overwrite the dataset
+    with pytest.raises(FileExistsError):
+        File.simulate_traces(tmp_path, 'simulated_test',
+                             transition_rate_matrix=transition_rate_matrix_two_states,
+                             intensity_of_each_state_per_channel=intensity_of_each_state_per_channel_two_states)

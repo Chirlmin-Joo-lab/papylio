@@ -5,6 +5,9 @@
 # Two versions:
 #   simulate_intensity_traces                  -> one state per frame
 #   simulate_intensity_traces_continuous_time  -> switches can happen during a frame (Ivo's option 2)
+#
+# Blinking and bleaching can be added as extra states with add_blinking_and_bleaching_states.
+# The easiest way to use all of this is File.simulate_traces, which also saves the result as a dataset.
 
 import numpy as np
 import xarray as xr
@@ -42,9 +45,81 @@ def determine_equilibrium_fraction_of_each_state(transition_rate_matrix):
     return equilibrium_fraction_of_each_state / equilibrium_fraction_of_each_state.sum()   # remove rounding errors
 
 
+def check_starting_probabilities(starting_probabilities, transition_rate_matrix):
+    """Chance for a molecule to start in each state.
+
+    If starting_probabilities is None, the equilibrium fractions are used. Otherwise it is checked that
+    there is one value per state, that none of them are negative and that they add up to 1.
+    """
+    number_of_states = len(transition_rate_matrix)
+    if starting_probabilities is None:
+        return determine_equilibrium_fraction_of_each_state(transition_rate_matrix)
+
+    starting_probabilities = np.array(starting_probabilities, dtype=float)
+    if starting_probabilities.shape != (number_of_states,):
+        raise ValueError('starting_probabilities should have one value per state')
+    if np.any(starting_probabilities < 0):
+        raise ValueError('starting_probabilities cannot be negative')
+    if not np.isclose(starting_probabilities.sum(), 1):
+        raise ValueError('starting_probabilities should add up to 1')
+    return starting_probabilities / starting_probabilities.sum()
+
+
+def add_blinking_and_bleaching_states(transition_rate_matrix, intensity_of_each_state_per_channel,
+                                      starting_probabilities=None, blinking_rate=0, blinking_recovery_rate=0,
+                                      bleaching_rate=0):
+    """Add dark (blinking) and bleached states to the rate matrix, intensities and starting probabilities.
+
+    Blinking: every state i gets a dark copy. The molecule goes to the dark copy with blinking_rate and comes
+    back with blinking_recovery_rate. While dark, it keeps switching between the (dark) states with the same
+    rates as normal, because the dye blinking does not stop the molecule from changing its conformation.
+    Bleaching: one extra state that can be reached from every other state with bleaching_rate, and that
+    can never be left (rate 0 out of it).
+    Dark and bleached states have intensity 0 in all channels, and starting probability 0.
+
+    State numbering after this: first the original states, then the dark copies (same order),
+    then the bleached state.
+
+    Returns the new transition_rate_matrix, intensity_of_each_state_per_channel and starting_probabilities.
+    """
+    transition_rate_matrix = np.array(transition_rate_matrix, dtype=float)
+    np.fill_diagonal(transition_rate_matrix, 0)
+    intensity_of_each_state_per_channel = np.array(intensity_of_each_state_per_channel, dtype=float)
+    number_of_states = len(transition_rate_matrix)
+    number_of_channels = intensity_of_each_state_per_channel.shape[1]
+
+    # the starting probabilities are worked out before adding the extra states,
+    # otherwise the equilibrium would be "everything bleached"
+    starting_probabilities = check_starting_probabilities(starting_probabilities, transition_rate_matrix)
+
+    if blinking_rate > 0:
+        # block matrix: [[normal switching, going dark], [coming back, switching while dark]]
+        going_dark = np.eye(number_of_states) * blinking_rate
+        coming_back = np.eye(number_of_states) * blinking_recovery_rate
+        transition_rate_matrix = np.block([[transition_rate_matrix, going_dark],
+                                           [coming_back, transition_rate_matrix]])
+        intensity_of_each_state_per_channel = np.vstack([intensity_of_each_state_per_channel,
+                                                         np.zeros((number_of_states, number_of_channels))])
+        starting_probabilities = np.concatenate([starting_probabilities, np.zeros(number_of_states)])
+
+    if bleaching_rate > 0:
+        # extra row and column: every state goes to the bleached state with bleaching_rate, nothing comes out
+        number_of_states_before_bleaching = len(transition_rate_matrix)
+        transition_rate_matrix = np.pad(transition_rate_matrix, ((0, 1), (0, 1)))
+        transition_rate_matrix[:number_of_states_before_bleaching, -1] = bleaching_rate
+        intensity_of_each_state_per_channel = np.vstack([intensity_of_each_state_per_channel,
+                                                         np.zeros((1, number_of_channels))])
+        starting_probabilities = np.append(starting_probabilities, 0)
+
+    return transition_rate_matrix, intensity_of_each_state_per_channel, starting_probabilities
+
+
 def simulate_states_of_molecules(transition_rate_matrix, number_of_molecules, number_of_frames,
-                                 time_per_frame_in_seconds, seed=None):
-    """State (0, 1, 2, ...) of every molecule in every frame, shape (molecule, frame). One state per frame."""
+                                 time_per_frame_in_seconds, starting_probabilities=None, seed=None):
+    """State (0, 1, 2, ...) of every molecule in every frame, shape (molecule, frame). One state per frame.
+
+    starting_probabilities: chance to start in each state, if None the equilibrium fractions are used.
+    """
     random_number_generator = np.random.default_rng(seed)
     number_of_states = len(transition_rate_matrix)
 
@@ -57,9 +132,9 @@ def simulate_states_of_molecules(transition_rate_matrix, number_of_molecules, nu
 
     states_of_all_molecules = np.zeros((number_of_molecules, number_of_frames), dtype=int)
 
-    equilibrium_fraction_of_each_state = determine_equilibrium_fraction_of_each_state(transition_rate_matrix)
+    starting_probabilities = check_starting_probabilities(starting_probabilities, transition_rate_matrix)
     states_of_all_molecules[:, 0] = random_number_generator.choice(number_of_states, size=number_of_molecules,
-                                                                   p=equilibrium_fraction_of_each_state)
+                                                                   p=starting_probabilities)
 
     # loop over the frames, but do all molecules at once (much faster than also looping over molecules)
     for frame_index in range(1, number_of_frames):
@@ -95,6 +170,10 @@ def simulate_switching_times_of_one_molecule(transition_rate_matrix, total_durat
     while True:
         rates_of_leaving_to_each_state = transition_rate_matrix[current_state]
         total_rate_of_leaving = rates_of_leaving_to_each_state.sum()
+
+        # a state that can't be left (like the bleached state): the molecule stays there until the end
+        if total_rate_of_leaving == 0:
+            break
 
         # instead of checking every frame, draw directly how long it stays (exponential, average 1/k)
         current_time = current_time + random_number_generator.exponential(1 / total_rate_of_leaving)
@@ -170,14 +249,15 @@ def _make_traces_data_array(intensity, states_of_all_molecules, time_per_frame_i
 
 def simulate_intensity_traces(number_of_states, transition_rate_matrix, number_of_molecules, number_of_frames,
                               time_per_frame_in_seconds, intensity_of_each_state_per_channel,
-                              standard_deviation_of_intensity_noise=0.0, channel_names=('donor', 'acceptor'),
-                              seed=None):
+                              standard_deviation_of_intensity_noise=0.0, starting_probabilities=None,
+                              channel_names=('donor', 'acceptor'), seed=None):
     """Simulated intensity traces with one state per frame, as xarray DataArray (molecule, channel, frame).
 
     transition_rate_matrix[i][j]: rate from state i to state j (per second)
     intensity_of_each_state_per_channel[state][channel]: e.g. [[800, 200], [300, 700]]
         -> state 0: donor 800, acceptor 200; state 1: donor 300, acceptor 700
     standard_deviation_of_intensity_noise: gaussian noise added to every frame
+    starting_probabilities: chance to start in each state, if None the equilibrium fractions are used
     seed: same seed gives the same result
     """
     transition_rate_matrix, intensity_of_each_state_per_channel = _check_simulation_inputs(
@@ -186,7 +266,8 @@ def simulate_intensity_traces(number_of_states, transition_rate_matrix, number_o
     random_number_generator = np.random.default_rng(seed)
 
     states_of_all_molecules = simulate_states_of_molecules(transition_rate_matrix, number_of_molecules, number_of_frames,
-                                                           time_per_frame_in_seconds, seed=random_number_generator)
+                                                           time_per_frame_in_seconds, starting_probabilities,
+                                                           seed=random_number_generator)
 
     # indexing with the states gives (molecule, frame, channel), transpose to (molecule, channel, frame)
     intensity_without_noise = np.transpose(intensity_of_each_state_per_channel[states_of_all_molecules], (0, 2, 1))
@@ -199,7 +280,7 @@ def simulate_intensity_traces(number_of_states, transition_rate_matrix, number_o
 def simulate_intensity_traces_continuous_time(number_of_states, transition_rate_matrix, number_of_molecules,
                                               number_of_frames, time_per_frame_in_seconds,
                                               intensity_of_each_state_per_channel,
-                                              standard_deviation_of_intensity_noise=0.0,
+                                              standard_deviation_of_intensity_noise=0.0, starting_probabilities=None,
                                               channel_names=('donor', 'acceptor'), seed=None):
     """Same inputs and output as simulate_intensity_traces, but switches can happen during a frame.
 
@@ -211,14 +292,14 @@ def simulate_intensity_traces_continuous_time(number_of_states, transition_rate_
 
     random_number_generator = np.random.default_rng(seed)
     total_duration_in_seconds = number_of_frames * time_per_frame_in_seconds
-    equilibrium_fraction_of_each_state = determine_equilibrium_fraction_of_each_state(transition_rate_matrix)
+    starting_probabilities = check_starting_probabilities(starting_probabilities, transition_rate_matrix)
 
     intensity_without_noise = np.zeros((number_of_molecules, len(channel_names), number_of_frames))
     state_with_most_time_in_each_frame = np.zeros((number_of_molecules, number_of_frames), dtype=int)
 
     # here I loop over molecules, because every molecule has a different number of switches
     for molecule_index in range(number_of_molecules):
-        start_state = random_number_generator.choice(number_of_states, p=equilibrium_fraction_of_each_state)
+        start_state = random_number_generator.choice(number_of_states, p=starting_probabilities)
         times_of_entering_a_state, states_entered = simulate_switching_times_of_one_molecule(
             transition_rate_matrix, total_duration_in_seconds, start_state, random_number_generator)
 

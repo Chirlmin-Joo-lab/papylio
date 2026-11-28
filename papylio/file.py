@@ -49,6 +49,8 @@ from papylio.decorators import return_none_when_executed_by_pycharm
 from papylio.helper_functions import get_default_parameters
 from papylio.analysis.classification_simple import classify_threshold
 from papylio.analysis.hidden_markov_modelling import classify_hmm
+from papylio.simulation import add_blinking_and_bleaching_states, simulate_intensity_traces, \
+                               simulate_intensity_traces_continuous_time
 
 
 import inspect
@@ -107,11 +109,125 @@ class File:
 
         if extensions is None:
             extensions = self.find_extensions()
-        self.add_extensions(extensions, load=self.experiment.import_all)
+        # without an experiment (e.g. for simulated data) there is no import_all setting, so just load
+        import_all = self.experiment.import_all if self.experiment is not None else True
+        self.add_extensions(extensions, load=import_all)
 
         self.perform_logging = perform_logging
         self.__logger = None
         self._log('info', f"Initialized {self} with Papylio v{papylio.__version__}")
+
+    @classmethod
+    def simulate_traces(cls, folder, filename, transition_rate_matrix, intensity_of_each_state_per_channel,
+                        number_of_molecules=100, number_of_frames=1000, time_per_frame_in_seconds=0.1,
+                        starting_probabilities=None, standard_deviation_of_intensity_noise=0.0,
+                        bleaching_rate=0.0, blinking_rate=0.0, blinking_recovery_rate=0.0,
+                        switches_during_frames=True, seed=None):
+        """
+        Simulate intensity traces of molecules switching between states and save them as a new dataset.
+
+        The molecules switch between states following a Markov chain with the given transition rates.
+        Every state has its own intensity in each channel, and gaussian noise can be added to every frame.
+        This is the entry point for simulating traces; the functions doing the work are in papylio/simulation.py.
+
+        Parameters
+        ----------
+        folder : str or Path
+            Folder in which the dataset is saved. It is created if it does not exist yet.
+        filename : str
+            Name of the file, without extension. The dataset is saved as ``<folder>/<filename>.nc``.
+        transition_rate_matrix : array-like, shape (number_of_states, number_of_states)
+            ``transition_rate_matrix[i][j]`` is the rate (per second) to go from state i to state j.
+            The values on the diagonal are not used.
+        intensity_of_each_state_per_channel : array-like, shape (number_of_states, number_of_channels)
+            Mean intensity of each channel in each state, e.g. ``[[800, 200], [300, 700]]`` for a low and a
+            high FRET state with a donor and an acceptor channel.
+        number_of_molecules : int, optional
+            Number of molecules (traces) to simulate. Default is 100.
+        number_of_frames : int, optional
+            Number of frames per trace. Default is 1000.
+        time_per_frame_in_seconds : float, optional
+            Time between two frames in seconds. Default is 0.1.
+        starting_probabilities : array-like, shape (number_of_states,), optional
+            Chance for a molecule to start in each state. Should add up to 1.
+            If None (default), the equilibrium fractions following from the transition rates are used.
+        standard_deviation_of_intensity_noise : float, optional
+            Standard deviation of the gaussian noise added to every frame. Default is 0 (no noise).
+        bleaching_rate : float, optional
+            Rate (per second) of bleaching. If larger than 0, a bleached state is added that can be reached
+            from all other states with this rate and can never be left. It has intensity 0 and starting
+            probability 0. Default is 0 (no bleaching).
+        blinking_rate : float, optional
+            Rate (per second) of going to a dark state. If larger than 0, every state gets a dark copy with
+            intensity 0, in which the molecule keeps switching between states as normal. Default is 0 (no blinking).
+        blinking_recovery_rate : float, optional
+            Rate (per second) of coming back from the dark state. Only used if ``blinking_rate`` is larger than 0.
+        switches_during_frames : bool, optional
+            If True (default), switches can happen at any moment, so a frame in which the molecule switches
+            gets a mix of the intensities of the states. If False, the state is decided once per frame.
+        seed : int, optional
+            Seed for the random number generator, the same seed gives the same result.
+
+        Returns
+        -------
+        File
+            File object of the new dataset, with the simulated traces stored as ``intensity`` with dimensions
+            (molecule, channel, frame). The true state of every frame is stored as the coordinate ``true_state``.
+            States are numbered as: the given states, then the dark copies (if blinking), then the bleached
+            state (if bleaching).
+
+        Examples
+        --------
+        >>> file = File.simulate_traces('simulations', 'two_state_test',
+        ...                             transition_rate_matrix=[[0, 2.0], [1.0, 0]],
+        ...                             intensity_of_each_state_per_channel=[[800, 200], [300, 700]],
+        ...                             standard_deviation_of_intensity_noise=50, bleaching_rate=0.05, seed=1)
+        """
+        path = Path(folder).joinpath(filename)
+        if path.with_suffix('.nc').exists():
+            raise FileExistsError(f'{path.with_suffix(".nc")} already exists, choose another filename or folder')
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # extra states for blinking and bleaching (only added when their rate is larger than 0)
+        transition_rate_matrix, intensity_of_each_state_per_channel, starting_probabilities = \
+            add_blinking_and_bleaching_states(transition_rate_matrix, intensity_of_each_state_per_channel,
+                                              starting_probabilities, blinking_rate=blinking_rate,
+                                              blinking_recovery_rate=blinking_recovery_rate,
+                                              bleaching_rate=bleaching_rate)
+
+        number_of_states = len(transition_rate_matrix)
+        number_of_channels = intensity_of_each_state_per_channel.shape[1]
+        if switches_during_frames:
+            simulation_function = simulate_intensity_traces_continuous_time
+        else:
+            simulation_function = simulate_intensity_traces
+
+        intensity = simulation_function(number_of_states=number_of_states,
+                                        transition_rate_matrix=transition_rate_matrix,
+                                        number_of_molecules=number_of_molecules,
+                                        number_of_frames=number_of_frames,
+                                        time_per_frame_in_seconds=time_per_frame_in_seconds,
+                                        intensity_of_each_state_per_channel=intensity_of_each_state_per_channel,
+                                        standard_deviation_of_intensity_noise=standard_deviation_of_intensity_noise,
+                                        starting_probabilities=starting_probabilities,
+                                        channel_names=tuple(range(number_of_channels)),
+                                        seed=seed)
+
+        # same format as the intensity from extract_traces: channels numbered 0, 1, ... and no molecule coordinate
+        intensity = intensity.drop_vars('molecule')
+        add_configuration_to_dataarray(intensity, units='a.u.')
+        intensity.attrs['configuration'] = json.dumps(dict(
+            transition_rate_matrix=transition_rate_matrix.tolist(),
+            intensity_of_each_state_per_channel=intensity_of_each_state_per_channel.tolist(),
+            starting_probabilities=starting_probabilities.tolist(),
+            time_per_frame_in_seconds=time_per_frame_in_seconds,
+            standard_deviation_of_intensity_noise=standard_deviation_of_intensity_noise,
+            bleaching_rate=bleaching_rate, blinking_rate=blinking_rate, blinking_recovery_rate=blinking_recovery_rate,
+            switches_during_frames=switches_during_frames, seed=seed))
+
+        file = cls(path)
+        file.dataset.set_variables(intensity=intensity)
+        return file
 
     def __repr__(self):
         """Return a string representation of the File object."""
@@ -204,6 +320,9 @@ class File:
     @return_none_when_executed_by_pycharm
     def absolute_path(self):
         """Return the absolute path to the file."""
+        if self.experiment is None:
+            # without an experiment the path given to File is used as it is
+            return self.relative_path
         return self.experiment.main_path.joinpath(self.relative_path)
 
     def open_directory(self) -> None:
@@ -373,7 +492,7 @@ class File:
         Returns:
             list: A list of found file extensions.
         """
-        file_names = [file.name for file in self.experiment.main_path.joinpath(self.directory).glob(self.name + '*')]
+        file_names = [file.name for file in self.absolute_path.parent.glob(self.name + '*')]
         extensions = [file_name[len(self.name):] for file_name in file_names]
         # For the special case of a sifx file, which is located inside a folder
         if '' in extensions:
